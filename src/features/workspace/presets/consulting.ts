@@ -1,0 +1,171 @@
+import type { WorkspaceConfig } from "../types";
+import type { ServiceDefinition } from "@/features/services/types";
+import type { StaffMember } from "@/features/staff/types";
+import type { ClientRecord } from "@/features/clients/types";
+import type { Appointment } from "@/features/appointments/types";
+
+const services: ServiceDefinition[] = [
+  {
+    id: "svc-erstberatung",
+    name: "Erstberatung",
+    durationMinutes: 30,
+    price: 0,
+    currency: "EUR",
+    bufferBeforeMinutes: 0,
+    bufferAfterMinutes: 5,
+    allowedStaffIds: [],
+    requiredResourceType: null,
+  },
+  {
+    id: "svc-website-audit",
+    name: "Website Audit",
+    durationMinutes: 60,
+    price: 180,
+    currency: "EUR",
+    bufferBeforeMinutes: 0,
+    bufferAfterMinutes: 10,
+    allowedStaffIds: [],
+    requiredResourceType: null,
+  },
+  {
+    id: "svc-projektbesprechung",
+    name: "Projektbesprechung",
+    durationMinutes: 45,
+    price: 120,
+    currency: "EUR",
+    bufferBeforeMinutes: 0,
+    bufferAfterMinutes: 0,
+    allowedStaffIds: [],
+    requiredResourceType: null,
+  },
+];
+
+const staff: StaffMember[] = [
+  { id: "staff-you", name: "You", colorToken: "--color-accent-lavender" },
+  { id: "staff-elena", name: "Elena", colorToken: "--color-accent-blue" },
+];
+
+const clients: ClientRecord[] = [
+  {
+    id: "company-nordwind",
+    name: "Nordwind GmbH",
+    email: "kontakt@nordwind.example",
+    phone: "+49 40 2233 4455",
+    tags: ["vip"],
+    lastVisit: "2026-09-05",
+    upcoming: [{ date: "2026-09-22", time: "14:00", service: "Projektbesprechung" }],
+    history: [{ date: "2026-09-05", service: "Website Audit", price: 180 }],
+    notes: "E-commerce relaunch, Q4 deadline.",
+    customFields: [
+      { label: "Company", value: "Nordwind GmbH" },
+      { label: "Domain", value: "nordwind.example" },
+      { label: "Project type", value: "E-commerce relaunch" },
+    ],
+  },
+  {
+    id: "company-bergmann-studio",
+    name: "Bergmann Studio",
+    email: "hello@bergmannstudio.example",
+    phone: "+49 30 9988 1122",
+    tags: ["new"],
+    lastVisit: null,
+    upcoming: [{ date: "2026-09-22", time: "10:00", service: "Erstberatung" }],
+    history: [],
+    notes: "Referred by Nordwind GmbH.",
+    customFields: [
+      { label: "Company", value: "Bergmann Studio" },
+      { label: "Domain", value: "bergmannstudio.example" },
+      { label: "Project type", value: "Portfolio website" },
+    ],
+  },
+  {
+    id: "company-fischer-partner",
+    name: "Fischer & Partner",
+    email: "info@fischer-partner.example",
+    phone: "+49 69 4433 2211",
+    tags: [],
+    lastVisit: "2026-08-28",
+    upcoming: [],
+    history: [{ date: "2026-08-28", service: "Website Audit", price: 180 }],
+    notes: "Law firm — accessibility compliance is the priority.",
+    customFields: [
+      { label: "Company", value: "Fischer & Partner Rechtsanwälte" },
+      { label: "Domain", value: "fischer-partner.example" },
+      { label: "Project type", value: "Accessibility audit" },
+    ],
+  },
+];
+
+const appointments: Appointment[] = [
+  {
+    id: "co-1",
+    client: "Bergmann Studio",
+    service: "Erstberatung",
+    staff: "You",
+    resourceId: null,
+    date: "2026-09-22",
+    time: "10:00",
+    durationMinutes: 30,
+    price: 0,
+    currency: "EUR",
+    notes: "",
+    visibility: "normal",
+    financialBucket: "main",
+    status: "confirmed",
+    paid: true,
+    seriesId: null,
+    recurrence: null,
+  },
+  {
+    id: "co-2",
+    client: "Nordwind GmbH",
+    service: "Projektbesprechung",
+    staff: "Elena",
+    resourceId: null,
+    date: "2026-09-22",
+    time: "14:00",
+    durationMinutes: 45,
+    price: 120,
+    currency: "EUR",
+    notes: "E-commerce relaunch — Q4 Deadline besprechen.",
+    visibility: "normal",
+    financialBucket: "main",
+    status: "confirmed",
+    paid: false,
+    seriesId: null,
+    recurrence: null,
+  },
+  {
+    id: "co-3",
+    client: "Fischer & Partner",
+    service: "Website Audit",
+    staff: "You",
+    resourceId: null,
+    date: "2026-09-24",
+    time: "11:00",
+    durationMinutes: 60,
+    price: 180,
+    currency: "EUR",
+    notes: "",
+    visibility: "normal",
+    financialBucket: "main",
+    status: "pending",
+    paid: false,
+    seriesId: null,
+    recurrence: null,
+  },
+];
+
+/** Consulting / Web Studio — B2B, no resources, company-level clients. */
+export const consultingWorkspace: WorkspaceConfig = {
+  slug: "demo-consulting",
+  industry: "consulting",
+  name: "Consulting / Web Studio",
+  tagline: "Erstberatung, Website Audit, Projektbesprechung",
+  emoji: "💼",
+  services,
+  staff,
+  resources: [],
+  clients,
+  appointments,
+};

@@ -1,0 +1,238 @@
+/* ServiceOS design tokens — §46, §47, §48, §90.3 of SPEC.md */
+
+:root {
+  /* Tells the browser this page has a real light theme, so native
+     controls (select/option popups, date/time pickers, scrollbars)
+     render with light-appropriate chrome instead of guessing. Each
+     theme block below overrides this to match. */
+  color-scheme: light;
+
+  /* Color — base interface (§46) */
+  --color-ink: #111111;
+  --color-paper: #f6f5f2;
+  --color-surface: #ffffff;
+  --color-muted: #6e6e6e;
+  --color-border: rgba(17, 17, 17, 0.14);
+
+  /* Semantic text/surface tokens — every component should reach for
+     these (never a raw --color-* or a literal) so text color always
+     matches the surface it sits on, in both themes (dark-theme
+     contrast audit, Calendar + Appointment UI). Aliases today, but
+     kept distinct from --color-ink/--color-muted so a surface-specific
+     override (e.g. a deliberately light card in dark mode) only needs
+     to change here, not hunt every component. */
+  --text-primary: var(--color-ink);
+  --text-secondary: #3d3d3d;
+  --text-muted: var(--color-muted);
+  --surface-primary: var(--color-surface);
+  --surface-secondary: var(--color-paper);
+  --surface-elevated: var(--color-surface);
+  --border-subtle: var(--color-border);
+  --border-strong: var(--color-accent-blue);
+
+  /* Fixed "light record panel" tokens — the Calendar appointment list is
+     a deliberate light index-card surface in BOTH themes (never inverted
+     to dark), so these never appear inside a dark-theme override block.
+     Anything drawn on this surface (rows, avatars, status pills) reads
+     these instead of the theme-following text/surface tokens above. */
+  --panel-surface: #ffffff;
+  --panel-border: rgba(17, 17, 17, 0.12);
+  --panel-text-primary: #111111;
+  --panel-text-secondary: #6e6e6e;
+  --panel-avatar-bg: #eaf1ff;
+  --panel-avatar-text: #3a66e0;
+  --panel-avatar-masked-bg: #f6f5f2;
+  --panel-avatar-masked-text: #6e6e6e;
+  --panel-status-positive-bg: #e6f8f0;
+  --panel-status-positive-text: #2f9e60;
+  --panel-status-warning-bg: #fef6e2;
+  --panel-status-warning-text: #d9a441;
+  --panel-status-negative-bg: #fef1e6;
+  --panel-status-negative-text: #d64545;
+  --panel-status-neutral-bg: #f6f5f2;
+  --panel-status-neutral-text: #6e6e6e;
+
+  /* Color — contextual accents (§46) */
+  --color-accent-blue: #3a66e0;
+  --color-accent-sky: #2f9bd6;
+  --color-accent-mint: #1f9e73;
+  --color-accent-lime: #7ba53a;
+  --color-accent-peach: #d97a3f;
+  --color-accent-pink: #c74f81;
+  --color-accent-lavender: #6f61d6;
+  --color-accent-yellow: #b3821a;
+
+  /* Color — soft tint surfaces for cards (Diia-inspired: light, colorful, calm) */
+  --tint-blue: #eaf1ff;
+  --tint-mint: #e6f8f0;
+  --tint-peach: #fef1e6;
+  --tint-lavender: #f1eefc;
+  --tint-yellow: #fef6e2;
+  --tint-pink: #fcedf3;
+
+  /* Color — status tokens (§86) */
+  --color-status-confirmed: #2f9e60;
+  --color-status-pending: #d9a441;
+  --color-status-cancelled: #9a9a9a;
+  --color-status-no-show: #d64545;
+  --color-status-completed: var(--color-ink);
+  --color-status-private: #7a6cff;
+
+  /* Typography (§45) */
+  --font-sans: var(--font-inter), "Inter", "Manrope", "Onest", system-ui, -apple-system,
+    sans-serif;
+
+  --font-size-display-xl: clamp(3rem, 2.4rem + 3vw, 5.5rem);
+  --font-size-display-l: clamp(2.4rem, 2rem + 2vw, 4rem);
+  --font-size-h1: clamp(2rem, 1.7rem + 1.2vw, 3.5rem);
+  --font-size-h2: clamp(1.6rem, 1.4rem + 0.8vw, 2.5rem);
+  --font-size-h3: clamp(1.3rem, 1.2rem + 0.4vw, 1.75rem);
+  --font-size-body-l: 1.125rem;
+  --font-size-body: 1rem;
+  --font-size-small: 0.8125rem;
+
+  --line-height-tight: 1.1;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.65;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  /* Spacing (§90.3) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Radii (§47, §90.3) */
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-pill: 999px;
+
+  /* Shadows — extremely soft, prefer border over shadow (§47) */
+  --shadow-none: none;
+  --shadow-soft: 0 1px 2px rgba(17, 17, 17, 0.04), 0 8px 24px rgba(17, 17, 17, 0.04);
+
+  /* Motion (§56) */
+  --motion-fast: 120ms;
+  --motion-normal: 200ms;
+  --motion-slow: 320ms;
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Z-index scale */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+
+  /* Breakpoints (referenced via container queries / JS, CSS uses raw values) */
+  --breakpoint-mobile: 480px;
+  --breakpoint-tablet: 768px;
+  --breakpoint-laptop: 1024px;
+  --breakpoint-desktop: 1280px;
+}
+
+/*
+ * Light is the deliberate default look of ServiceOS (§44, §95 — Diia-like
+ * clarity, not a dark SaaS dashboard). Dark is a real, designed mirror
+ * theme (§49), not an inverted filter — same structure, same accent hues
+ * lightened for contrast, same restraint.
+ *
+ * Resolution order: an explicit choice (`data-theme` — future Settings
+ * toggle, §49) always wins; with no explicit choice, the OS preference
+ * decides. `:root:not([data-theme="light"])` lets the OS media query
+ * apply unless the person explicitly chose light.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --color-ink: #f5f4f1;
+    --color-paper: #131211;
+    --color-surface: #1c1b1a;
+    --color-muted: #a3a29c;
+    --color-border: rgba(245, 244, 241, 0.14);
+
+    --text-primary: var(--color-ink);
+    --text-secondary: #c9c8c2;
+    --text-muted: var(--color-muted);
+    --surface-primary: var(--color-surface);
+    --surface-secondary: var(--color-paper);
+    --surface-elevated: #242322;
+    --border-subtle: var(--color-border);
+    --border-strong: var(--color-accent-blue);
+
+    --color-accent-blue: #7ea6ff;
+    --color-accent-sky: #7cc9f0;
+    --color-accent-mint: #5fd6a8;
+    --color-accent-lime: #b0d97a;
+    --color-accent-peach: #f0a06a;
+    --color-accent-pink: #ec8fb4;
+    --color-accent-lavender: #ab9df5;
+    --color-accent-yellow: #e0b64f;
+
+    --tint-blue: #1b2438;
+    --tint-mint: #16241f;
+    --tint-peach: #2a2119;
+    --tint-lavender: #221f34;
+    --tint-yellow: #292315;
+    --tint-pink: #291b23;
+
+    --color-status-confirmed: #5fd6a8;
+    --color-status-pending: #e0b64f;
+    --color-status-cancelled: #8a8983;
+    --color-status-no-show: #ea7a7a;
+    --color-status-private: #ab9df5;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-ink: #f5f4f1;
+  --color-paper: #131211;
+  --color-surface: #1c1b1a;
+  --color-muted: #a3a29c;
+  --color-border: rgba(245, 244, 241, 0.14);
+
+  --text-primary: var(--color-ink);
+  --text-secondary: #c9c8c2;
+  --text-muted: var(--color-muted);
+  --surface-primary: var(--color-surface);
+  --surface-secondary: var(--color-paper);
+  --surface-elevated: #242322;
+  --border-subtle: var(--color-border);
+  --border-strong: var(--color-accent-blue);
+
+  --color-accent-blue: #7ea6ff;
+  --color-accent-sky: #7cc9f0;
+  --color-accent-mint: #5fd6a8;
+  --color-accent-lime: #b0d97a;
+  --color-accent-peach: #f0a06a;
+  --color-accent-pink: #ec8fb4;
+  --color-accent-lavender: #ab9df5;
+  --color-accent-yellow: #e0b64f;
+
+  --tint-blue: #1b2438;
+  --tint-mint: #16241f;
+  --tint-peach: #2a2119;
+  --tint-lavender: #221f34;
+  --tint-yellow: #292315;
+  --tint-pink: #291b23;
+
+  --color-status-confirmed: #5fd6a8;
+  --color-status-pending: #e0b64f;
+  --color-status-cancelled: #8a8983;
+  --color-status-no-show: #ea7a7a;
+  --color-status-private: #ab9df5;
+}

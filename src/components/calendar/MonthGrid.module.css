@@ -1,0 +1,67 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--border-subtle);
+  gap: 1px;
+}
+
+.weekdayHeader {
+  background: var(--surface-secondary);
+  padding: var(--space-2);
+  text-align: center;
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.cell {
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  min-height: 96px;
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  border: none;
+}
+
+.cellOutside {
+  background: var(--surface-secondary);
+  color: var(--text-muted);
+}
+
+.cellToday {
+  background: var(--tint-blue);
+}
+
+.cellDate {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+}
+
+.chip {
+  display: block;
+  padding: 1px var(--space-1);
+  border-radius: 4px;
+  background: var(--tint-mint);
+  color: var(--color-accent-mint);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chipMasked {
+  background: var(--surface-secondary);
+  color: var(--text-muted);
+}
+
+.more {
+  font-size: 10px;
+  color: var(--text-secondary);
+}

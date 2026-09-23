@@ -1,0 +1,90 @@
+.grid {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+  overflow: hidden;
+}
+
+.hourAxis {
+  display: grid;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.hourLabel {
+  padding: var(--space-2);
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.columns {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(120px, 1fr);
+}
+
+.column {
+  position: relative;
+  display: grid;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.column:first-child {
+  border-left: none;
+}
+
+.columnHeader {
+  grid-column: 1 / -1;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  background: var(--surface-secondary);
+  position: sticky;
+  top: 0;
+}
+
+.slot {
+  border-top: 1px solid var(--border-subtle);
+  min-height: 28px;
+}
+
+.slot:first-child {
+  border-top: none;
+}
+
+.block {
+  position: relative;
+  margin: 2px 4px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  text-align: left;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.blockTitle {
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.blockMeta {
+  font-size: 10px;
+  opacity: 0.8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.blockMasked {
+  background: var(--surface-secondary) !important;
+  color: var(--text-secondary) !important;
+}

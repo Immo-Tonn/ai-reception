@@ -1,0 +1,423 @@
+/* Mobile-first (§ mobile-first requirement): base rules target ~375-430px
+   phones; tablet/desktop widen via min-width overrides below. */
+
+.page {
+  flex: 1;
+  padding: 0 var(--space-4) var(--space-8);
+  max-width: 1040px;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .page {
+    padding: 0 var(--space-8) var(--space-10);
+  }
+}
+
+@media (min-width: 900px) {
+  .page {
+    padding: 0 var(--space-12) var(--space-10);
+  }
+}
+
+.header {
+  margin-bottom: var(--space-6);
+}
+
+.eyebrow {
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+  margin-bottom: var(--space-2);
+}
+
+.greeting {
+  font-size: 1.75rem;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.02em;
+  line-height: var(--line-height-tight);
+  margin-bottom: var(--space-2);
+}
+
+@media (min-width: 768px) {
+  .greeting {
+    font-size: var(--font-size-h1);
+  }
+}
+
+.subtitle {
+  font-size: var(--font-size-body);
+  color: var(--color-muted);
+}
+
+@media (min-width: 768px) {
+  .subtitle {
+    font-size: var(--font-size-body-l);
+  }
+}
+
+/* Assistant quick entry — always one tap away from Today on mobile */
+
+.assistantEntry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4);
+  margin-bottom: var(--space-6);
+  border-radius: var(--radius-lg);
+  border: none;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  text-align: left;
+  cursor: pointer;
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+
+.assistantEntry:hover {
+  opacity: 0.85;
+}
+
+.assistantEntry:active {
+  opacity: 0.7;
+}
+
+.assistantEntryIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: rgba(246, 245, 242, 0.14);
+  flex-shrink: 0;
+}
+
+.assistantEntryBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.assistantEntryTitle {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+}
+
+.assistantEntryHint {
+  font-size: var(--font-size-small);
+  opacity: 0.7;
+}
+
+/* Metric cards — 2-up on phones (no tiny 4-up grid), 4-up from tablet up */
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-8);
+}
+
+@media (min-width: 640px) {
+  .metrics {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.metricCard {
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  overflow: hidden;
+}
+
+@media (min-width: 640px) {
+  .metricCard {
+    padding: var(--space-5);
+  }
+}
+
+.metricLabel {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  opacity: 0.72;
+}
+
+.metricValue {
+  font-size: clamp(1.05rem, 0.9rem + 1.5vw, 1.375rem);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+  .metricValue {
+    font-size: var(--font-size-h2);
+  }
+}
+
+.metricMeta {
+  font-size: var(--font-size-small);
+  opacity: 0.72;
+}
+
+/* Sections */
+
+.section {
+  margin-bottom: var(--space-8);
+}
+
+@media (min-width: 768px) {
+  .section {
+    margin-bottom: var(--space-10);
+  }
+}
+
+.sectionTitle {
+  font-size: 1.125rem;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+  margin-bottom: var(--space-3);
+}
+
+@media (min-width: 768px) {
+  .sectionTitle {
+    font-size: var(--font-size-h3);
+    margin-bottom: var(--space-4);
+  }
+}
+
+/* Needs attention — full-width tappable rows, no tiny targets */
+
+.attentionList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.attentionItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+/* Tag-qualified on purpose: the empty-schedule fallback reuses this
+   class on a plain <div> (not clickable), so only the real <a> rows
+   below get pointer/hover/press affordances. */
+a.attentionItem {
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+
+a.attentionItem:hover {
+  background: var(--color-paper);
+  border-color: var(--color-ink);
+}
+
+a.attentionItem:active {
+  background: var(--tint-blue);
+}
+
+.attentionLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.attentionDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-peach);
+  flex-shrink: 0;
+}
+
+.attentionText {
+  font-size: var(--font-size-body);
+}
+
+.attentionAction {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-paper);
+  color: var(--color-accent-blue);
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+a.attentionItem:hover .attentionAction,
+a.attentionItem:focus-visible .attentionAction {
+  transform: translateX(3px);
+}
+
+/* Schedule — stacked rows, never a cramped table on mobile */
+
+.scheduleList {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.scheduleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 64px;
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.scheduleRow:hover {
+  background: var(--color-paper);
+}
+
+.scheduleRow:active {
+  background: var(--tint-blue);
+}
+
+@media (min-width: 640px) {
+  .scheduleRow {
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-5);
+  }
+}
+
+.scheduleRow + .scheduleRow {
+  border-top: 1px solid var(--color-border);
+}
+
+.scheduleTime {
+  width: 48px;
+  flex-shrink: 0;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-muted);
+}
+
+@media (min-width: 640px) {
+  .scheduleTime {
+    width: 64px;
+    font-size: var(--font-size-body);
+  }
+}
+
+.scheduleAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  flex-shrink: 0;
+  background: var(--tint-blue);
+  color: var(--color-accent-blue);
+}
+
+.scheduleAvatarPrivate {
+  background: var(--color-paper);
+  color: var(--color-muted);
+}
+
+.scheduleBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.scheduleTitle {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scheduleSubtitle {
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scheduleMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .scheduleMeta {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-3);
+  }
+}
+
+.scheduleDuration {
+  font-size: 11px;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+  .scheduleDuration {
+    font-size: var(--font-size-small);
+  }
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+  .badge {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--font-size-small);
+  }
+}
+
+.badgeConfirmed {
+  background: var(--tint-mint);
+  color: var(--color-status-confirmed);
+}
+
+.badgePending {
+  background: var(--tint-yellow);
+  color: var(--color-status-pending);
+}
+
+.badgePrivate {
+  background: var(--color-paper);
+  color: var(--color-muted);
+}

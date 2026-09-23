@@ -1,0 +1,51 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.positive {
+  background: var(--tint-mint);
+  color: var(--color-status-confirmed);
+}
+
+.warning {
+  background: var(--tint-yellow);
+  color: var(--color-status-pending);
+}
+
+.negative {
+  background: var(--tint-peach);
+  color: var(--color-status-no-show);
+}
+
+.neutral {
+  background: var(--color-paper);
+  color: var(--color-muted);
+}
+
+/* Fixed-color variant for badges drawn on the Calendar's light record
+   panel (never follows the app theme — see page.module.css .list). */
+.onLight.positive {
+  background: var(--panel-status-positive-bg);
+  color: var(--panel-status-positive-text);
+}
+
+.onLight.warning {
+  background: var(--panel-status-warning-bg);
+  color: var(--panel-status-warning-text);
+}
+
+.onLight.negative {
+  background: var(--panel-status-negative-bg);
+  color: var(--panel-status-negative-text);
+}
+
+.onLight.neutral {
+  background: var(--panel-status-neutral-bg);
+  color: var(--panel-status-neutral-text);
+}

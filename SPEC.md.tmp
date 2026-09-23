@@ -1,0 +1,3207 @@
+# Universal Service Business Platform — Product & Technical Specification
+
+> **Working title:** `ServiceOS`  
+> **Document purpose:** master specification for Claude / Codex / developers  
+> **Product type:** multi-tenant SaaS for service businesses  
+> **Primary idea:** one platform that can act as CRM + scheduler + administrator + secretary + AI business assistant  
+> **Design direction:** inspired by the clarity, simplicity, human-centered UX and visual language of the Ukrainian **Дія / Diia** ecosystem, without cloning its brand, logo, proprietary assets or exact screens.
+
+---
+
+# 1. Product Vision
+
+Build a universal SaaS platform for **any business that sells services**.
+
+The platform must work for businesses such as:
+
+- beauty salons and independent specialists;
+- massage / wellness;
+- auto service / detailing;
+- cleaning services;
+- repair and construction specialists;
+- photographers and studios;
+- tutors and teachers;
+- consultants;
+- lawyers and professional services;
+- web studios and IT services;
+- fitness / coaching;
+- pet services;
+- home services;
+- maintenance businesses;
+- agencies;
+- freelancers;
+- other service businesses.
+
+The core product must not be tied to one industry.
+
+The system should adapt to different businesses through:
+
+- configurable services;
+- custom fields;
+- workflow modes;
+- staff and resource configuration;
+- booking rules;
+- financial categories;
+- forms;
+- automation rules;
+- AI context.
+
+The central product idea is:
+
+> **The owner should feel that the platform is not just software, but a digital administrator / secretary that keeps the business organized and tells the owner what requires attention.**
+
+---
+
+# 2. Product Principles
+
+1. **Universal core, configurable industries**
+2. **Simple enough for a solo freelancer**
+3. **Powerful enough for a team**
+4. **AI is part of the workflow, not a decorative chatbot**
+5. **Mobile-first operational UX**
+6. **Minimal number of clicks**
+7. **Every important action has a clear status**
+8. **Privacy and permissions are first-class concepts**
+9. **Financial separation is first-class and independent from privacy**
+10. **No hidden business logic**
+11. **GDPR-oriented architecture**
+12. **Fast, calm, human-centered interface**
+
+---
+
+# 3. Core Business Modes
+
+A workspace can use one or more modes.
+
+## 3.1 Appointments
+
+For businesses where time slots are central.
+
+Examples:
+
+- salon;
+- massage;
+- tutor;
+- consultant;
+- doctor-like wellness service;
+- photographer;
+- car detailing.
+
+Flow:
+
+`Client → Service → Staff/Resource → Date/Time → Appointment → Payment`
+
+---
+
+## 3.2 Jobs
+
+For businesses where the work is a task/order rather than a fixed appointment.
+
+Examples:
+
+- cleaning;
+- repair;
+- construction;
+- auto repair;
+- installation;
+- field service.
+
+Flow:
+
+`Lead → Request → Estimate → Job → Assigned worker → Status → Invoice → Payment`
+
+---
+
+## 3.3 Projects
+
+For longer work.
+
+Examples:
+
+- web studio;
+- design agency;
+- marketing;
+- consulting;
+- renovation;
+- photography production.
+
+Flow:
+
+`Lead → Proposal → Project → Tasks / Milestones → Files → Invoice → Payment`
+
+---
+
+## 3.4 Hybrid Mode
+
+A business can combine modes.
+
+Example:
+
+Auto service:
+
+`Appointment → Vehicle inspection → Job → Parts / work → Invoice`
+
+Web studio:
+
+`Consultation appointment → Proposal → Project → Invoice`
+
+---
+
+# 4. Multi-Tenant Architecture
+
+The product is SaaS.
+
+Each registered company receives a separate **Workspace**.
+
+All business data must belong to a workspace.
+
+Example:
+
+```text
+Platform
+├── Workspace A — Beauty salon
+├── Workspace B — Cleaning company
+├── Workspace C — Auto service
+└── Workspace D — Web studio
+```
+
+A user may belong to multiple workspaces.
+
+Every database query involving business data must be scoped by `workspace_id`.
+
+No workspace may access another workspace's data.
+
+Use Row Level Security where applicable.
+
+---
+
+# 5. User Roles
+
+Initial roles:
+
+- `owner`
+- `admin`
+- `manager`
+- `staff`
+- `accountant`
+- `viewer`
+- `client`
+
+Later support custom roles.
+
+## 5.1 Owner
+
+Full access.
+
+Can:
+
+- see all appointments;
+- see private appointments;
+- see all financial buckets;
+- manage permissions;
+- manage staff;
+- configure AI;
+- manage billing;
+- view audit logs;
+- configure workspace settings.
+
+## 5.2 Admin / Manager
+
+Configurable access.
+
+May manage:
+
+- clients;
+- normal appointments;
+- services;
+- staff schedules;
+- invoices;
+- inbox.
+
+Private information is visible only when specifically permitted.
+
+## 5.3 Staff
+
+Normally sees:
+
+- own schedule;
+- assigned clients/jobs;
+- relevant client notes;
+- tasks.
+
+Must not automatically see:
+
+- company-wide finance;
+- owner-only notes;
+- private appointments;
+- private financial details.
+
+## 5.4 Accountant
+
+Optional role for finance-related pages.
+
+## 5.5 Client
+
+Access only through client portal.
+
+---
+
+# 6. CRITICAL FEATURE — Appointment / Job Separation
+
+This feature is mandatory and must be designed correctly from the beginning.
+
+The system must distinguish **visibility/privacy** from **financial classification**.
+
+They are two separate dimensions.
+
+---
+
+## 6.1 Visibility Classification
+
+Each appointment/job/project can have a visibility level:
+
+```text
+NORMAL
+PRIVATE
+OWNER_ONLY
+CUSTOM
+```
+
+### NORMAL
+
+Visible according to ordinary workspace permissions.
+
+### PRIVATE
+
+Sensitive/private appointment.
+
+Possible behavior:
+
+- hidden from ordinary staff;
+- calendar may show only `Busy`;
+- client name hidden;
+- service hidden;
+- price hidden;
+- notes hidden;
+- visible only to authorized users.
+
+### OWNER_ONLY
+
+Only the workspace owner can see full details.
+
+Other staff may see only blocked time if required.
+
+### CUSTOM
+
+Owner chooses specific:
+
+- users;
+- roles;
+- teams.
+
+---
+
+# 7. CRITICAL FEATURE — Financial Separation
+
+Financial classification must be independent from appointment privacy.
+
+Every revenue-generating entity can point to a **Financial Bucket**.
+
+Examples:
+
+```text
+MAIN
+PRIVATE
+SECONDARY
+CUSTOM
+```
+
+Owner can create custom buckets.
+
+Examples:
+
+- Main Business
+- Private
+- Partner Revenue
+- Room 2
+- Branch A
+- Personal Clients
+- Online Services
+- Cash Desk 2
+
+Database concept:
+
+```text
+financial_buckets
+- id
+- workspace_id
+- name
+- slug
+- color_token
+- is_default
+- is_archived
+- created_at
+```
+
+Relevant records reference:
+
+```text
+financial_bucket_id
+```
+
+---
+
+## 7.1 Important UX Rule
+
+When creating/editing an appointment:
+
+```text
+Visibility
+[ Normal ▾ ]
+
+Financial account
+[ Main Business ▾ ]
+```
+
+These controls are separate.
+
+A record can therefore be:
+
+```text
+Visibility: PRIVATE
+Financial Bucket: MAIN
+```
+
+or:
+
+```text
+Visibility: NORMAL
+Financial Bucket: PRIVATE
+```
+
+or:
+
+```text
+Visibility: OWNER_ONLY
+Financial Bucket: PRIVATE
+```
+
+Do not collapse these concepts into one checkbox.
+
+---
+
+## 7.2 Dashboard Filtering
+
+Owner can view:
+
+```text
+Revenue
+€9,770
+
+Main Business
+€8,450
+
+Private
+€1,320
+```
+
+Filters:
+
+```text
+All
+Main
+Private
+Custom
+```
+
+Owner can choose whether a bucket appears on the primary operational dashboard.
+
+However:
+
+> The product must never be designed to conceal legally reportable revenue. Internal financial buckets are organizational/reporting categories. Compliance/export views must be capable of including all transactions that are legally required to be reported.
+
+---
+
+# 8. Calendar
+
+The calendar is one of the primary application surfaces.
+
+Views:
+
+- Day
+- Week
+- Month
+- Staff
+- Resources
+- Timeline
+- Agenda
+
+Features:
+
+- drag-and-drop;
+- resize appointment duration;
+- filters;
+- staff colors/tokens;
+- status indicators;
+- private appointment masking;
+- resource conflict detection;
+- working hours;
+- breaks;
+- holidays;
+- blocked time;
+- recurring appointments;
+- waiting list;
+- quick-create;
+- mobile agenda view.
+
+Appointment card may display:
+
+```text
+10:30
+Anna Müller
+Haircut
+45 min
+€55
+```
+
+Private appointment for unauthorized staff:
+
+```text
+10:30
+Busy
+60 min
+```
+
+No sensitive information should leak through:
+
+- tooltip;
+- API response;
+- HTML;
+- client-side cache;
+- search;
+- AI context.
+
+---
+
+# 9. Appointment Statuses
+
+Base statuses:
+
+```text
+DRAFT
+PENDING
+CONFIRMED
+CHECKED_IN
+IN_PROGRESS
+COMPLETED
+CANCELLED
+NO_SHOW
+RESCHEDULED
+```
+
+Workspaces may enable only the statuses they need.
+
+---
+
+# 10. Clients / CRM
+
+Each client has a profile.
+
+Base fields:
+
+- first name;
+- last name;
+- company;
+- phone;
+- email;
+- preferred language;
+- address;
+- tags;
+- notes;
+- internal notes;
+- marketing consent;
+- communication preferences;
+- source;
+- assigned staff;
+- created date.
+
+Client timeline:
+
+- inquiries;
+- appointments;
+- jobs;
+- projects;
+- quotes;
+- invoices;
+- payments;
+- messages;
+- forms;
+- uploaded files;
+- notes;
+- cancellations;
+- reviews.
+
+---
+
+# 11. Custom Fields
+
+Custom fields are essential for making the platform universal.
+
+Supported types:
+
+- text;
+- textarea;
+- number;
+- currency;
+- date;
+- datetime;
+- checkbox;
+- select;
+- multi-select;
+- URL;
+- phone;
+- email;
+- file;
+- image;
+- address.
+
+Examples:
+
+### Auto service
+
+- License plate
+- VIN
+- Mileage
+- Vehicle model
+
+### Cleaning
+
+- Property size
+- Number of rooms
+- Floor
+- Parking info
+- Access instructions
+
+### Web studio
+
+- Domain
+- Hosting
+- CMS
+- Deadline
+- Existing website
+
+### Photographer
+
+- Location
+- Event type
+- Number of guests
+- Deliverables
+
+Custom fields can attach to:
+
+- client;
+- appointment;
+- job;
+- project;
+- service;
+- resource.
+
+---
+
+# 12. Services
+
+Service properties:
+
+- name;
+- category;
+- description;
+- duration;
+- buffer before;
+- buffer after;
+- price;
+- variable price;
+- tax behavior;
+- allowed staff;
+- required resources;
+- online booking enabled;
+- deposit required;
+- cancellation policy;
+- custom intake form;
+- recurrence suggestions.
+
+Services can be grouped.
+
+Examples:
+
+```text
+Cleaning
+├── Regular cleaning
+├── Deep cleaning
+└── Windows
+
+Web
+├── Consultation
+├── Landing page
+└── Website maintenance
+```
+
+---
+
+# 13. Staff
+
+Staff profile:
+
+- name;
+- role;
+- contact information;
+- skills;
+- services;
+- working hours;
+- vacation;
+- breaks;
+- location;
+- languages;
+- permissions;
+- internal hourly cost;
+- booking priority;
+- avatar.
+
+---
+
+# 14. Resources
+
+The platform must support resources that are not people.
+
+Examples:
+
+- treatment room;
+- workshop lift;
+- company vehicle;
+- camera;
+- studio;
+- machine;
+- meeting room;
+- equipment.
+
+A booking can require:
+
+```text
+1 staff member
++
+1 room
++
+1 device
+```
+
+The system must prevent conflicting bookings.
+
+---
+
+# 15. Public Booking
+
+Each workspace can enable a public booking page.
+
+Example route:
+
+```text
+/book/{workspaceSlug}
+```
+
+or custom domain later.
+
+Booking flow should be configurable.
+
+Default:
+
+```text
+Service
+→ Staff preference
+→ Date
+→ Time
+→ Client details
+→ Optional form
+→ Confirmation
+```
+
+Possible modes:
+
+```text
+Service first
+Staff first
+Date first
+AI guided booking
+```
+
+---
+
+# 16. AI-Guided Booking
+
+A client should be able to type naturally:
+
+> “I need a deep cleaning on Saturday afternoon for an 80 m² apartment.”
+
+AI should:
+
+1. identify service;
+2. determine missing information;
+3. ask only relevant questions;
+4. check schedule;
+5. check staff/resources;
+6. offer available options;
+7. create booking after confirmation.
+
+AI must not invent availability.
+
+It must call platform tools.
+
+---
+
+# 17. AI ASSISTANT — Core Concept
+
+AI is a central product feature.
+
+There are two primary assistants.
+
+## 17.1 Business Copilot
+
+For owner/team.
+
+Examples:
+
+```text
+What do I have today?
+Who has not confirmed tomorrow?
+Move Müller to Friday after 15:00.
+How much did we earn this month?
+Show unpaid invoices.
+Which clients have not returned in 6 months?
+Fill tomorrow's empty slots.
+Create a quote for this request.
+Draft a reply to this client.
+```
+
+## 17.2 Client Assistant
+
+For customers.
+
+Examples:
+
+```text
+I need a haircut tomorrow evening.
+Can I move my booking?
+How much does this service cost?
+Do you have anything available Saturday?
+```
+
+---
+
+# 18. AI Tool Architecture
+
+The AI must never receive unrestricted database access.
+
+Expose controlled application tools.
+
+Example:
+
+```ts
+searchClients()
+getClient()
+getAvailableSlots()
+getSchedule()
+createAppointment()
+moveAppointment()
+cancelAppointment()
+getServices()
+getStaff()
+createLead()
+createJob()
+createQuote()
+getInvoices()
+getRevenueSummary()
+draftMessage()
+sendMessage()
+createTask()
+```
+
+Each tool must:
+
+- validate user authorization;
+- validate workspace;
+- validate record-level permissions;
+- validate input;
+- log write actions;
+- return structured data.
+
+---
+
+# 19. AI Confirmation Rules
+
+AI may perform low-risk read operations immediately.
+
+Examples:
+
+- search schedule;
+- find client;
+- summarize finance;
+- retrieve services.
+
+For meaningful write actions, show confirmation where appropriate.
+
+Example:
+
+```text
+Move appointment?
+
+Anna Müller
+Friday 25 Sep
+14:00 → 16:30
+
+[Confirm move] [Cancel]
+```
+
+Require stronger confirmation for:
+
+- deleting records;
+- bulk messaging;
+- refunds;
+- large financial actions;
+- changing permissions;
+- exporting sensitive data.
+
+---
+
+# 20. AI Permission Awareness
+
+AI permissions must never exceed the logged-in user's permissions.
+
+Example:
+
+A staff member asks:
+
+> “How much did the company earn this month?”
+
+If the role cannot view company finance, AI must not reveal it.
+
+A manager asks:
+
+> “What is the private appointment at 14:00?”
+
+If manager lacks access:
+
+> “You have a blocked time at 14:00, but you do not have permission to view its details.”
+
+AI search, embeddings, summaries and caches must follow the same privacy rules.
+
+---
+
+# 21. AI Morning Brief
+
+Dashboard can show:
+
+```text
+Good morning.
+
+Today:
+7 appointments
+3 new requests
+2 clients need confirmation
+1 staff member unavailable
+€420 overdue
+1 empty 90-minute slot at 15:30
+```
+
+AI may add:
+
+```text
+Suggested actions
+
+• Contact 2 unconfirmed clients
+• Offer the 15:30 slot to waiting-list clients
+• Follow up on invoice #1042
+```
+
+---
+
+# 22. AI Evening Summary
+
+Optional daily summary:
+
+```text
+Today
+
+11 jobs completed
+€1,480 recorded
+4 new clients
+2 cancellations
+1 unpaid invoice
+3 follow-ups for tomorrow
+```
+
+---
+
+# 23. Unified Inbox
+
+Create a centralized communication inbox.
+
+Initial channels:
+
+- internal website messages;
+- booking requests;
+- email integration.
+
+Later:
+
+- WhatsApp Business;
+- SMS;
+- Instagram / Messenger where technically and contractually possible;
+- voice assistant.
+
+Inbox features:
+
+- client detection;
+- conversation assignment;
+- unread state;
+- tags;
+- priority;
+- internal notes;
+- AI summary;
+- AI reply draft;
+- templates;
+- conversion to lead / booking / job.
+
+---
+
+# 24. Leads and Requests
+
+Not every service business starts with a calendar booking.
+
+Lead pipeline:
+
+```text
+NEW
+CONTACTED
+QUALIFIED
+QUOTE_SENT
+WON
+LOST
+```
+
+A lead can become:
+
+- appointment;
+- job;
+- project;
+- client.
+
+---
+
+# 25. Quotes / Estimates
+
+Quotes should support:
+
+- line items;
+- quantity;
+- unit price;
+- discount;
+- tax;
+- notes;
+- validity date;
+- attachments;
+- online acceptance;
+- status.
+
+Statuses:
+
+```text
+DRAFT
+SENT
+VIEWED
+ACCEPTED
+DECLINED
+EXPIRED
+```
+
+Accepted quote can create:
+
+- job;
+- project;
+- invoice;
+- appointment.
+
+---
+
+# 26. Jobs
+
+Job fields:
+
+- client;
+- title;
+- description;
+- address;
+- assigned staff;
+- scheduled time;
+- status;
+- tasks;
+- files;
+- before/after photos;
+- internal notes;
+- price;
+- financial bucket;
+- visibility;
+- invoice.
+
+---
+
+# 27. Projects
+
+Project support:
+
+- client;
+- status;
+- members;
+- milestones;
+- tasks;
+- due dates;
+- files;
+- comments;
+- invoices;
+- timeline.
+
+Do not attempt to compete with Jira/Asana in MVP.
+
+Keep project management lightweight.
+
+---
+
+# 28. Tasks
+
+Tasks can be:
+
+- linked to client;
+- linked to appointment;
+- linked to job;
+- linked to project;
+- linked to invoice;
+- independent.
+
+Fields:
+
+- title;
+- assignee;
+- due date;
+- priority;
+- status;
+- reminder.
+
+AI can create tasks from conversations.
+
+---
+
+# 29. Waiting List
+
+Client can specify:
+
+- service;
+- preferred staff;
+- earliest date;
+- latest date;
+- day preferences;
+- time range.
+
+When a matching slot opens:
+
+1. system finds compatible waiting-list entries;
+2. owner can approve outreach, or automation can run according to settings;
+3. client receives offer;
+4. first confirmed response may reserve slot.
+
+---
+
+# 30. No-Show Prevention
+
+Configurable automation:
+
+```text
+Booking created
+→ confirmation message
+
+24h before
+→ reminder
+
+2h before
+→ reminder
+
+No confirmation
+→ flag for admin
+```
+
+Optional:
+
+- deposit;
+- stored payment provider token;
+- cancellation window;
+- no-show label.
+
+---
+
+# 31. Recurring Services
+
+Support recurring appointments/jobs.
+
+Examples:
+
+- weekly cleaning;
+- biweekly lesson;
+- monthly website maintenance;
+- six-month vehicle service reminder.
+
+Recurrence patterns:
+
+- daily;
+- weekly;
+- monthly;
+- custom interval.
+
+---
+
+# 32. Follow-Up Automation
+
+After completed service:
+
+```text
++2 hours
+→ thank-you message
+
++1 day
+→ review request
+
++30 days
+→ rebooking reminder
+```
+
+Rules configurable per service.
+
+---
+
+# 33. Client Portal
+
+Client can view:
+
+- upcoming appointments;
+- previous appointments;
+- jobs;
+- quotes;
+- invoices;
+- payments;
+- files;
+- forms;
+- messages.
+
+Client can:
+
+- confirm;
+- reschedule if allowed;
+- cancel if allowed;
+- accept quote;
+- pay invoice;
+- upload file;
+- complete form;
+- request another service.
+
+---
+
+# 34. Forms
+
+Form builder for:
+
+- intake;
+- consent;
+- pre-appointment questions;
+- job details;
+- feedback.
+
+Field types:
+
+- text;
+- long text;
+- select;
+- checkbox;
+- date;
+- file;
+- image;
+- signature later.
+
+Forms can be attached to services.
+
+---
+
+# 35. Files and Photos
+
+Use object storage.
+
+Support:
+
+- client files;
+- appointment files;
+- job photos;
+- project documents;
+- quote attachments;
+- invoice attachments.
+
+Permissions must inherit from parent record.
+
+---
+
+# 36. Finance
+
+This is **business finance tracking**, not full accounting software in the first version.
+
+Core features:
+
+- revenue;
+- payments;
+- invoices;
+- unpaid balances;
+- refunds;
+- discounts;
+- payment methods;
+- financial buckets;
+- staff performance;
+- service revenue;
+- dashboard summaries.
+
+Views:
+
+```text
+Revenue
+Invoices
+Payments
+Outstanding
+Financial Buckets
+Reports
+```
+
+---
+
+# 37. Payments
+
+Payment status:
+
+```text
+UNPAID
+PARTIALLY_PAID
+PAID
+REFUNDED
+VOID
+```
+
+Methods:
+
+- cash;
+- bank transfer;
+- card;
+- online provider;
+- custom.
+
+Payment provider integration later / phase-based.
+
+---
+
+# 38. Invoice Reminders
+
+Automation:
+
+```text
+Invoice sent
+→ wait 5 days
+→ if unpaid: reminder
+
+wait 5 more days
+→ if unpaid: second reminder
+
+wait configurable period
+→ create owner task
+```
+
+---
+
+# 39. Analytics
+
+Owner dashboard:
+
+- revenue;
+- revenue by financial bucket;
+- appointments/jobs;
+- completed services;
+- cancellations;
+- no-shows;
+- new clients;
+- returning clients;
+- average ticket;
+- occupancy;
+- staff utilization;
+- unpaid invoices;
+- lead conversion;
+- popular services.
+
+Filters:
+
+- date;
+- staff;
+- service;
+- location;
+- financial bucket;
+- branch;
+- custom tags.
+
+---
+
+# 40. Notifications
+
+In-app notifications.
+
+Later:
+
+- email;
+- SMS;
+- push;
+- WhatsApp.
+
+Examples:
+
+- new booking;
+- cancellation;
+- new lead;
+- quote accepted;
+- invoice paid;
+- invoice overdue;
+- staff absence;
+- waitlist opportunity;
+- AI attention required.
+
+---
+
+# 41. Automation Engine
+
+Simple rule system.
+
+Model:
+
+```text
+TRIGGER
++
+CONDITIONS
++
+ACTIONS
+```
+
+Example:
+
+```text
+Trigger:
+Appointment completed
+
+Condition:
+Service = Car detailing
+
+Action:
+Wait 180 days
+Send maintenance reminder
+```
+
+Another:
+
+```text
+Trigger:
+Invoice overdue by 7 days
+
+Action:
+Send reminder
+Create task for owner
+```
+
+---
+
+# 42. Locations / Branches
+
+Support:
+
+- single-location business;
+- multi-location business;
+- mobile service business;
+- remote/online business.
+
+Location properties:
+
+- address;
+- timezone;
+- opening hours;
+- assigned staff;
+- assigned resources;
+- booking rules.
+
+---
+
+# 43. Mobile Experience
+
+The web app must be fully usable on a phone.
+
+Critical mobile screens:
+
+- Today;
+- calendar;
+- create appointment;
+- client profile;
+- inbox;
+- AI assistant;
+- payment;
+- task list.
+
+Do not treat mobile as a reduced desktop screenshot.
+
+Use dedicated responsive interaction patterns.
+
+---
+
+# 44. DESIGN DIRECTION — Inspired by Дія / Diia
+
+The product must feel:
+
+- modern;
+- calm;
+- human;
+- simple;
+- premium but not luxurious;
+- confident;
+- friendly;
+- highly readable;
+- digital-first;
+- accessible.
+
+The UI should be **inspired by the design principles of Diia**, not cloned.
+
+Do NOT copy:
+
+- Diia logo;
+- government symbols;
+- exact page compositions;
+- exact brand identity;
+- exact proprietary illustrations.
+
+Use the broader principles:
+
+- strong typographic hierarchy;
+- generous whitespace;
+- simple navigation;
+- minimal chrome;
+- contextual color;
+- soft gradients;
+- direct language;
+- strong accessibility;
+- clear service-first UX.
+
+---
+
+# 45. Typography
+
+Preferred design direction:
+
+### Option A
+
+Use **e-Ukraine** / **e-Ukraine Head** only if licensing and required attribution are correctly handled for the commercial product.
+
+### Option B — Safe fallback
+
+Use:
+
+```text
+Primary: Inter
+Alternative: Manrope
+Alternative: Onest
+```
+
+Typography principles:
+
+- large editorial headings;
+- normal-weight body copy;
+- limited number of font weights;
+- clear numeric displays;
+- spacious line height.
+
+Suggested scale:
+
+```text
+Display XL: 72–88 px desktop
+Display L: 56–64 px
+H1: 44–56 px
+H2: 32–40 px
+H3: 24–28 px
+Body L: 18–20 px
+Body: 16 px
+Small: 13–14 px
+```
+
+Mobile:
+
+```text
+H1: 38–44 px
+H2: 28–34 px
+Body: 16 px
+```
+
+Do not make the interface look like a generic Bootstrap admin panel.
+
+---
+
+# 46. Color System
+
+Base interface:
+
+```text
+Ink        #111111
+Paper      #F6F5F2
+White      #FFFFFF
+Muted      #6E6E6E
+Border     rgba(17,17,17,0.14)
+```
+
+Use contextual accent colors rather than one dominant SaaS purple.
+
+Possible soft accents:
+
+```text
+Soft Blue
+Sky
+Mint
+Lime
+Peach
+Pink
+Lavender
+Warm Yellow
+```
+
+Use gradients selectively.
+
+Example:
+
+```css
+background:
+  radial-gradient(circle at 20% 10%, rgba(...), transparent 40%),
+  radial-gradient(circle at 80% 30%, rgba(...), transparent 42%),
+  #f6f5f2;
+```
+
+Important:
+
+- no excessive neon;
+- no dark cyberpunk aesthetic;
+- no generic blue-purple SaaS gradient everywhere;
+- no random color per component;
+- color must communicate state or context.
+
+---
+
+# 47. Cards
+
+Cards should feel light and spacious.
+
+Properties:
+
+```text
+border: subtle
+radius: 18–28px
+shadow: none or extremely soft
+padding: generous
+background: white / contextual soft tone
+```
+
+Prefer border + spacing over heavy shadows.
+
+Cards may contain:
+
+- number;
+- label;
+- action;
+- tiny contextual status.
+
+Example dashboard:
+
+```text
+┌────────────────────┐
+│ Revenue            │
+│ €8,450             │
+│ +8.4% this month   │
+└────────────────────┘
+```
+
+---
+
+# 48. Buttons
+
+Primary button:
+
+- black / dark ink;
+- white label;
+- rounded but not pill-shaped everywhere;
+- clear active/hover state.
+
+Secondary:
+
+- transparent;
+- subtle border.
+
+Destructive:
+
+- explicit warning color;
+- confirmation required.
+
+Avoid dozens of button styles.
+
+---
+
+# 49. Navigation
+
+Desktop app:
+
+```text
+┌ Sidebar ─────────┐
+│ Logo             │
+│ Today            │
+│ Calendar         │
+│ Inbox            │
+│ Clients          │
+│ Work             │
+│ Finance          │
+│ Analytics        │
+│ Assistant ✦      │
+│                  │
+│ Settings         │
+└──────────────────┘
+```
+
+Navigation should remain visually quiet.
+
+Possible collapsed sidebar on smaller desktop widths.
+
+Mobile:
+
+bottom navigation for the most frequent areas:
+
+```text
+Today
+Calendar
++
+Inbox
+More
+```
+
+AI assistant can have a persistent but non-intrusive entry point.
+
+---
+
+# 50. Dashboard Design
+
+Dashboard should not be a wall of charts.
+
+Start with a human summary.
+
+Example:
+
+```text
+Good morning, Christina.
+
+Tuesday, 22 September
+
+You have 7 appointments today.
+Two clients still need confirmation.
+```
+
+Then cards:
+
+```text
+Today
+7 bookings
+
+Revenue
+€1,240
+
+Requests
+3 new
+
+Outstanding
+€420
+```
+
+Then:
+
+```text
+Needs attention
+```
+
+with actionable items.
+
+Then today's schedule.
+
+Then optional analytics.
+
+---
+
+# 51. AI Assistant UI
+
+Assistant should be a first-class screen.
+
+Layout:
+
+```text
+┌─────────────────────────────────────┐
+│ Assistant ✦                         │
+│                                     │
+│ Good morning.                       │
+│ Here is what needs attention today. │
+│                                     │
+│ [2 unconfirmed bookings]            │
+│ [€420 overdue]                      │
+│ [1 empty slot]                      │
+│                                     │
+│ Ask anything...                     │
+└─────────────────────────────────────┘
+```
+
+Suggested prompts:
+
+```text
+What needs my attention?
+Show tomorrow's free slots.
+Who has not paid?
+Create a booking.
+Draft a reply.
+How much did we earn this week?
+```
+
+When AI proposes an action, render it as a structured action card, not plain chat text only.
+
+Example:
+
+```text
+Move appointment
+
+Anna Müller
+Fri 25 Sep
+14:00 → 16:30
+
+[Confirm] [Edit]
+```
+
+---
+
+# 52. Calendar Design
+
+Calendar should look calm and clean.
+
+Avoid:
+
+- tiny dense boxes;
+- dozens of colors;
+- excessive borders.
+
+Use:
+
+- whitespace;
+- subtle grid;
+- rounded appointment blocks;
+- strong time hierarchy;
+- quick filters.
+
+Private appointments for unauthorized users:
+
+```text
+Busy
+```
+
+not blurred client data.
+
+---
+
+# 53. Finance Design
+
+Financial views must make the bucket model immediately understandable.
+
+Example:
+
+```text
+Revenue this month
+€9,770
+
+Main Business
+€8,450
+
+Private
+€1,320
+```
+
+Filter chips:
+
+```text
+[All] [Main] [Private] [+ Custom]
+```
+
+For owner:
+
+show both combined and separated views.
+
+For restricted staff:
+
+show only permitted buckets.
+
+---
+
+# 54. Empty States
+
+Every empty screen must explain:
+
+1. what this area is;
+2. why it is useful;
+3. what first action to take.
+
+Bad:
+
+```text
+No data.
+```
+
+Good:
+
+```text
+No clients yet
+
+Add your first client or create a booking.
+[Add client]
+```
+
+---
+
+# 55. Microcopy
+
+Language should be direct and human.
+
+Prefer:
+
+```text
+Create booking
+Send reminder
+Move appointment
+Add client
+```
+
+Avoid:
+
+```text
+Initiate appointment creation process
+Execute customer notification
+```
+
+---
+
+# 56. Animation
+
+Animation must support understanding.
+
+Allowed:
+
+- soft page transitions;
+- card entrance;
+- calendar drag feedback;
+- button feedback;
+- assistant action confirmation;
+- subtle gradient motion.
+
+Avoid:
+
+- decorative constant motion;
+- long intro animations;
+- excessive parallax;
+- animations that delay work.
+
+Target feeling:
+
+**fast and alive, not flashy.**
+
+---
+
+# 57. Accessibility
+
+Minimum requirements:
+
+- WCAG-oriented contrast;
+- keyboard navigation;
+- visible focus states;
+- semantic HTML;
+- label/input association;
+- screen-reader-friendly forms;
+- reduced-motion support;
+- minimum mobile tap targets;
+- status not communicated by color alone.
+
+---
+
+# 58. Public Marketing Website
+
+The SaaS marketing website is separate from the application.
+
+Possible structure:
+
+```text
+/
+├── Product
+├── AI Assistant
+├── Scheduling
+├── CRM
+├── Industries
+├── Pricing
+├── Security
+├── Login
+└── Start free
+```
+
+Visual language should match the app.
+
+---
+
+# 59. Onboarding
+
+Goal: working workspace in under 10 minutes.
+
+Flow:
+
+```text
+1. What kind of business do you run?
+2. How do clients work with you?
+3. Add services
+4. Add staff
+5. Set working hours
+6. Configure booking
+7. Choose financial buckets
+8. Import clients (optional)
+9. You're ready
+```
+
+AI can help onboarding.
+
+Example:
+
+> “Describe your business in one sentence.”
+
+AI suggests:
+
+- services;
+- durations;
+- categories;
+- custom fields;
+- workflow mode.
+
+User confirms before creation.
+
+---
+
+# 60. Suggested Industry Presets
+
+Presets are configuration shortcuts, not separate products.
+
+Examples:
+
+```text
+Beauty & Wellness
+Cleaning
+Auto Service
+Repair & Trades
+Photography
+Education
+Consulting
+Agency / Web Studio
+Fitness
+Pet Services
+Other
+```
+
+Each preset can preconfigure:
+
+- terminology;
+- custom fields;
+- booking defaults;
+- statuses;
+- resources;
+- dashboard suggestions.
+
+---
+
+# 61. Terminology Configuration
+
+Different industries use different words.
+
+Allow workspace terminology presets.
+
+Examples:
+
+```text
+Appointment / Booking / Termin
+Job / Order / Auftrag
+Client / Customer / Patient / Student
+Staff / Team / Technician / Master
+```
+
+Do not hard-code beauty terminology.
+
+---
+
+# 62. Search
+
+Global command/search bar:
+
+```text
+Search clients, bookings, jobs, invoices…
+```
+
+Support:
+
+- fuzzy search;
+- phone;
+- email;
+- invoice number;
+- custom fields;
+- tags.
+
+AI semantic search can be layered later.
+
+---
+
+# 63. Command Palette
+
+Keyboard shortcut:
+
+```text
+⌘ K / Ctrl K
+```
+
+Actions:
+
+```text
+Create booking
+Add client
+New invoice
+New task
+Open assistant
+Search client
+Go to calendar
+```
+
+---
+
+# 64. Audit Log
+
+Log critical actions:
+
+- appointment created;
+- appointment moved;
+- privacy changed;
+- financial bucket changed;
+- invoice changed;
+- payment changed;
+- permissions changed;
+- AI write action;
+- export;
+- deletion.
+
+Fields:
+
+```text
+actor
+action
+entity
+entity_id
+before
+after
+timestamp
+ip_metadata where appropriate
+source: USER | AI | AUTOMATION | API
+```
+
+---
+
+# 65. GDPR / Data Protection
+
+Because the platform will operate in Europe, GDPR should be considered from the architecture stage.
+
+Features:
+
+- data export;
+- delete/anonymize client;
+- consent tracking;
+- retention rules;
+- audit trail;
+- access controls;
+- encryption in transit;
+- secure storage;
+- minimal collection;
+- privacy settings;
+- processor/subprocessor documentation later.
+
+Sensitive industry data may require additional legal review.
+
+Do not position the initial release as specialized medical software.
+
+---
+
+# 66. Technical Stack
+
+Recommended:
+
+```text
+Frontend
+Next.js App Router
+React
+TypeScript
+
+UI
+CSS Modules / SCSS Modules
+Modern CSS with CSS variables and design tokens
+Radix UI or carefully selected headless primitives where useful
+Custom design system
+
+IMPORTANT:
+Tailwind CSS must NOT be used in this project.
+Do not install Tailwind.
+Do not use utility-first class styling as the main styling architecture.
+
+Backend
+Next.js server layer
+Supabase
+
+Database
+PostgreSQL
+
+Auth
+Supabase Auth
+
+Storage
+Supabase Storage
+
+Realtime
+Supabase Realtime where useful
+
+Hosting
+Vercel
+
+Validation
+Zod
+
+Forms
+React Hook Form
+
+AI
+Provider abstraction
+Tool/function calling
+Structured outputs
+
+Email
+Provider abstraction (e.g. Resend)
+
+Payments
+Stripe or regional provider abstraction
+
+Monitoring
+Sentry or equivalent
+
+Analytics
+privacy-aware product analytics
+```
+
+Avoid building core business logic entirely inside React components.
+
+---
+
+# 67. Background Jobs
+
+Automations and reminders require a reliable background-job layer.
+
+Possible options:
+
+- Trigger.dev;
+- Inngest;
+- Supabase scheduled functions / cron where sufficient.
+
+Use a provider abstraction if practical.
+
+Background tasks:
+
+- reminders;
+- follow-ups;
+- invoice reminders;
+- waiting-list matching;
+- recurring bookings;
+- daily summaries;
+- webhook retries.
+
+---
+
+# 68. Database — Core Tables
+
+Initial conceptual model:
+
+```text
+users
+workspaces
+workspace_members
+roles
+permissions
+
+clients
+client_tags
+client_notes
+custom_field_definitions
+custom_field_values
+
+services
+service_categories
+
+staff_profiles
+staff_services
+working_hours
+availability_exceptions
+
+resources
+resource_availability
+
+appointments
+appointment_participants
+appointment_resources
+
+leads
+quotes
+quote_items
+
+jobs
+job_assignments
+
+projects
+project_members
+tasks
+
+financial_buckets
+invoices
+invoice_items
+payments
+
+messages
+conversations
+
+forms
+form_fields
+form_responses
+
+files
+
+automation_rules
+automation_runs
+
+notifications
+
+ai_threads
+ai_messages
+ai_actions
+
+audit_logs
+```
+
+---
+
+# 69. Appointment Table — Important Fields
+
+Conceptual schema:
+
+```text
+appointments
+- id
+- workspace_id
+- client_id
+- service_id
+- staff_id
+- location_id
+- starts_at
+- ends_at
+- timezone
+- status
+
+- visibility_level
+- financial_bucket_id
+
+- title
+- client_notes
+- internal_notes
+
+- price
+- currency
+- payment_status
+
+- source
+- created_by
+- created_at
+- updated_at
+```
+
+Do not encode private finance using a single `is_private` boolean.
+
+---
+
+# 70. Permission Model
+
+Permissions should be capability-based.
+
+Examples:
+
+```text
+clients.view
+clients.edit
+
+appointments.view
+appointments.create
+appointments.edit
+appointments.cancel
+
+private_records.view
+
+finance.view
+finance.edit
+financial_bucket.main.view
+financial_bucket.private.view
+
+staff.manage
+
+settings.manage
+billing.manage
+```
+
+Role = collection of permissions.
+
+Later allow custom roles.
+
+---
+
+# 71. API / Server Security Rules
+
+Every write operation must verify:
+
+```text
+authenticated user
+→ workspace membership
+→ required permission
+→ record scope
+→ payload validation
+→ business constraints
+→ audit log
+```
+
+Never trust `workspace_id` sent by the browser without authorization verification.
+
+---
+
+# 72. AI Data Boundary
+
+When preparing context for AI:
+
+1. retrieve only permitted records;
+2. strip unauthorized fields;
+3. avoid exposing private records;
+4. preserve workspace isolation;
+5. log write operations;
+6. never let a model decide authorization.
+
+Authorization belongs to application code.
+
+---
+
+# 73. Internationalization
+
+Build i18n from the start.
+
+Initial target languages can include:
+
+- German;
+- English;
+- Ukrainian;
+- Russian if product strategy requires it.
+
+Architecture must allow more languages later.
+
+Store user-facing templates by locale.
+
+Dates/currency/timezones must be localized correctly.
+
+---
+
+# 74. Germany / EU Readiness
+
+Plan for:
+
+- EUR;
+- German date/time formats;
+- VAT configuration;
+- invoice fields;
+- GDPR;
+- localized legal pages.
+
+Do not implement tax filing in MVP.
+
+Export data in formats useful for accounting workflows later.
+
+---
+
+# 75. MVP — Version 1
+
+The first sellable version should include:
+
+### Foundation
+
+- auth;
+- workspace;
+- onboarding;
+- roles;
+- responsive app shell.
+
+### CRM
+
+- clients;
+- notes;
+- custom fields.
+
+### Services
+
+- services;
+- categories;
+- durations;
+- prices.
+
+### Team
+
+- staff;
+- schedules.
+
+### Calendar
+
+- appointments;
+- working hours;
+- conflicts;
+- drag/drop;
+- statuses.
+
+### Critical separation
+
+- normal/private/owner-only visibility;
+- financial buckets;
+- separate revenue reporting;
+- permission-safe masking.
+
+### Booking
+
+- public booking page.
+
+### Finance basic
+
+- payment status;
+- revenue;
+- invoices basic;
+- outstanding balances.
+
+### AI
+
+- business assistant;
+- schedule lookup;
+- client lookup;
+- booking creation/movement;
+- simple revenue queries;
+- action confirmations.
+
+### Dashboard
+
+- Today;
+- Needs attention;
+- basic revenue;
+- appointments;
+- requests.
+
+---
+
+# 76. Version 1.5
+
+Add:
+
+- unified inbox;
+- reminders;
+- forms;
+- client portal;
+- waiting list;
+- recurring bookings;
+- quotes;
+- jobs;
+- file uploads;
+- AI reply drafts;
+- morning brief;
+- evening summary.
+
+---
+
+# 77. Version 2
+
+Add:
+
+- automation builder;
+- projects;
+- resources;
+- advanced finance;
+- advanced analytics;
+- branches;
+- online payments;
+- custom roles;
+- industry presets;
+- integrations.
+
+---
+
+# 78. Later / Advanced
+
+Possible future additions:
+
+- AI phone receptionist;
+- voice commands;
+- route optimization for mobile workers;
+- WhatsApp automation;
+- inventory-lite;
+- employee time tracking;
+- document generation;
+- electronic signatures;
+- marketplace integrations;
+- API for third-party developers;
+- white-label mode.
+
+---
+
+# 79. Features NOT to Build Too Early
+
+Do not start with:
+
+- full accounting;
+- payroll;
+- tax filing;
+- ERP inventory;
+- full project-management suite;
+- complex custom workflow builder;
+- call-center infrastructure;
+- native iOS/Android apps;
+- dozens of integrations.
+
+First make the core operational loop excellent.
+
+---
+
+# 80. Main User Journey — Solo Business
+
+```text
+Register
+→ Create workspace
+→ Add services
+→ Set working hours
+→ Share booking link
+→ Client books
+→ Appointment appears
+→ Reminder sent
+→ Service completed
+→ Payment recorded
+→ Follow-up
+→ AI summarizes day
+```
+
+---
+
+# 81. Main User Journey — Team Business
+
+```text
+New request
+→ AI / admin qualifies request
+→ Assign staff/resource
+→ Schedule
+→ Client confirmation
+→ Staff completes work
+→ Invoice
+→ Payment
+→ Follow-up
+→ Analytics
+```
+
+---
+
+# 82. Main User Journey — Private Appointment
+
+Owner creates appointment:
+
+```text
+Client: Example Client
+Service: Consultation
+Time: 15:00
+Visibility: OWNER_ONLY
+Financial bucket: PRIVATE
+```
+
+Other employee calendar:
+
+```text
+15:00 — Busy
+```
+
+Owner calendar:
+
+```text
+15:00
+Example Client
+Consultation
+€150
+Private
+```
+
+Finance owner view:
+
+```text
+Main revenue:    €8,450
+Private revenue: €1,320
+Combined:        €9,770
+```
+
+This workflow is mandatory.
+
+---
+
+# 83. Main User Journey — AI Secretary
+
+Owner:
+
+> “Find Frau Müller and move her Friday appointment to the first free slot after 15:00.”
+
+System:
+
+1. identifies client;
+2. identifies appointment;
+3. checks permissions;
+4. checks availability;
+5. returns proposed move;
+6. owner confirms;
+7. system updates appointment;
+8. audit log written;
+9. optional client notification sent.
+
+---
+
+# 84. Design Deliverables Before Heavy Development
+
+Before implementing the entire app, create these polished screens:
+
+1. Login
+2. Onboarding
+3. Dashboard
+4. Calendar
+5. Appointment drawer/modal
+6. Client list
+7. Client profile
+8. Assistant
+9. Finance
+10. Settings
+11. Public booking
+12. Mobile Today screen
+
+These screens establish the full visual system.
+
+---
+
+# 85. Component System
+
+Build reusable components:
+
+```text
+AppShell
+Sidebar
+MobileNav
+TopBar
+
+PageHeader
+SectionHeader
+
+Card
+MetricCard
+ActionCard
+AttentionCard
+
+Button
+IconButton
+Dropdown
+Tabs
+Chip
+Badge
+
+Input
+Textarea
+Select
+Combobox
+DatePicker
+TimePicker
+MoneyInput
+
+Drawer
+Modal
+Popover
+
+DataTable
+EmptyState
+
+Calendar
+AppointmentCard
+TimeGrid
+
+ClientAvatar
+ClientSummary
+
+AssistantMessage
+AssistantActionCard
+AssistantComposer
+
+FinancialBucketBadge
+VisibilityBadge
+```
+
+Avoid page-specific duplicated UI.
+
+---
+
+# 86. Status Visual Language
+
+Use calm contextual status tokens.
+
+Example:
+
+```text
+Confirmed    green
+Pending      yellow
+Cancelled    muted/red
+No-show      red
+Completed    neutral/dark
+Private      violet/neutral special marker
+Owner-only   lock icon + neutral
+```
+
+Do not rely on color alone.
+
+---
+
+# 87. Responsive Breakpoints
+
+Design intentionally for:
+
+- mobile;
+- tablet;
+- laptop;
+- desktop.
+
+Mobile screens should prioritize action.
+
+Example mobile home:
+
+```text
+Good morning
+
+[ + New ]
+
+Today
+09:00 Müller
+10:30 Schmidt
+12:00 Busy
+...
+
+Needs attention
+2 confirmations
+1 unpaid invoice
+```
+
+---
+
+# 88. Performance
+
+Goals:
+
+- fast first load;
+- route-level code splitting;
+- server rendering where useful;
+- optimistic UI for safe actions;
+- virtualize large lists/calendar where needed;
+- avoid giant client bundles;
+- cache carefully without leaking tenant data.
+
+---
+
+# 89. Testing
+
+Minimum:
+
+- unit tests for business rules;
+- integration tests for permissions;
+- booking conflict tests;
+- financial bucket tests;
+- private appointment visibility tests;
+- AI tool authorization tests;
+- E2E for critical workflows.
+
+Critical test:
+
+> A user without `private_records.view` must never receive private appointment details from API, UI, search or AI.
+
+---
+
+# 90. Development Rules for Claude / Coding Agent
+
+## 90.1 Do not build the entire product in one pass
+
+Work in phases.
+
+For each task:
+
+1. inspect relevant files only;
+2. explain intended change briefly;
+3. implement;
+4. typecheck;
+5. lint;
+6. test relevant functionality;
+7. report changed files.
+
+## 90.2 Preserve architecture
+
+Do not:
+
+- duplicate data models;
+- hard-code workspace IDs;
+- bypass RLS;
+- bypass permission checks;
+- put secrets in client code;
+- let AI call raw database queries directly.
+
+## 90.3 Preserve design
+
+Do not introduce:
+
+- random gradients;
+- generic dashboard templates;
+- inconsistent radii;
+- arbitrary shadows;
+- new colors without tokens;
+- different typography per page;
+- Tailwind CSS;
+- utility-class-heavy styling;
+- inline style sprawl.
+
+Use the design system.
+
+### Styling rule — mandatory
+
+This project must NOT use Tailwind CSS.
+
+Preferred styling approach:
+
+```text
+CSS Modules / SCSS Modules
++
+CSS Custom Properties
++
+Design Tokens
++
+shared component-level styles
+```
+
+Global design tokens should define:
+
+```text
+colors
+spacing
+radii
+typography
+shadows
+z-index
+motion
+breakpoints
+```
+
+Example:
+
+```css
+:root {
+  --color-ink: #111111;
+  --color-paper: #f6f5f2;
+  --color-surface: #ffffff;
+  --color-muted: #6e6e6e;
+
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+}
+```
+
+Component styles should live close to components, for example:
+
+```text
+components/
+  Button/
+    Button.tsx
+    Button.module.css
+```
+
+The goal is a controlled, original visual system inspired by Diia's clarity, not a generic utility-framework look.
+
+---
+
+# 91. Suggested Project Structure
+
+```text
+src/
+├── app/
+│   ├── (auth)/
+│   ├── (marketing)/
+│   ├── (app)/
+│   │   └── [workspaceSlug]/
+│   │       ├── today/
+│   │       ├── calendar/
+│   │       ├── clients/
+│   │       ├── inbox/
+│   │       ├── work/
+│   │       ├── finance/
+│   │       ├── analytics/
+│   │       ├── assistant/
+│   │       └── settings/
+│   └── book/
+│
+├── components/
+│   ├── ui/
+│   ├── calendar/
+│   ├── clients/
+│   ├── finance/
+│   └── assistant/
+│
+├── features/
+│   ├── appointments/
+│   ├── clients/
+│   ├── finance/
+│   ├── jobs/
+│   ├── ai/
+│   └── permissions/
+│
+├── lib/
+│   ├── auth/
+│   ├── db/
+│   ├── ai/
+│   ├── permissions/
+│   ├── validation/
+│   └── i18n/
+│
+└── styles/
+```
+
+Exact structure may evolve, but domain boundaries should remain clear.
+
+---
+
+# 92. Environment / Secrets
+
+Typical environment groups:
+
+```text
+DATABASE
+SUPABASE
+AI_PROVIDER
+EMAIL_PROVIDER
+PAYMENT_PROVIDER
+ERROR_MONITORING
+```
+
+Never commit secrets.
+
+Use separate:
+
+- development;
+- preview;
+- production.
+
+---
+
+# 93. Product Success Criterion
+
+The product succeeds when a small business owner can open the app in the morning and immediately understand:
+
+1. what is happening today;
+2. what needs attention;
+3. who needs a reply;
+4. what is unpaid;
+5. where there are empty slots;
+6. what the business earned;
+7. what the AI can handle for them.
+
+The owner should not need to manually inspect five pages to understand the day.
+
+---
+
+# 94. UX North Star
+
+The experience should feel like:
+
+> **“I have a very organized digital administrator who knows my calendar, clients, work, payments and tasks — but asks me before doing anything important.”**
+
+---
+
+# 95. Visual North Star
+
+The interface should feel:
+
+```text
+Дія-like clarity
++
+Swiss-style order
++
+modern SaaS functionality
++
+warm human microcopy
++
+very strong mobile usability
+```
+
+Not:
+
+```text
+corporate ERP
+generic admin template
+dark hacker dashboard
+over-designed Dribbble concept
+beauty-only CRM
+```
+
+---
+
+# 96. Final Product Positioning
+
+Short version:
+
+> **AI-powered business assistant for service businesses.**
+
+Expanded:
+
+> A universal platform for service businesses that combines scheduling, clients, jobs, finance, communication and automation with an AI administrator that helps run everyday operations.
+
+---
+
+# 97. Non-Negotiable Requirements
+
+Claude / development team must treat the following as fixed product requirements:
+
+1. The product is **not beauty-only**.
+2. It must work for different service industries.
+3. It is a **multi-tenant SaaS**.
+4. AI is a real operational assistant.
+5. **Private appointments/jobs must exist.**
+6. **Visibility and financial classification must be separate.**
+7. **Private/main/custom revenue buckets must exist.**
+8. Permissions must be enforced server-side.
+9. AI must obey those same permissions.
+10. Public booking must be built into the platform.
+11. Mobile UX is mandatory.
+12. Design should be inspired by the simplicity and human-centered approach of **Diia**, without cloning the Diia brand.
+13. **Tailwind CSS must not be used anywhere in the project.**
+14. Styling should use CSS Modules / SCSS Modules, CSS variables and a custom design-token system.
+15. The dashboard must focus on actions and attention, not decorative charts.
+16. The app must remain visually calm even as functionality grows.
+17. Internal financial separation must not be implemented as a mechanism for concealing legally reportable revenue.
+
+---
+
+# 98. First Implementation Milestone
+
+Before adding advanced modules, build a polished vertical slice:
+
+```text
+Auth
+→ Workspace
+→ Onboarding
+→ Services
+→ Staff
+→ Clients
+→ Calendar
+→ Create Appointment
+→ Visibility
+→ Financial Bucket
+→ Dashboard
+→ AI Assistant
+```
+
+Required demo scenario:
+
+1. Create normal client appointment.
+2. Create owner-only/private appointment.
+3. Assign private financial bucket.
+4. Show private record masked for unauthorized staff.
+5. Show separated revenue to owner.
+6. Ask AI: “What do I have today?”
+7. Verify AI does not expose private details to unauthorized role.
+8. Ask owner AI: “Show private revenue this month.”
+9. Move a booking through an AI action with confirmation.
+10. Verify audit log.
+
+Only after this vertical slice is stable should the product expand into inbox, quotes, jobs and automations.
+
+---
+
+# 99. Reference Direction
+
+For visual inspiration, study the official Diia ecosystem for principles such as:
+
+- service-first information architecture;
+- strong typography;
+- minimal interaction friction;
+- contextual color;
+- readable layouts;
+- accessible and inclusive UI;
+- simple language.
+
+Do not copy pages pixel-for-pixel.
+
+Create an original commercial product identity.
+
+---
+
+# 100. End Goal
+
+The finished platform should be usable by a person who does not want to “manage a CRM”.
+
+They should simply be able to say:
+
+> “Show me today.”
+
+> “Book this client.”
+
+> “Who hasn't paid?”
+
+> “Move this appointment.”
+
+> “What needs my attention?”
+
+> “How much did my main business make?”
+
+> “How much is in my private financial category?”
+
+and the platform should safely do the administrative work around those requests.
+

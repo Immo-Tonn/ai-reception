@@ -1,0 +1,110 @@
+import type { Conversation } from "./types";
+
+/** Demo data for the design/navigation pass only — no real client messages. */
+export const demoConversations: Conversation[] = [
+  {
+    id: "conv-anna",
+    clientId: "anna-muller",
+    clientName: "Anna Müller",
+    channel: "webChat",
+    status: "open",
+    unread: true,
+    lastMessageAt: "2026-09-22T08:12:00",
+    lastMessagePreview: "Can I move my haircut to a bit later on Tuesday?",
+    messages: [
+      {
+        id: "m1",
+        author: "client",
+        authorName: "Anna Müller",
+        body: "Hi! Can I move my haircut to a bit later on Tuesday?",
+        createdAt: "2026-09-22T08:12:00",
+      },
+    ],
+  },
+  {
+    id: "conv-jonas",
+    clientId: "jonas-schmidt",
+    clientName: "Jonas Schmidt",
+    channel: "whatsapp",
+    status: "pending",
+    unread: true,
+    lastMessageAt: "2026-09-21T17:40:00",
+    lastMessagePreview: "Sounds good, see you then.",
+    messages: [
+      {
+        id: "m1",
+        author: "client",
+        authorName: "Jonas Schmidt",
+        body: "Hi, do you have anything free this week for a consultation?",
+        createdAt: "2026-09-21T17:20:00",
+      },
+      {
+        id: "m2",
+        author: "staff",
+        authorName: "You",
+        body: "Yes — Thursday 10:30 is open, would that work?",
+        createdAt: "2026-09-21T17:32:00",
+      },
+      {
+        id: "m3",
+        author: "client",
+        authorName: "Jonas Schmidt",
+        body: "Sounds good, see you then.",
+        createdAt: "2026-09-21T17:40:00",
+      },
+    ],
+  },
+  {
+    id: "conv-newlead",
+    clientId: null,
+    clientName: "Sofia Bergmann",
+    channel: "email",
+    status: "open",
+    unread: true,
+    lastMessageAt: "2026-09-20T11:05:00",
+    lastMessagePreview: "Hi, I found your studio online — do you take walk-ins?",
+    messages: [
+      {
+        id: "m1",
+        author: "client",
+        authorName: "Sofia Bergmann",
+        body: "Hi, I found your studio online — do you take walk-ins, or is everything by appointment?",
+        createdAt: "2026-09-20T11:05:00",
+      },
+    ],
+  },
+  {
+    id: "conv-laura",
+    clientId: "laura-fischer",
+    clientName: "Laura Fischer",
+    channel: "sms",
+    status: "resolved",
+    unread: false,
+    lastMessageAt: "2026-09-18T09:15:00",
+    lastMessagePreview: "Perfect, thank you!",
+    messages: [
+      {
+        id: "m1",
+        author: "client",
+        authorName: "Laura Fischer",
+        body: "Can you remind me what time my appointment is tomorrow?",
+        createdAt: "2026-09-18T09:02:00",
+      },
+      {
+        id: "m2",
+        author: "staff",
+        authorName: "You",
+        body: "Of course — 14:00 tomorrow.",
+        createdAt: "2026-09-18T09:10:00",
+        internal: false,
+      },
+      {
+        id: "m3",
+        author: "client",
+        authorName: "Laura Fischer",
+        body: "Perfect, thank you!",
+        createdAt: "2026-09-18T09:15:00",
+      },
+    ],
+  },
+];

@@ -1,0 +1,230 @@
+.page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.header {
+  padding: var(--space-4) var(--space-4) var(--space-3);
+}
+
+@media (min-width: 768px) {
+  .header {
+    padding: var(--space-6) var(--space-8) var(--space-3);
+  }
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-accent-lavender);
+  margin-bottom: var(--space-2);
+}
+
+.sparkDot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-lavender);
+}
+
+.greeting {
+  font-size: 1.5rem;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+  margin-bottom: var(--space-1);
+}
+
+@media (min-width: 768px) {
+  .greeting {
+    font-size: var(--font-size-h2);
+  }
+}
+
+.subtitle {
+  font-size: var(--font-size-body);
+  color: var(--color-muted);
+}
+
+/* Attention chips row */
+.attentionRow {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding: 0 var(--space-4) var(--space-4);
+  scrollbar-width: none;
+}
+
+@media (min-width: 768px) {
+  .attentionRow {
+    padding: 0 var(--space-8) var(--space-4);
+  }
+}
+
+.attentionRow::-webkit-scrollbar {
+  display: none;
+}
+
+.attentionChip {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-ink);
+  white-space: nowrap;
+}
+
+/* Thread */
+.thread {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-4) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+@media (min-width: 768px) {
+  .thread {
+    padding: var(--space-2) var(--space-8) var(--space-4);
+  }
+}
+
+.bubbleRow {
+  display: flex;
+}
+
+.bubbleRowUser {
+  justify-content: flex-end;
+}
+
+.bubble {
+  max-width: 84%;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-relaxed);
+}
+
+.bubbleAssistant {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-top-left-radius: var(--space-1);
+}
+
+.bubbleUser {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  border-top-right-radius: var(--space-1);
+}
+
+/* Suggested prompts */
+.suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.suggestionButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: var(--font-size-body);
+  text-align: left;
+}
+
+/* Action card (§19, §51) */
+.actionCard {
+  max-width: 84%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--tint-lavender);
+  overflow: hidden;
+}
+
+.actionCardHeader {
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-accent-lavender);
+}
+
+.actionCardBody {
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+.actionCardTitle {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: 2px;
+}
+
+.actionCardMeta {
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+}
+
+.actionCardActions {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+/* Composer */
+.composer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-border);
+  background: var(--color-paper);
+}
+
+.composerInput {
+  flex: 1;
+  height: 48px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: var(--font-size-body);
+}
+
+.composerInput::placeholder {
+  color: var(--color-muted);
+}
+
+.sendButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-ink);
+  color: var(--color-paper);
+  border: none;
+}
+
+.sendButton:disabled {
+  opacity: 0.4;
+}

@@ -1,0 +1,235 @@
+/* Mobile-first: single column, compact brand header, full-width form.
+   Desktop gains the two-column split (§84). The top bar is a normal-flow
+   row of its own — never absolute over content, so it can never end up
+   under a headline/longer-locale string at any width (§ mobile nav
+   follow-up: "controls не должны использовать абсолютное
+   позиционирование поверх контента"). */
+.screen {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topBar {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: calc(var(--space-3) + env(safe-area-inset-top)) var(--space-4) var(--space-3);
+}
+
+@media (min-width: 900px) {
+  .topBar {
+    padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-6) var(--space-4);
+  }
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 900px) {
+  .body {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+  }
+}
+
+/* Brand panel — light, softly colored (mint/blue), never a solid dark
+   block: same restraint as the Landing hero, not a dark SaaS aside. */
+.brandPanel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-5);
+  overflow: hidden;
+  background: var(--color-paper);
+}
+
+@media (min-width: 900px) {
+  .brandPanel {
+    justify-content: space-between;
+    padding: var(--space-12);
+  }
+}
+
+.brandPanel::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  z-index: 0;
+  background-image:
+    radial-gradient(ellipse 60% 55% at 20% 15%, rgba(58, 102, 224, 0.22), transparent 68%),
+    radial-gradient(ellipse 55% 50% at 85% 80%, rgba(31, 158, 115, 0.2), transparent 68%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .brandPanel {
+    background: #12141c;
+  }
+  :root:not([data-theme="light"]) .brandPanel::before {
+    background-image:
+      radial-gradient(ellipse 60% 55% at 20% 15%, rgba(126, 166, 255, 0.18), transparent 68%),
+      radial-gradient(ellipse 55% 50% at 85% 80%, rgba(95, 214, 168, 0.14), transparent 68%);
+  }
+}
+
+:root[data-theme="dark"] .brandPanel {
+  background: #12141c;
+}
+:root[data-theme="dark"] .brandPanel::before {
+  background-image:
+    radial-gradient(ellipse 60% 55% at 20% 15%, rgba(126, 166, 255, 0.18), transparent 68%),
+    radial-gradient(ellipse 55% 50% at 85% 80%, rgba(95, 214, 168, 0.14), transparent 68%);
+}
+
+.logo {
+  position: relative;
+  z-index: 1;
+  display: none;
+  font-size: var(--font-size-body-l);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+}
+
+@media (min-width: 900px) {
+  .logo {
+    display: block;
+  }
+}
+
+.brandContent {
+  position: relative;
+  z-index: 1;
+  max-width: 34ch;
+}
+
+.brandTitle {
+  font-size: 1.5rem;
+  line-height: 1.2;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+  margin-bottom: var(--space-2);
+}
+
+@media (min-width: 900px) {
+  .brandTitle {
+    font-size: var(--font-size-h1);
+    line-height: var(--line-height-tight);
+    margin-bottom: var(--space-4);
+  }
+}
+
+.brandSubtitle {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-muted);
+}
+
+@media (min-width: 900px) {
+  .brandSubtitle {
+    font-size: var(--font-size-body-l);
+  }
+}
+
+.brandFoot {
+  position: relative;
+  z-index: 1;
+  display: none;
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+}
+
+@media (min-width: 900px) {
+  .brandFoot {
+    display: block;
+  }
+}
+
+.formPanel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6) var(--space-5) var(--space-10);
+  background: var(--color-paper);
+}
+
+@media (min-width: 900px) {
+  .formPanel {
+    padding: var(--space-8);
+  }
+}
+
+.formCard {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.formHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.formTitle {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+}
+
+.formSubtitle {
+  font-size: var(--font-size-body);
+  color: var(--color-muted);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.formFoot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.signupPrompt {
+  text-align: center;
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+}
+
+.signupLink {
+  color: var(--color-ink);
+  font-weight: var(--font-weight-medium);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

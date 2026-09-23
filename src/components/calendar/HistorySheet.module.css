@@ -1,0 +1,29 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.row {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+}
+
+.rowSummary {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+}
+
+.rowMeta {
+  font-size: var(--font-size-small);
+  color: var(--text-secondary);
+}
+
+.empty {
+  padding: var(--space-8) var(--space-5);
+  text-align: center;
+  color: var(--text-secondary);
+}

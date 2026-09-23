@@ -1,0 +1,122 @@
+.page {
+  flex: 1;
+  padding: 0 var(--space-4) var(--space-8);
+}
+
+@media (min-width: 768px) {
+  .page {
+    padding: 0 var(--space-8) var(--space-10);
+  }
+}
+
+@media (min-width: 900px) {
+  .page {
+    padding: 0 var(--space-12) var(--space-10);
+    max-width: 760px;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+}
+
+@media (min-width: 768px) {
+  .title {
+    font-size: var(--font-size-h1);
+  }
+}
+
+.newButton {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .newButton {
+    display: inline-flex;
+  }
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-primary);
+  overflow: hidden;
+}
+
+.row {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-primary);
+}
+
+.row + .row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.rowTitle {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+}
+
+.rowMeta {
+  font-size: var(--font-size-small);
+  color: var(--text-secondary);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  padding: var(--space-8) var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.emptyTitle {
+  font-size: var(--font-size-body-l);
+  font-weight: var(--font-weight-medium);
+}
+
+.emptyDescription {
+  font-size: var(--font-size-body);
+  color: var(--text-secondary);
+}
+
+.fab {
+  position: fixed;
+  right: var(--space-4);
+  bottom: calc(60px + env(safe-area-inset-bottom) + var(--space-4));
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-pill);
+  background: var(--color-ink);
+  color: var(--color-paper);
+  border: none;
+  box-shadow: var(--shadow-soft);
+}
+
+@media (min-width: 900px) {
+  .fab {
+    display: none;
+  }
+}

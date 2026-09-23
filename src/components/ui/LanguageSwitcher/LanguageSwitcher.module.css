@@ -1,0 +1,80 @@
+.wrapper {
+  position: relative;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  /* Matches ThemeSwitcher's total height (44px pill + 3px padding on
+     each side = 50px) so the two controls read as one visual weight. */
+  height: 50px;
+  min-width: 50px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+}
+
+.triggerLabel {
+  text-transform: uppercase;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  /* Deliberately way above the dropdown token — this floats over
+     page-level hero content (mesh gradient + large headline), not just
+     sibling UI, so it needs headroom past z-modal. */
+  z-index: 1000;
+  min-width: 176px;
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  /* Solid, not translucent — a headline sitting behind this must never
+     show through. var(--color-surface) is already opaque; the rgba
+     fallback keeps it that way even if the token is ever redefined with
+     alpha. */
+  background: rgba(255, 255, 255, 0.98);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-soft), 0 1px 2px rgba(17, 17, 17, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .menu {
+    background: rgba(18, 18, 22, 0.98);
+  }
+}
+
+:root[data-theme="dark"] .menu {
+  background: rgba(18, 18, 22, 0.98);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 44px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--color-ink);
+  font-size: var(--font-size-body);
+  text-align: left;
+}
+
+.option:hover {
+  background: var(--color-paper);
+}
+
+.optionCheck {
+  color: var(--color-accent-blue);
+}

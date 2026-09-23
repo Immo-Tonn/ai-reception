@@ -1,0 +1,412 @@
+.page {
+  flex: 1;
+  padding: 0 var(--space-4) var(--space-8);
+}
+
+@media (min-width: 768px) {
+  .page {
+    padding: 0 var(--space-8) var(--space-10);
+  }
+}
+
+@media (min-width: 900px) {
+  .page {
+    padding: 0 var(--space-8) var(--space-10);
+    max-width: none;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+}
+
+@media (min-width: 768px) {
+  .title {
+    font-size: var(--font-size-h1);
+  }
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.historyButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.newButton {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .newButton {
+    display: inline-flex;
+  }
+}
+
+/* Mobile agenda vs. desktop views: two parallel trees toggled by CSS only
+   (no JS breakpoint detection, no hydration mismatch). Mobile always gets
+   its dedicated agenda UX — never a shrunken desktop grid (§ mobile-first
+   requirement). */
+.mobileOnly {
+  max-width: 760px;
+}
+
+@media (min-width: 900px) {
+  .mobileOnly {
+    display: none;
+  }
+}
+
+.desktopOnly {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .desktopOnly {
+    display: block;
+  }
+}
+
+/* Date strip — the mobile calendar surface itself, not a shrunken grid. */
+.dateStrip {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-5);
+  scrollbar-width: none;
+}
+
+.dateStrip::-webkit-scrollbar {
+  display: none;
+}
+
+.dateChip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 52px;
+  padding: var(--space-3) var(--space-2);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.dateChipActive {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: var(--color-paper);
+}
+
+.dateChipWeekday {
+  font-size: 11px;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.dateChipNum {
+  font-size: var(--font-size-body-l);
+  font-weight: var(--font-weight-semibold);
+}
+
+.dateChipDot {
+  width: 4px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+  opacity: 0.6;
+}
+
+/* Staff filter chips */
+.staffRow {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  margin-bottom: var(--space-5);
+  scrollbar-width: none;
+}
+
+.staffRow::-webkit-scrollbar {
+  display: none;
+}
+
+.staffChip {
+  flex-shrink: 0;
+  height: 36px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-primary);
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+}
+
+.staffChipActive {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: var(--color-paper);
+}
+
+/* View switcher (Day/Week/Month/Staff) — shared by mobile and desktop. */
+.viewSwitcher {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-4);
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+@media (min-width: 900px) {
+  .viewSwitcher {
+    margin-bottom: var(--space-5);
+  }
+}
+
+/* Week/Staff grid columns have a min-width per column and don't shrink to
+   fit a phone screen — scroll horizontally instead of squeezing them
+   unreadable (mobile-first: still the same TimeGrid, not a redraw). */
+.gridScroll {
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+  -webkit-overflow-scrolling: touch;
+}
+
+.viewTab {
+  height: 36px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+}
+
+.viewTabActive {
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-soft);
+}
+
+.desktopToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.dateNav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.dateNavButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+}
+
+.dateNavLabel {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  min-width: 160px;
+  text-align: center;
+}
+
+/* Appointment list — same theme-following surface system as Inbox
+   (color-surface/color-border/text tokens), so Calendar reads as part
+   of the same design system instead of a fixed light panel. */
+.list {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  /* Clips each row's corners to the container's radius so the first
+     and last row never visually poke past the rounded shell. */
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 68px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  text-align: left;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .row {
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-5);
+  }
+}
+
+.row + .row {
+  border-top: 1px solid var(--color-border);
+}
+
+.rowTime {
+  width: 44px;
+  flex-shrink: 0;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-muted);
+}
+
+@media (min-width: 640px) {
+  .rowTime {
+    width: 56px;
+    font-size: var(--font-size-body);
+  }
+}
+
+.rowAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  flex-shrink: 0;
+  background: var(--tint-blue);
+  color: var(--color-accent-blue);
+}
+
+.rowAvatarMasked {
+  background: var(--color-paper);
+  color: var(--color-muted);
+}
+
+.rowBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.rowTitle {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-ink);
+  /* Wrap instead of an early ellipsis — a client name only breaks onto
+     a second line if the row genuinely has no room for it, never cut
+     off while space is still available (long DE/RU/UK names). */
+  overflow-wrap: break-word;
+}
+
+.rowSubtitle {
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  max-width: 40%;
+}
+
+.rowDuration {
+  font-size: 11px;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+/* Empty state — same theme-following surface as .list above. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  padding: var(--space-8) var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.emptyTitle {
+  font-size: var(--font-size-body-l);
+  font-weight: var(--font-weight-medium);
+}
+
+.emptyHint {
+  font-size: var(--font-size-body);
+  color: var(--color-muted);
+}
+
+/* Mobile floating create button (desktop uses the header button instead) */
+.fab {
+  position: fixed;
+  right: var(--space-4);
+  bottom: calc(60px + env(safe-area-inset-bottom) + var(--space-4));
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-pill);
+  background: var(--color-ink);
+  color: var(--color-paper);
+  border: none;
+  box-shadow: var(--shadow-soft);
+}
+
+@media (min-width: 900px) {
+  .fab {
+    display: none;
+  }
+}

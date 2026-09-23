@@ -1,0 +1,246 @@
+/*
+ * Landing hero background — a soft mesh gradient inspired by Diia's
+ * "alive" digital-product feel, but at roughly a third of its saturation
+ * (§ visual direction note): warm paper base, mint / sky / lavender / peach
+ * blooms spread across the whole first screen, not a corner accent.
+ * Reused later as the same technique per-section (Today = mint/blue,
+ * Finance = peach, Assistant = lavender) once approved.
+ */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  background: var(--color-paper);
+  overflow: hidden;
+}
+
+/* Dark is a deliberate midnight graphite/blue, not near-black — scoped to
+   the hero only for now (§ refinement: don't propagate past Landing yet). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .hero {
+    background: #12141c;
+  }
+}
+
+:root[data-theme="dark"] .hero {
+  background: #12141c;
+}
+
+@media (min-width: 768px) {
+  .hero {
+    justify-content: center;
+    padding: var(--space-16) var(--space-6);
+  }
+}
+
+/* Oversized mesh layer behind the content: positions are relative to its
+   own (larger-than-viewport) box, so blobs stay spread across the whole
+   hero regardless of how many lines the headline wraps to. */
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  z-index: 0;
+  background-image:
+    radial-gradient(ellipse 60% 50% at 18% 20%, rgba(31, 158, 115, 0.3), transparent 68%),
+    radial-gradient(ellipse 56% 46% at 84% 14%, rgba(58, 102, 224, 0.24), transparent 70%),
+    radial-gradient(ellipse 60% 52% at 82% 86%, rgba(111, 97, 214, 0.28), transparent 70%),
+    radial-gradient(ellipse 56% 48% at 14% 88%, rgba(217, 122, 63, 0.22), transparent 68%),
+    radial-gradient(ellipse 70% 60% at 50% 48%, rgba(58, 102, 224, 0.08), transparent 76%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero::before {
+    animation: meshFloat 70s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes meshFloat {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(-2.5%, -2%, 0) scale(1.05);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .hero::before {
+    background-image:
+      radial-gradient(ellipse 60% 50% at 18% 20%, rgba(95, 214, 168, 0.16), transparent 68%),
+      radial-gradient(ellipse 56% 46% at 84% 14%, rgba(126, 166, 255, 0.15), transparent 70%),
+      radial-gradient(ellipse 60% 52% at 82% 86%, rgba(171, 157, 245, 0.16), transparent 70%),
+      radial-gradient(ellipse 56% 48% at 14% 88%, rgba(240, 160, 106, 0.1), transparent 68%),
+      radial-gradient(ellipse 70% 60% at 50% 48%, rgba(126, 166, 255, 0.06), transparent 76%);
+  }
+}
+
+:root[data-theme="dark"] .hero::before {
+  background-image:
+    radial-gradient(ellipse 60% 50% at 18% 20%, rgba(95, 214, 168, 0.16), transparent 68%),
+    radial-gradient(ellipse 56% 46% at 84% 14%, rgba(126, 166, 255, 0.15), transparent 70%),
+    radial-gradient(ellipse 60% 52% at 82% 86%, rgba(171, 157, 245, 0.16), transparent 70%),
+    radial-gradient(ellipse 56% 48% at 14% 88%, rgba(240, 160, 106, 0.1), transparent 68%),
+    radial-gradient(ellipse 70% 60% at 50% 48%, rgba(126, 166, 255, 0.06), transparent 76%);
+}
+
+/* Normal-flow top bar — never absolute over content. An absolute overlay
+   only "works" until a headline gets long enough (a locale, a narrow
+   viewport) to reach under it; reserving real height is the only fix
+   that holds at every width/language (§ mobile nav follow-up). */
+.topBar {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: calc(var(--space-3) + env(safe-area-inset-top)) var(--space-4) var(--space-3);
+}
+
+@media (min-width: 768px) {
+  .topBar {
+    padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-6) var(--space-4);
+  }
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Mobile-first: anchor content toward the lower-middle third instead of
+     dead-centering it in a tall, mostly-empty viewport. */
+  justify-content: flex-end;
+  padding: 0 var(--space-5) var(--space-12);
+}
+
+@media (min-width: 768px) {
+  .content {
+    justify-content: center;
+    padding: 0 var(--space-6) var(--space-10);
+  }
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-5);
+}
+
+.title {
+  /* Sized to stay readable across DE/EN/UK/RU, where translated headlines
+     run noticeably longer than the English source. Mobile: no character
+     cap — wrap at word boundaries within the hero's own padding, which is
+     wide enough for every locale's longest word (§ i18n length check).
+     The headline never auto-hyphenates in any language — a display-size
+     headline reads better broken at a word boundary than cut with a "-".
+     Body copy (§ elsewhere) may still use real hyphens:auto with lang. */
+  font-size: clamp(2.25rem, 1.85rem + 4.2vw, 3.75rem);
+  line-height: 1.15;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.02em;
+  width: 100%;
+  margin-bottom: var(--space-5);
+  /* Silent break-word is only a safety net for the rare unbreakable German
+     compound (e.g. "Dienstleistungsunternehmen") — normal word-wrapping is
+     the default behavior for every other word in every language. */
+  overflow-wrap: break-word;
+  hyphens: none;
+}
+
+/* German headlines run longer on average (compounds) — a touch smaller
+   than the other locales reduces how often the break-word fallback above
+   ever has to fire, without hyphenating anything. */
+:global(html[lang="de"]) .title {
+  font-size: clamp(2rem, 1.7rem + 3.6vw, 3.25rem);
+}
+
+@media (min-width: 768px) {
+  .title {
+    font-size: var(--font-size-display-l);
+    max-width: 20ch;
+    width: auto;
+  }
+}
+
+.subtitle {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-relaxed);
+  color: var(--color-muted);
+  max-width: 34ch;
+  margin-bottom: var(--space-8);
+}
+
+@media (min-width: 768px) {
+  .subtitle {
+    font-size: var(--font-size-body-l);
+    max-width: 42ch;
+    margin-bottom: var(--space-10);
+  }
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: var(--space-3);
+}
+
+@media (min-width: 480px) {
+  .actions {
+    flex-direction: row;
+    width: auto;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+.primaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  border: none;
+  box-shadow: 0 8px 24px rgba(17, 17, 17, 0.16);
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+
+.primaryButton:hover {
+  opacity: 0.85;
+}
+
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  border: 1px solid var(--color-border);
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.secondaryButton:hover {
+  background: var(--color-paper);
+}
