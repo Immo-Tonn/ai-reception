@@ -225,6 +225,10 @@ export function BookingWizard({
 
         {step === "staff" && (
           <>
+            <button type="button" className={styles.stepBack} onClick={() => goTo("service")}>
+              <Icon name="arrowLeft" size={16} strokeWidth={1.8} />
+              {booking.stepService}
+            </button>
             <h1 className={styles.stepTitle}>{booking.stepStaff}</h1>
             <div className={styles.optionList}>
               <button
@@ -267,6 +271,10 @@ export function BookingWizard({
 
         {step === "date" && (
           <>
+            <button type="button" className={styles.stepBack} onClick={() => goTo("staff")}>
+              <Icon name="arrowLeft" size={16} strokeWidth={1.8} />
+              {booking.stepStaff}
+            </button>
             <h1 className={styles.stepTitle}>{booking.stepDate}</h1>
             <div className={styles.dateStrip}>
               {dateStrip.map((iso) => {
@@ -294,6 +302,10 @@ export function BookingWizard({
 
         {step === "time" && (
           <>
+            <button type="button" className={styles.stepBack} onClick={() => goTo("date")}>
+              <Icon name="arrowLeft" size={16} strokeWidth={1.8} />
+              {booking.stepDate}
+            </button>
             <h1 className={styles.stepTitle}>{booking.stepTime}</h1>
             {slotsLoading ? null : slots.length === 0 ? (
               <div className={styles.empty}>
@@ -322,6 +334,10 @@ export function BookingWizard({
 
         {step === "details" && selectedService && selectedSlot && (
           <>
+            <button type="button" className={styles.stepBack} onClick={() => goTo("time")}>
+              <Icon name="arrowLeft" size={16} strokeWidth={1.8} />
+              {booking.stepTime}
+            </button>
             <h1 className={styles.stepTitle}>{booking.stepDetails}</h1>
             <p className={styles.detailsHelper}>{booking.detailsHelper}</p>
 

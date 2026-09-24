@@ -5,6 +5,8 @@ export const de: Messages = {
     appName: "ServiceOS",
     back: "Zurück",
     you: "Du",
+    backToBusiness: "ServiceOS für Unternehmen",
+    backToClientArea: "Kundenbereich",
   },
   home: {
     eyebrow: "ServiceOS",

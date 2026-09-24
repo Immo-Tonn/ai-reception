@@ -16,6 +16,11 @@ export const en = {
      * UI chrome, not a real person's name, so (unlike Elena/Marco/…) it
      * localizes. */
     you: "You",
+    /** Back-link labels used by signup/login (→ /business) and
+     * client/login/signup (→ /client) — the label names the
+     * destination, not just "Back" (§ contextual back navigation). */
+    backToBusiness: "ServiceOS for business",
+    backToClientArea: "Client area",
   },
   home: {
     eyebrow: "ServiceOS",

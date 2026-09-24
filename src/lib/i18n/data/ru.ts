@@ -5,6 +5,8 @@ export const ru: Messages = {
     appName: "ServiceOS",
     back: "Назад",
     you: "Вы",
+    backToBusiness: "ServiceOS для бизнеса",
+    backToClientArea: "Клиентская зона",
   },
   home: {
     eyebrow: "ServiceOS",

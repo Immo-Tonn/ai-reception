@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
+import { BackLink } from "@/components/ui";
 import { SignupForm } from "./SignupForm";
 import styles from "../client.module.css";
 
@@ -11,11 +12,12 @@ export const metadata: Metadata = {
 
 export default async function ClientSignupPage() {
   const locale = await getRequestLocale();
-  const { client } = getMessages(locale);
+  const { client, common } = getMessages(locale);
 
   return (
     <main className={styles.screen}>
       <div className={styles.topBar}>
+        <BackLink href="/client" label={common.backToClientArea} />
         <Preferences />
       </div>
       <div className={styles.body}>

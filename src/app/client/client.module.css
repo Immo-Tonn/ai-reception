@@ -171,15 +171,6 @@
   padding: calc(var(--space-3) + env(safe-area-inset-top)) var(--space-4) var(--space-3);
 }
 
-/* Subtle back navigation — a small text link, not a large button
-   (§ intermediate entry screens need a clear but understated way back to
-   the neutral root). */
-.backLink {
-  font-size: var(--font-size-small);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-muted);
-}
-
 .body {
   flex: 1;
   display: flex;

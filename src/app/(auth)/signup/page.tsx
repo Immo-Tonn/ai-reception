@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
+import { BackLink } from "@/components/ui";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { SignupForm } from "./SignupForm";
@@ -11,11 +12,12 @@ export const metadata: Metadata = {
 
 export default async function SignupPage() {
   const locale = await getRequestLocale();
-  const { signup } = getMessages(locale);
+  const { signup, common } = getMessages(locale);
 
   return (
     <main className={styles.screen}>
       <div className={styles.topBar}>
+        <BackLink href="/business" label={common.backToBusiness} />
         <Preferences />
       </div>
 

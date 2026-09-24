@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Button } from "@/components/ui";
+import { Button, BackLink } from "@/components/ui";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
@@ -12,11 +12,12 @@ export const metadata: Metadata = {
 
 export default async function LoginPage() {
   const locale = await getRequestLocale();
-  const { login } = getMessages(locale);
+  const { login, common } = getMessages(locale);
 
   return (
     <main className={styles.screen}>
       <div className={styles.topBar}>
+        <BackLink href="/business" label={common.backToBusiness} />
         <Preferences />
       </div>
 

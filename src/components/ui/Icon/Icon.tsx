@@ -13,6 +13,7 @@ export type IconName =
   | "lock"
   | "chevronRight"
   | "arrowRight"
+  | "arrowLeft"
   | "plus"
   | "close"
   | "more"
@@ -54,6 +55,7 @@ const paths: Record<IconName, string> = {
    * actual arrow-right glyph, not a bare chevron that reads as a
    * checkmark/tick at small sizes). */
   arrowRight: "M4 12h16M13 5l7 7-7 7",
+  arrowLeft: "M20 12H4M11 5l-7 7 7 7",
   plus: "M12 5v14M5 12h14",
   close: "M6 6l12 12M18 6 6 18",
   more: "M5 12h.01M12 12h.01M19 12h.01",

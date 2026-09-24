@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
+import { BackLink } from "@/components/ui";
 import { demoWorkspaces } from "@/features/workspace/registry";
 import styles from "../client.module.css";
 
@@ -28,9 +29,7 @@ export default async function ClientDiscoverPage() {
   return (
     <main className={styles.screen}>
       <div className={styles.topBar}>
-        <Link href="/client" className={styles.backLink}>
-          ← {common.back}
-        </Link>
+        <BackLink href="/client" label={common.back} />
         <Preferences />
       </div>
       <div className={styles.body}>

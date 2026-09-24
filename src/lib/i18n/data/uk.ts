@@ -5,6 +5,8 @@ export const uk: Messages = {
     appName: "ServiceOS",
     back: "Назад",
     you: "Ви",
+    backToBusiness: "ServiceOS для бізнесу",
+    backToClientArea: "Клієнтська зона",
   },
   home: {
     eyebrow: "ServiceOS",

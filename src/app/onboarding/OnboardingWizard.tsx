@@ -91,7 +91,7 @@ export function OnboardingWizard({ messages }: { messages: Messages_ }) {
     <div className={styles.screen}>
       <header className={styles.header}>
         <button type="button" className={styles.backButton} onClick={goBack} aria-label={messages.back}>
-          <Icon name="chevronRight" size={18} style={{ transform: "rotate(180deg)" }} />
+          <Icon name="arrowLeft" size={18} strokeWidth={1.8} />
         </button>
         <div className={styles.progressTrack}>
           <div className={styles.progressFill} style={{ width: `${progress}%` }} />

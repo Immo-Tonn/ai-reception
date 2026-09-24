@@ -2,6 +2,178 @@
 
 ---
 
+## ТЕКУЩАЯ ЗАДАЧА — Back navigation + Native mobile (Expo) foundation ✅ ЗАВЕРШЕНО
+
+Две части: (1) единый contextual Back pattern на secondary/flow экранах
+web-приложения перед командным тестированием; (2) минимальный React
+Native + Expo foundation для будущих iOS/Android (не полноценное
+приложение, не WebView).
+
+### Часть 1 — Back navigation (web)
+- Новый переиспользуемый компонент **`BackLink`**
+  (`src/components/ui/BackLink/BackLink.tsx` + `.module.css`, экспорт
+  из `@/components/ui`) — `arrowLeft` иконка + label, 44px min touch
+  target, focus-visible. Новая иконка `arrowLeft` в
+  `src/components/ui/Icon/Icon.tsx` (стержень+наконечник, не chevron,
+  не Unicode).
+- **Где добавлен** (был отсутствовал полностью): `/signup` → `/business`
+  (label "ServiceOS for business"), `/login` → `/business` (тот же
+  label), `/client/signup` → `/client` (label "Client area"),
+  `/client/login` → `/client` (тот же label). Новые i18n-ключи
+  `common.backToBusiness`/`common.backToClientArea` (4 локали).
+- **Где уже был, теперь на shared-компоненте**: `/business` → `/`,
+  `/client` → `/`, `/client/book` → `/client` (были на inline `<Link>`
+  + `styles.backLink`, теперь на `<BackLink>`; неиспользуемый CSS-класс
+  `.backLink` в `client.module.css` удалён).
+- **Public Booking** (`BookingWizard.tsx`) — contextual back добавлен на
+  шаги `staff`/`date`/`time`/`details` (не было вообще, кроме
+  функциональной кнопки Back в футере шага `details`): маленькая
+  строка `← {previous step title}` над заголовком шага, использует
+  `goTo(previousStep)` — НЕ router.back(), данные (selectedService/
+  selectedStaffId/selectedDate/selectedSlot/name/email/phone/notes) не
+  теряются, т.к. это просто смена локального state. Шаг `service`
+  (первый) и `confirmation` (успех) — без back, как и требовалось.
+  Подтверждено кликом в браузере: staff→date→(back)→staff, выбор Elena
+  сохранился.
+- **Onboarding** — уже был правильным (step 0 → `/signup`, остальные —
+  предыдущий шаг, данные в state, Skip только с шага 2) — не
+  переписывался, только заменил rotated-chevron хак на настоящую
+  `arrowLeft` иконку.
+- **Top-level экраны** (Today/Calendar/Clients/Inbox/Work/Finance/
+  Analytics/Settings, root `/`) — Back НЕ добавлялся, как и требовалось
+  (sidebar/bottom nav — основная навигация).
+- **Nested detail pages** (`ClientDetailView`, `ConversationView` в
+  business-приложении) — уже имели свой back до этой задачи, не
+  трогались (не входили в explicit список изменений, работают).
+
+### Часть 2 — React Native + Expo foundation
+- **Путь:** `apps/mobile/` (создан через `create-expo-app@latest
+  --template blank-typescript`, expo-router добавлен через `npx expo
+  install`).
+- **Стек:** Expo SDK 57, React Native 0.86, TypeScript strict,
+  Expo Router (file-based), react-native-safe-area-context,
+  react-native-web (для web-preview/export проверки).
+- **Структура:**
+  - `app/_layout.tsx` — Stack navigator + ThemeProvider + I18nProvider.
+  - `app/index.tsx` — Welcome (зеркало web root: нейтральный, 2 action
+    row).
+  - `app/business.tsx`, `app/client.tsx`, `app/login.tsx` — placeholder
+    экраны с BackHeader.
+  - `src/theme/` — Light/Dark/System foundation (`useTheme()`,
+    `useColorScheme()`, без персистентности — заложено для будущего).
+  - `src/i18n/` — DE/EN/UK/RU foundation (`useI18n()`,
+    `expo-localization` для детекта locale устройства).
+  - `src/lib/config.ts` — env/config abstraction (`appConfig.apiBaseUrl`
+    читается из `app.config.ts`'s `extra`, сейчас пустой — backend ещё
+    не существует).
+  - `src/components/` — `Screen`, `BackHeader`, `ActionRow` (shared,
+    без дублирования markup).
+- **iOS/Android config:** `app.config.ts` — bundle identifier
+  `com.serviceos.app` (iOS) и package `com.serviceos.app` (Android) —
+  **PROVISIONAL**, явно помечены в коде и README, обновить перед любым
+  реальным билдом. `scheme: "serviceos"` — deep-link foundation
+  (`serviceos://...`), резолвится через Expo Router file-based routes
+  автоматически.
+- **`eas.json`** — build profile shells (development/preview/
+  production), **без credentials, без project id, без signing**.
+- **Assets:** дефолтные Expo-шаблонные icon/splash — временные,
+  ServiceOS не имеет готовых production PNG-assets на web-стороне для
+  переиспользования; явно помечено в `apps/mobile/README.md`.
+- **Architecture boundary:** та же концепция, что на web — UI → Service
+  → Interface → Adapter. Business-логика НЕ дублировалась на native
+  (её там нет намеренно) — `config.ts` уже задаёт паттерн абстракции.
+- **НЕ подключено** (намеренно): Supabase, real Apple/Google/email
+  auth, push, payments, AI, Calendar/Finance/CRM экраны, signing
+  certificates/keystores, App Store/Play Store submission.
+- **Проверено:**
+  - `npx tsc --noEmit` внутри `apps/mobile` — чисто.
+  - `npx expo-doctor` — **21/21 checks passed**.
+  - `npx expo config --type public` — конфиг резолвится корректно
+    (bundle id/package/scheme/plugins видны).
+  - `npx expo export --platform web` — **успешный бандл, 787 модулей**,
+    подтверждает, что проект реально запускается/собирается (не просто
+    "файлы существуют"). Build-артефакт `dist/` удалён после проверки
+    (не коммитился).
+  - `npm run start`/`ios`/`android` — не запускались физически (нет
+    симулятора/устройства в этой сессии), но `expo export` — более
+    сильное доказательство работоспособности бандла, чем просто
+    типчек.
+
+### Tests / Build (обе части)
+- ✅ Web: `npx tsc --noEmit`, `npm run test` (55/55), `npm run build` —
+  все зелёные.
+- ✅ Mobile: `npx tsc --noEmit`, `npx expo-doctor` (21/21),
+  `npx expo export --platform web` — все зелёные.
+
+### Files Changed
+**Web:** `src/components/ui/BackLink/{BackLink.tsx,BackLink.module.css}`
+(новый), `src/components/ui/Icon/Icon.tsx` (+arrowLeft),
+`src/components/ui/index.ts` (export BackLink), `src/app/business/
+page.tsx`, `src/app/client/page.tsx`, `src/app/client/book/page.tsx`,
+`src/app/client/client.module.css` (удалён неиспользуемый `.backLink`),
+`src/app/(auth)/signup/page.tsx`, `src/app/(auth)/login/page.tsx`,
+`src/app/(auth)/login/page.module.css` (topBar space-between),
+`src/app/client/login/page.tsx`, `src/app/client/signup/page.tsx`,
+`src/app/book/[workspaceSlug]/BookingWizard.tsx` (per-step back),
+`src/app/book/[workspaceSlug]/page.module.css` (+`.stepBack`),
+`src/app/onboarding/OnboardingWizard.tsx` (arrowLeft вместо rotated
+chevron), `src/lib/i18n/data/{en,de,uk,ru}.ts` (+backToBusiness/
+backToClientArea).
+
+**Mobile (новое):** весь `apps/mobile/` (см. структуру выше).
+
+**Docs (новое):** `docs/TEAM_START.md`.
+
+### Deployment Ready
+
+- **Repository:** https://github.com/Immo-Tonn/ai-reception
+- **Branch:** `main`
+- **Latest commit:** будет проставлен после push этой задачи (см. ниже
+  в этом же разделе после коммита) — на момент завершения работы:
+  `TBD_COMMIT_HASH`
+- **Web build status:** ✅ PASS (typecheck + 55/55 tests + production
+  build).
+- **Mobile foundation status:** ✅ Foundation validated (typecheck +
+  expo-doctor 21/21 + successful web export bundle). НЕ App Store/Play
+  Store ready.
+- **Supabase status:** NOT CONNECTED YET.
+- **Данные сейчас:** local/demo, browser localStorage — не
+  синхронизируются между устройствами/браузерами.
+- **Известные ограничения:** Analytics "Staff utilization" показывает
+  нелокализованное "You"; судьба legacy `booking.actions.ts`/
+  `publicBooking.service.ts` не решена; DE/UK визуальный QA (не
+  текстовый) для некоторых экранов не пересмотрен вручную в этой
+  сессии — риск низкий (одни и те же i18n-ключи, typecheck подтверждает
+  полноту).
+- **Что нужно для deployment:** Vercel сейчас **NOT CONNECTED /
+  TO BE CONFIGURED** для этого репозитория (не переключался
+  автоматически). Команде нужно: Vercel Project → Settings → Git →
+  Connected Git Repository → `Immo-Tonn/ai-reception`, branch `main`.
+  Mobile foundation не участвует в web-деплое (отдельный EAS build
+  цикл, ещё не настроен — project id в `eas.json` отсутствует
+  намеренно).
+
+### Resume From Here
+
+**WEB NEXT STEP:** Back navigation pattern закрыт для всех
+перечисленных secondary/flow экранов. DE/UK визуальный (не текстовый)
+QA для новых back-ссылок не выполнен — низкий риск. Дальше — либо
+Supabase-интеграция (см. `docs/TEAM_START.md` §4), либо продуктовые
+задачи по явному запросу.
+
+**NATIVE NEXT STEP:** Foundation готов и провалидирован (typecheck +
+expo-doctor + export). Следующий реальный шаг — НЕ полноценный продукт,
+а: (1) решить финальные bundle identifier/package name (сейчас
+provisional `com.serviceos.app`); (2) когда появится Supabase —
+реализовать `SupabaseAuthProvider`/repository adapters на native той же
+архитектурой, что и web; (3) реальные ServiceOS icon/splash assets
+вместо Expo-шаблонных; (4) физический запуск на симуляторе/устройстве
+(не делался в этой headless-сессии).
+
+---
+
+---
+
 ## GIT MIGRATION — team repository ✅ ЗАВЕРШЕНО
 
 Локальный репозиторий раньше не имел ни одного remote (`git remote -v`

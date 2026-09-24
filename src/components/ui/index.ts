@@ -7,3 +7,4 @@ export type { IconName } from "./Icon/Icon";
 export { Sheet } from "./Sheet/Sheet";
 export { ThemeSwitcher } from "./ThemeSwitcher/ThemeSwitcher";
 export { LanguageSwitcher } from "./LanguageSwitcher/LanguageSwitcher";
+export { BackLink } from "./BackLink/BackLink";

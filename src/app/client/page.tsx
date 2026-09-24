@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
+import { BackLink } from "@/components/ui";
 import styles from "./client.module.css";
 
 export const metadata: Metadata = {
@@ -24,9 +25,7 @@ export default async function ClientIntroPage() {
     <main className={styles.heroScreen}>
       <div className={styles.heroMeshLayerC} aria-hidden="true" />
       <div className={styles.topBar}>
-        <Link href="/" className={styles.backLink}>
-          ← {client.backToHome}
-        </Link>
+        <BackLink href="/" label={client.backToHome} />
         <Preferences />
       </div>
 
