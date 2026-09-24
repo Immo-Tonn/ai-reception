@@ -128,9 +128,8 @@ backToClientArea).
 
 - **Repository:** https://github.com/Immo-Tonn/ai-reception
 - **Branch:** `main`
-- **Latest commit:** будет проставлен после push этой задачи (см. ниже
-  в этом же разделе после коммита) — на момент завершения работы:
-  `TBD_COMMIT_HASH`
+- **Latest commit:** `8ac5bbb` ("feat: prepare ServiceOS for team
+  testing and mobile foundation")
 - **Web build status:** ✅ PASS (typecheck + 55/55 tests + production
   build).
 - **Mobile foundation status:** ✅ Foundation validated (typecheck +
