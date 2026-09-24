@@ -2,6 +2,57 @@
 
 ---
 
+## GIT MIGRATION — team repository ✅ ЗАВЕРШЕНО
+
+Локальный репозиторий раньше не имел ни одного remote (`git remote -v`
+был пуст — ни разу никуда не пушился). Вместе с пользователем решили:
+создать personal backup repo под `origin`, затем безопасно перенести
+в team repo.
+
+**Personal remote (backup):** `origin` → `https://github.com/Kristin198689/serviceos`
+(новый private repo, создан в этой сессии) — ветки `main` и `dev` запушены.
+
+**Team remote:** `team` → `https://github.com/Immo-Tonn/ai-reception`
+— до этой сессии содержал только `README.md` (3 коммита, "AI Reception
+/ LABRITY" концепт, unrelated history). Смёржено безопасно:
+`git merge team/main --allow-unrelated-histories`, конфликт только в
+`README.md` (объединил продуктовое описание команды + dev-инструкции
+ServiceOS, ссылка на `HANDOFF_GRAPH.md`). Push в `team/main` — обычный
+fast-forward (`44b4cd1..a0a350b`), **без force**, история команды не
+переписана, не потеряна.
+
+**Commit hash (team/main === local main === origin/main):** `a0a350b`
+
+**Secrets check:** `.gitignore` уже правильно исключал `.env*`,
+`node_modules`, `.next`, `*.pem` и т.д.; `git grep` по паттернам
+API-ключей/токенов/private-key блоков — ничего не найдено. `supabase/
+migrations/` — SQL-схемы, были в репозитории ещё до этой сессии (не
+добавлялись сейчас, не секреты).
+
+**Workflow (принято, задокументировано):** local changes → typecheck/
+tests/build → commit → push напрямую в `team/main` (без PR, пока один
+разработчик). Force push запрещён навсегда, если явно не попросят.
+
+**Deployment (Vercel):** локально Vercel CLI не установлен, `.vercel/`
+отсутствует — репозиторий никогда не был привязан к Vercel локально в
+этом окружении. Не могу проверить текущую привязку деплоя из
+командной строки (нет доступа к Vercel dashboard/токену в этой
+сессии). Если деплой уже существует и указывает на старый personal
+remote или ни на что — нужно на стороне Vercel dashboard (Project →
+Settings → Git) переключить "Connected Git Repository" на
+`Immo-Tonn/ai-reception`, ветка `main`. Supabase не трогался.
+
+### Resume From Here (git/deploy)
+1. Проверить/переключить Vercel deployment на `Immo-Tonn/ai-reception`
+   (main) через Vercel dashboard — я не могу сделать это из CLI без
+   токена/логина.
+2. Дальнейшие изменения — коммитить и пушить напрямую в `team/main`
+   (workflow согласован, PR не обязателен, пока 1 разработчик).
+3. Visual/product задачи по первым экранам закрыты — background
+   откатан к мягкой версии по фидбеку пользователя.
+
+---
+
 ## BACKGROUND — откат к мягкому градиенту ✅ ЗАВЕРШЕНО
 
 Пользователь отклонил последнюю версию (1 насыщенный blob + blur на
