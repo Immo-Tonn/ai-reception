@@ -53,10 +53,26 @@
 }
 
 .header {
+  /* Always-reachable Close — stays pinned to the top of the sheet's own
+   * scroll container (not the page) even once a long form is scrolled
+   * past it, so backdrop-tap is never the only obvious way out. */
+  position: sticky;
+  top: calc(var(--space-3) * -1);
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-2);
   margin-bottom: var(--space-4);
+  background: var(--surface-primary);
+}
+
+@media (min-width: 768px) {
+  .header {
+    top: calc(var(--space-5) * -1);
+    padding-top: var(--space-5);
+  }
 }
 
 .title {

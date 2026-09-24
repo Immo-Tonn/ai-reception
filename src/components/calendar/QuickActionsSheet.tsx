@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { Button, Icon, Sheet, type IconName } from "@/components/ui";
 import type { Appointment } from "@/features/appointments/types";
-import type { Messages } from "@/lib/i18n";
+import type { ServiceDefinition } from "@/features/services/types";
+import { resolveServiceLabel } from "@/features/services/label";
+import type { Locale, Messages } from "@/lib/i18n";
 import { StatusBadge } from "./StatusBadge";
 import styles from "./QuickActionsSheet.module.css";
 
@@ -11,6 +13,8 @@ interface QuickActionsSheetProps {
   open: boolean;
   onClose: () => void;
   appointment: Appointment | null;
+  services: ServiceDefinition[];
+  locale: Locale;
   messages: Messages["quickActions"];
   statusMessages: Messages["appointmentStatus"];
   waitingListMatchCount: number;
@@ -27,6 +31,8 @@ export function QuickActionsSheet({
   open,
   onClose,
   appointment,
+  services,
+  locale,
   messages,
   statusMessages,
   waitingListMatchCount,
@@ -120,7 +126,7 @@ export function QuickActionsSheet({
           <p className={styles.confirmDescription}>
             {messages.cancelConfirmDescription
               .replace("{client}", isMasked ? statusMessages[appointment.status] : appointment.client)
-              .replace("{service}", isMasked ? "" : appointment.service)
+              .replace("{service}", isMasked ? "" : resolveServiceLabel(appointment.service, services, locale))
               .replace("{time}", appointment.time)}
           </p>
           <div className={styles.confirmActions}>

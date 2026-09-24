@@ -32,6 +32,7 @@ export default async function SignupPage() {
         <section className={styles.formPanel}>
           <div className={styles.formCard}>
             <div className={styles.formHeader}>
+              <span className={styles.businessBadge}>{signup.businessBadge}</span>
               <h2 className={styles.formTitle}>{signup.title}</h2>
               <p className={styles.formSubtitle}>{signup.subtitle}</p>
             </div>
@@ -42,6 +43,13 @@ export default async function SignupPage() {
               {signup.loginPrompt}{" "}
               <a className={styles.signupLink} href="/login">
                 {signup.loginLink}
+              </a>
+            </p>
+
+            <p className={styles.signupPrompt}>
+              {signup.clientPrompt}{" "}
+              <a className={styles.signupLink} href="/client">
+                {signup.clientLink}
               </a>
             </p>
           </div>

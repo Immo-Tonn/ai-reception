@@ -36,55 +36,140 @@
   }
 }
 
-/* Oversized mesh layer behind the content: positions are relative to its
-   own (larger-than-viewport) box, so blobs stay spread across the whole
-   hero regardless of how many lines the headline wraps to. */
-.hero::before {
+/* Three independently-moving mesh layers instead of one rigid image: a
+   single background-image with several blobs baked together only ever
+   translates/scales as one flat sheet, which reads as static no matter
+   how far you move it. Each layer carries SEVERAL overlapping, wide,
+   soft-edged blobs (not one compact saturated spot) — this is what
+   keeps colors dissolving into each other instead of reading as
+   separate moving "spotlights" (§ visual feedback: distinct blobs were
+   rejected as too obvious — the goal is atmosphere, not visible shapes
+   moving around). No `filter: blur` needed; the wide `transparent 64-
+   68%` falloff on each gradient already does the softening. */
+.hero::before,
+.hero::after {
   content: "";
   position: absolute;
-  inset: -10%;
+  inset: -18%;
   z-index: 0;
-  background-image:
-    radial-gradient(ellipse 60% 50% at 18% 20%, rgba(31, 158, 115, 0.3), transparent 68%),
-    radial-gradient(ellipse 56% 46% at 84% 14%, rgba(58, 102, 224, 0.24), transparent 70%),
-    radial-gradient(ellipse 60% 52% at 82% 86%, rgba(111, 97, 214, 0.28), transparent 70%),
-    radial-gradient(ellipse 56% 48% at 14% 88%, rgba(217, 122, 63, 0.22), transparent 68%),
-    radial-gradient(ellipse 70% 60% at 50% 48%, rgba(58, 102, 224, 0.08), transparent 76%);
 }
 
+.meshLayerC {
+  position: absolute;
+  inset: -20%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.hero::before {
+  background-image:
+    radial-gradient(ellipse 58% 48% at 20% 22%, rgba(31, 158, 115, 0.4), transparent 66%),
+    radial-gradient(ellipse 54% 44% at 82% 16%, rgba(58, 102, 224, 0.32), transparent 68%);
+}
+
+.hero::after {
+  background-image:
+    radial-gradient(ellipse 56% 48% at 82% 86%, rgba(111, 97, 214, 0.36), transparent 68%),
+    radial-gradient(ellipse 54% 46% at 16% 86%, rgba(217, 122, 63, 0.3), transparent 66%);
+}
+
+.meshLayerC {
+  background-image: radial-gradient(ellipse 72% 62% at 50% 46%, rgba(58, 102, 224, 0.16), transparent 74%);
+}
+
+/* Noticeably alive but never fast: all three layers loop seamlessly
+   (0%/100% identical, no jump-cut) on transform + opacity only (cheap
+   for the GPU, no layout/repaint). Three different durations (16s/21s/
+   27s) plus negative delays mean the trio is never in the same relative
+   position twice within any reasonably-long viewing session, so it
+   never reads as an obvious short loop — while each individual layer's
+   own swing is large enough to see within an 8-15s glance. */
 @media (prefers-reduced-motion: no-preference) {
   .hero::before {
-    animation: meshFloat 70s ease-in-out infinite alternate;
+    animation: meshBreatheA 16s ease-in-out infinite;
+  }
+
+  .hero::after {
+    animation: meshBreatheB 21s ease-in-out infinite;
+    animation-delay: -7s;
+  }
+
+  .meshLayerC {
+    animation: meshBreatheC 27s ease-in-out infinite;
+    animation-delay: -14s;
   }
 }
 
-@keyframes meshFloat {
-  from {
+/* Atmospheric, not obvious: modest amplitude (translate a few percent,
+   scale ~1.0–1.1, a gentle opacity swing) — enough that the gradient
+   doesn't read as flatly static over a 10s+ glance, but nothing a
+   viewer would describe as "a shape moved". */
+@keyframes meshBreatheA {
+  0%,
+  100% {
     transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.75;
   }
-  to {
-    transform: translate3d(-2.5%, -2%, 0) scale(1.05);
+  50% {
+    transform: translate3d(-4%, -3%, 0) scale(1.08);
+    opacity: 1;
+  }
+}
+
+@keyframes meshBreatheB {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.04);
+    opacity: 0.65;
+  }
+  50% {
+    transform: translate3d(3%, 4%, 0) scale(0.97);
+    opacity: 0.95;
+  }
+}
+
+@keyframes meshBreatheC {
+  0%,
+  100% {
+    transform: translate3d(-2%, 2%, 0) scale(0.98);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate3d(2%, -2%, 0) scale(1.1);
+    opacity: 0.85;
   }
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .hero::before {
     background-image:
-      radial-gradient(ellipse 60% 50% at 18% 20%, rgba(95, 214, 168, 0.16), transparent 68%),
-      radial-gradient(ellipse 56% 46% at 84% 14%, rgba(126, 166, 255, 0.15), transparent 70%),
-      radial-gradient(ellipse 60% 52% at 82% 86%, rgba(171, 157, 245, 0.16), transparent 70%),
-      radial-gradient(ellipse 56% 48% at 14% 88%, rgba(240, 160, 106, 0.1), transparent 68%),
-      radial-gradient(ellipse 70% 60% at 50% 48%, rgba(126, 166, 255, 0.06), transparent 76%);
+      radial-gradient(ellipse 58% 48% at 20% 22%, rgba(95, 214, 168, 0.22), transparent 66%),
+      radial-gradient(ellipse 54% 44% at 82% 16%, rgba(126, 166, 255, 0.2), transparent 68%);
+  }
+  :root:not([data-theme="light"]) .hero::after {
+    background-image:
+      radial-gradient(ellipse 56% 48% at 82% 86%, rgba(171, 157, 245, 0.22), transparent 68%),
+      radial-gradient(ellipse 54% 46% at 16% 86%, rgba(240, 160, 106, 0.16), transparent 66%);
+  }
+  :root:not([data-theme="light"]) .meshLayerC {
+    background-image: radial-gradient(ellipse 72% 62% at 50% 46%, rgba(126, 166, 255, 0.1), transparent 74%);
   }
 }
 
 :root[data-theme="dark"] .hero::before {
   background-image:
-    radial-gradient(ellipse 60% 50% at 18% 20%, rgba(95, 214, 168, 0.16), transparent 68%),
-    radial-gradient(ellipse 56% 46% at 84% 14%, rgba(126, 166, 255, 0.15), transparent 70%),
-    radial-gradient(ellipse 60% 52% at 82% 86%, rgba(171, 157, 245, 0.16), transparent 70%),
-    radial-gradient(ellipse 56% 48% at 14% 88%, rgba(240, 160, 106, 0.1), transparent 68%),
-    radial-gradient(ellipse 70% 60% at 50% 48%, rgba(126, 166, 255, 0.06), transparent 76%);
+    radial-gradient(ellipse 58% 48% at 20% 22%, rgba(95, 214, 168, 0.22), transparent 66%),
+    radial-gradient(ellipse 54% 44% at 82% 16%, rgba(126, 166, 255, 0.2), transparent 68%);
+}
+
+:root[data-theme="dark"] .hero::after {
+  background-image:
+    radial-gradient(ellipse 56% 48% at 82% 86%, rgba(171, 157, 245, 0.22), transparent 68%),
+    radial-gradient(ellipse 54% 46% at 16% 86%, rgba(240, 160, 106, 0.16), transparent 66%);
+}
+
+:root[data-theme="dark"] .meshLayerC {
+  background-image: radial-gradient(ellipse 72% 62% at 50% 46%, rgba(126, 166, 255, 0.1), transparent 74%);
 }
 
 /* Normal-flow top bar — never absolute over content. An absolute overlay
@@ -190,57 +275,96 @@
   }
 }
 
-.actions {
+/* Two understated action rows, not two competing hero cards — a single
+   full-width row each, label on the left, a small circular arrow button
+   on the right. Deliberately plain text + a circle, nothing that could
+   read as a gender/biological symbol (§ icon must be a clean directional
+   arrow in its own separate circular container, not a combined glyph). */
+.actionList {
   display: flex;
   flex-direction: column;
   width: 100%;
-  gap: var(--space-3);
+  max-width: 280px;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
-@media (min-width: 480px) {
-  .actions {
-    flex-direction: row;
-    width: auto;
-    flex-wrap: wrap;
-    justify-content: center;
+@media (min-width: 768px) {
+  .actionList {
+    max-width: 300px;
   }
 }
 
-.primaryButton {
-  display: inline-flex;
+/* An elegant navigation action, not a form button: a frosted-glass row
+   (translucent surface + blur, not a solid white pill) so the living
+   gradient behind it keeps showing through — this is what actually ties
+   the row visually to the breathing background instead of sitting on
+   top of it as an opaque card. `color-mix` derives the tint from the
+   existing `--color-surface` token per theme (no new hardcoded colors);
+   `@supports` below covers browsers without it. ~40px height (padding
+   only, no min-height — the row hugs its content instead of forcing
+   48px+) sits in the 38-42px target; the whole row is the click target
+   even though the visible circle is small (§ touch target stays
+   generous). */
+.actionRow {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  height: 52px;
-  padding: 0 var(--space-6);
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 9px 14px;
   border-radius: var(--radius-md);
-  background: var(--color-ink);
-  color: var(--color-paper);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-medium);
-  border: none;
-  box-shadow: 0 8px 24px rgba(17, 17, 17, 0.16);
-  transition: opacity var(--motion-fast) var(--motion-ease);
-}
-
-.primaryButton:hover {
-  opacity: 0.85;
-}
-
-.secondaryButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 52px;
-  padding: 0 var(--space-6);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-ink);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-medium);
   border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 45%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  text-align: left;
   transition: background var(--motion-fast) var(--motion-ease);
 }
 
-.secondaryButton:hover {
-  background: var(--color-paper);
+@supports not (background: color-mix(in srgb, red 50%, transparent)) {
+  .actionRow {
+    background: var(--color-surface);
+  }
+}
+
+.actionRow:hover {
+  background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+}
+
+.actionRow:hover .actionArrow {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  transform: translateX(2px);
+}
+
+.actionLabel {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+}
+
+.actionArrow {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-paper) 70%, transparent);
+  color: var(--color-ink);
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
+}
+
+.tertiaryLink {
+  display: inline-block;
+  margin-top: var(--space-6);
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }

@@ -9,7 +9,14 @@ export default async function WaitingListPage({
 }) {
   const { workspaceSlug } = await params;
   const locale = await getRequestLocale();
-  const { waitingList } = getMessages(locale);
+  const { common, waitingList } = getMessages(locale);
 
-  return <WaitingListView workspaceSlug={workspaceSlug} locale={locale} messages={waitingList} />;
+  return (
+    <WaitingListView
+      workspaceSlug={workspaceSlug}
+      locale={locale}
+      messages={waitingList}
+      youLabel={common.you}
+    />
+  );
 }

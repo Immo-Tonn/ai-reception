@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { Button, Input, Sheet } from "@/components/ui";
 import { getWorkspaceConfig } from "@/features/workspace/registry";
+import { getServiceLabel } from "@/features/services/label";
+import { getStaffLabel } from "@/features/staff/label";
 import type { WaitingListEntry } from "@/features/waitingList/types";
-import type { Messages } from "@/lib/i18n";
+import type { Locale, Messages } from "@/lib/i18n";
 import styles from "./AddWaitingListSheet.module.css";
 
 export function AddWaitingListSheet({
@@ -13,12 +15,16 @@ export function AddWaitingListSheet({
   onSave,
   messages,
   workspaceSlug,
+  locale,
+  youLabel,
 }: {
   open: boolean;
   onClose: () => void;
   onSave: (entry: WaitingListEntry) => void;
   messages: Messages["waitingList"];
   workspaceSlug: string;
+  locale: Locale;
+  youLabel: string;
 }) {
   const workspace = getWorkspaceConfig(workspaceSlug);
   const demoServices = workspace.services;
@@ -64,7 +70,7 @@ export function AddWaitingListSheet({
           >
             {demoServices.map((item) => (
               <option key={item.id} value={item.name}>
-                {item.name}
+                {getServiceLabel(item, locale)}
               </option>
             ))}
           </select>
@@ -80,7 +86,7 @@ export function AddWaitingListSheet({
             <option value="">{messages.anyStaff}</option>
             {demoStaff.map((item) => (
               <option key={item.id} value={item.name}>
-                {item.name}
+                {getStaffLabel(item.name, youLabel)}
               </option>
             ))}
           </select>

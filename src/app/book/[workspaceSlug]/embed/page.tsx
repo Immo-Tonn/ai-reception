@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 /**
  * Chromeless variant for iframe embedding (§3). Same BookingWizard, same
- * booking engine, same server actions as the standalone page — only the
+ * client-side booking engine as the standalone page — only the
  * header/footer chrome differs, controlled by the `chromeless` prop.
  */
 export default async function EmbeddedBookingPage({
@@ -20,7 +20,7 @@ export default async function EmbeddedBookingPage({
 }) {
   const { workspaceSlug } = await params;
   const locale = await getRequestLocale();
-  const { booking } = getMessages(locale);
+  const { common, booking, client } = getMessages(locale);
   const branding = getWorkspaceBranding(workspaceSlug);
 
   return (
@@ -28,7 +28,9 @@ export default async function EmbeddedBookingPage({
       workspaceSlug={workspaceSlug}
       locale={locale}
       booking={booking}
+      client={client}
       branding={branding}
+      youLabel={common.you}
       chromeless
     />
   );

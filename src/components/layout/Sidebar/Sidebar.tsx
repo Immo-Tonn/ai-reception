@@ -2,7 +2,8 @@
 
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "@/components/ui";
-import type { Messages } from "@/lib/i18n";
+import { getWorkspaceConfig } from "@/features/workspace/registry";
+import type { Locale, Messages } from "@/lib/i18n";
 import styles from "./Sidebar.module.css";
 
 interface NavEntry {
@@ -24,19 +25,27 @@ const mainNav: NavEntry[] = [
 
 export function Sidebar({
   workspaceSlug,
+  locale,
   messages,
   appName,
 }: {
   workspaceSlug: string;
+  locale: Locale;
   messages: Messages["nav"];
   appName: string;
 }) {
   const pathname = usePathname();
   const base = `/${workspaceSlug}`;
+  const workspace = getWorkspaceConfig(workspaceSlug);
 
   function isActive(segment: string) {
     return pathname === `${base}/${segment}` || pathname?.startsWith(`${base}/${segment}/`);
   }
+
+  // Work's visibility/label live on WorkspaceConfig (§ single source of
+  // truth) — a Salon simply omits it from `mainNav` instead of every nav
+  // component branching on `workspaceSlug`.
+  const visibleNav = mainNav.filter((item) => item.key !== "work" || workspace.workEnabled !== false);
 
   return (
     <aside className={styles.sidebar}>
@@ -46,7 +55,7 @@ export function Sidebar({
       </div>
 
       <nav className={styles.nav}>
-        {mainNav.map((item) => (
+        {visibleNav.map((item) => (
           <a
             key={item.segment}
             href={`${base}/${item.segment}`}
@@ -55,7 +64,7 @@ export function Sidebar({
             <span className={styles.navIcon}>
               <Icon name={item.icon} size={18} />
             </span>
-            {messages[item.key]}
+            {item.key === "work" ? (workspace.workLabel?.[locale] ?? messages.work) : messages[item.key]}
           </a>
         ))}
       </nav>

@@ -52,6 +52,13 @@ export default async function LoginPage() {
                 {login.signupLink}
               </a>
             </p>
+
+            <p className={styles.signupPrompt}>
+              {login.clientPrompt}{" "}
+              <a className={styles.signupLink} href="/client">
+                {login.clientLink}
+              </a>
+            </p>
           </div>
         </section>
       </div>

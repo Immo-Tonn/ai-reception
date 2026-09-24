@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import { Button, Icon } from "@/components/ui";
-import {
-  listBookableServicesAction,
-  listBookableStaffAction,
-  getAvailabilityAction,
-  createPublicBookingAction,
-} from "@/server/actions/booking.actions";
-import type { AvailableSlot } from "@/server/services/availability.service";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Button, Icon, Input } from "@/components/ui";
+import { getWorkspaceConfig } from "@/features/workspace/registry";
+import { getClientAvailableSlots, type AvailableSlot } from "@/features/publicBooking/availability";
+import { createClientBooking, BookingUnavailableError } from "@/features/publicBooking/createBooking";
+import { getClientDetailsFieldErrors } from "@/features/publicBooking/detailsValidation";
+import { getServiceLabel } from "@/features/services/label";
+import { getStaffLabel } from "@/features/staff/label";
+import { useClientAuth } from "@/features/clientAuth/useClientAuth";
 import type { ServiceDefinition } from "@/features/services/types";
 import type { StaffMember } from "@/features/staff/types";
 import type { WorkspaceBranding } from "@/features/branding/types";
@@ -33,17 +33,22 @@ export function BookingWizard({
   workspaceSlug,
   locale,
   booking,
+  client,
   branding,
+  youLabel,
   chromeless = false,
   headerActions,
 }: {
   workspaceSlug: string;
   locale: Locale;
   booking: Messages["booking"];
+  client: Messages["client"];
   branding: WorkspaceBranding;
+  youLabel: string;
   chromeless?: boolean;
   headerActions?: ReactNode;
 }) {
+  const { identity } = useClientAuth();
   const [step, setStep] = useState<Step>("service");
   const [services, setServices] = useState<ServiceDefinition[]>([]);
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
@@ -59,20 +64,48 @@ export function BookingWizard({
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Which fields have been interacted with (blurred) — an error only
+  // shows once the person has actually left the field, or after a submit
+  // attempt (`submitAttempted`), never on first render of an empty form
+  // (§ validation UX: don't just disable Submit with no explanation, but
+  // don't scold an untouched field either).
+  const [touched, setTouched] = useState<{ name?: boolean; email?: boolean; phone?: boolean }>({});
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const nameFieldRef = useRef<HTMLInputElement>(null);
+  const emailFieldRef = useRef<HTMLInputElement>(null);
+  const phoneFieldRef = useRef<HTMLInputElement>(null);
 
   const dateStrip = buildDateStrip();
   const selectedService = services.find((s) => s.id === selectedServiceId) ?? null;
+  const fieldErrors = useMemo(
+    () => getClientDetailsFieldErrors({ name, email, phone }),
+    [name, email, phone],
+  );
+  const showNameError = Boolean(fieldErrors.name) && (touched.name || submitAttempted);
+  const showEmailError = Boolean(fieldErrors.email) && (touched.email || submitAttempted);
+  const showPhoneError = Boolean(fieldErrors.phone) && (touched.phone || submitAttempted);
 
   useEffect(() => {
-    listBookableServicesAction(workspaceSlug).then(setServices);
-    listBookableStaffAction(workspaceSlug).then(setStaffList);
+    const workspace = getWorkspaceConfig(workspaceSlug);
+    setServices(workspace.services);
+    setStaffList(workspace.staff);
   }, [workspaceSlug]);
+
+  // A signed-in client (see /client/login, /client/signup) doesn't have
+  // to retype their details every booking — guest checkout still works
+  // without ever touching this (§ booking never depends on registration).
+  useEffect(() => {
+    if (!identity) return;
+    setName((current) => current || identity.name);
+    setEmail((current) => current || identity.email);
+    setPhone((current) => current || identity.phone);
+  }, [identity]);
 
   useEffect(() => {
     if (step !== "time" || !selectedServiceId) return;
     setSlotsLoading(true);
     const staffId = selectedStaffId === "any" ? null : selectedStaffId;
-    getAvailabilityAction(workspaceSlug, selectedServiceId, staffId, selectedDate)
+    getClientAvailableSlots(workspaceSlug, selectedServiceId, staffId, selectedDate)
       .then(setSlots)
       .finally(() => setSlotsLoading(false));
   }, [step, workspaceSlug, selectedServiceId, selectedStaffId, selectedDate]);
@@ -104,10 +137,20 @@ export function BookingWizard({
 
   async function handleSubmit() {
     if (!selectedService || !selectedSlot) return;
+    if (fieldErrors.name || fieldErrors.email || fieldErrors.phone) {
+      setSubmitAttempted(true);
+      const firstInvalidRef = fieldErrors.name
+        ? nameFieldRef
+        : fieldErrors.email
+          ? emailFieldRef
+          : phoneFieldRef;
+      firstInvalidRef.current?.focus();
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      await createPublicBookingAction(workspaceSlug, {
+      await createClientBooking(workspaceSlug, {
         serviceId: selectedService.id,
         staffId: selectedStaffId === "any" ? null : selectedStaffId,
         date: selectedDate,
@@ -115,7 +158,11 @@ export function BookingWizard({
         client: { name, email, phone, notes },
       });
       goTo("confirmation");
-    } catch {
+    } catch (err) {
+      if (!(err instanceof BookingUnavailableError)) {
+        // eslint-disable-next-line no-console
+        console.error("Public booking failed", err);
+      }
       setError(booking.slotTakenError);
       setStep("time");
     } finally {
@@ -132,7 +179,9 @@ export function BookingWizard({
           <span className={styles.logo} style={{ background: branding.primaryColor }}>
             {branding.logoInitial}
           </span>
-          <span className={styles.businessName}>{branding.businessName}</span>
+          <span className={styles.businessName} title={branding.businessName}>
+            {branding.businessName}
+          </span>
           {headerActions && <span className={styles.headerRight}>{headerActions}</span>}
         </header>
       )}
@@ -144,7 +193,7 @@ export function BookingWizard({
         />
       </div>
 
-      <div className={styles.content}>
+      <div className={`${styles.content} ${step === "details" ? styles.contentDetails : ""}`}>
         {step === "service" && (
           <>
             <h1 className={styles.stepTitle}>{booking.stepService}</h1>
@@ -160,7 +209,7 @@ export function BookingWizard({
                   }}
                 >
                   <span className={styles.optionBody}>
-                    <span className={styles.optionTitle}>{service.name}</span>
+                    <span className={styles.optionTitle}>{getServiceLabel(service, locale)}</span>
                     <span className={styles.optionHint}>
                       {booking.durationLabel.replace("{minutes}", String(service.durationMinutes))}
                     </span>
@@ -208,7 +257,7 @@ export function BookingWizard({
                     }}
                   >
                     <span className={styles.optionBody}>
-                      <span className={styles.optionTitle}>{staff.name}</span>
+                      <span className={styles.optionTitle}>{getStaffLabel(staff.name, youLabel)}</span>
                     </span>
                   </button>
                 ))}
@@ -274,55 +323,65 @@ export function BookingWizard({
         {step === "details" && selectedService && selectedSlot && (
           <>
             <h1 className={styles.stepTitle}>{booking.stepDetails}</h1>
-            <div className={styles.summaryCard}>
-              <span className={styles.summaryLine}>{selectedService.name}</span>
+            <p className={styles.detailsHelper}>{booking.detailsHelper}</p>
+
+            <div className={styles.summaryCard} style={{ borderLeftColor: branding.primaryColor }}>
+              <span className={styles.summaryLine}>{getServiceLabel(selectedService, locale)}</span>
               <span className={styles.summaryLineMuted}>
                 {formatDate(new Date(selectedDate + "T00:00:00"), locale, { dateStyle: "medium" })} ·{" "}
-                {selectedSlot.time} · {selectedSlot.staffName}
+                {selectedSlot.time} · {getStaffLabel(selectedSlot.staffName, youLabel)}
               </span>
             </div>
+
             {error && <p className={styles.errorText}>{error}</p>}
+
             <div className={styles.form}>
-              <label className={styles.label}>
-                {booking.nameLabel}
-                <input
-                  className={styles.textarea}
-                  style={{ minHeight: 48 }}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-              </label>
-              <label className={styles.label}>
-                {booking.emailLabel}
-                <input
-                  className={styles.textarea}
-                  style={{ minHeight: 48 }}
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </label>
-              <label className={styles.label}>
-                {booking.phoneLabel}
-                <input
-                  className={styles.textarea}
-                  style={{ minHeight: 48 }}
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
-              </label>
-              <label className={styles.label}>
-                {booking.notesLabel}
+              <Input
+                ref={nameFieldRef}
+                label={`${booking.nameLabel} *`}
+                autoComplete="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, name: true }))}
+                error={showNameError ? booking.nameError : undefined}
+                required
+              />
+              <Input
+                ref={emailFieldRef}
+                label={`${booking.emailLabel} *`}
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, email: true }))}
+                error={showEmailError ? booking.emailError : undefined}
+                required
+              />
+              <Input
+                ref={phoneFieldRef}
+                label={`${booking.phoneLabel} *`}
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, phone: true }))}
+                error={showPhoneError ? booking.phoneError : undefined}
+                required
+              />
+              <div className={styles.field}>
+                <label className={styles.fieldLabel} htmlFor="booking-notes">
+                  {booking.notesLabel}
+                </label>
                 <textarea
-                  className={styles.textarea}
-                  placeholder={booking.notesPlaceholder}
+                  id="booking-notes"
+                  className={styles.notesTextarea}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                 />
-              </label>
+                <span className={styles.fieldHint}>{booking.notesPlaceholder}</span>
+              </div>
             </div>
           </>
         )}
@@ -337,7 +396,7 @@ export function BookingWizard({
               {booking.confirmationDescription.replace("{email}", email)}
             </p>
             <div className={styles.summaryCard}>
-              <span className={styles.summaryLine}>{selectedService.name}</span>
+              <span className={styles.summaryLine}>{getServiceLabel(selectedService, locale)}</span>
               <span className={styles.summaryLineMuted}>
                 {formatDate(new Date(selectedDate + "T00:00:00"), locale, { dateStyle: "full" })} ·{" "}
                 {selectedSlot.time}
@@ -354,10 +413,17 @@ export function BookingWizard({
                 setEmail("");
                 setPhone("");
                 setNotes("");
+                setTouched({});
+                setSubmitAttempted(false);
               }}
             >
               {booking.bookAnother}
             </Button>
+            {!identity && (
+              <a href={`/client/signup?redirect=/client/bookings`} className={styles.createAccountLink}>
+                {client.createAccountPrompt}
+              </a>
+            )}
           </>
         )}
       </div>
@@ -370,7 +436,7 @@ export function BookingWizard({
           <Button
             className={styles.footerNext}
             fullWidth
-            disabled={!name || !email || submitting}
+            disabled={submitting}
             onClick={handleSubmit}
           >
             {submitting ? booking.submitting : booking.confirmBooking}

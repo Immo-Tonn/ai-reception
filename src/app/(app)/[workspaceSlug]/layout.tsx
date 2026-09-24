@@ -19,7 +19,7 @@ export default async function WorkspaceLayout({
 
   return (
     <div className={styles.shell}>
-      <Sidebar workspaceSlug={workspaceSlug} messages={nav} appName={common.appName} />
+      <Sidebar workspaceSlug={workspaceSlug} locale={locale} messages={nav} appName={common.appName} />
       <div className={styles.content}>
         <div className={styles.topBar}>
           <WorkspaceSwitcher currentSlug={workspaceSlug} />

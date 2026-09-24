@@ -12,6 +12,7 @@ export type IconName =
   | "settings"
   | "lock"
   | "chevronRight"
+  | "arrowRight"
   | "plus"
   | "close"
   | "more"
@@ -48,6 +49,11 @@ const paths: Record<IconName, string> = {
     "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 13.5a1.7 1.7 0 0 0 .3 1.9l.1.1a1.9 1.9 0 1 1-2.7 2.7l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2a1.9 1.9 0 1 1-3.9 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a1.9 1.9 0 1 1-2.7-2.7l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H4a1.9 1.9 0 1 1 0-3.9h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a1.9 1.9 0 1 1 2.7-2.7l.1.1a1.7 1.7 0 0 0 1.9.3H10a1.7 1.7 0 0 0 1-1.5V4a1.9 1.9 0 1 1 3.9 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a1.9 1.9 0 1 1 2.7 2.7l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H20a1.9 1.9 0 1 1 0 3.9h-.1a1.7 1.7 0 0 0-1.5 1Z",
   lock: "M6 11V8a6 6 0 0 1 12 0v3M5 11h14v9H5zM12 15v2",
   chevronRight: "m9 5 7 7-7 7",
+  /* A real directional arrow — shaft + head — not a chevron: the two
+   * must never be visually interchangeable (§ root action rows need an
+   * actual arrow-right glyph, not a bare chevron that reads as a
+   * checkmark/tick at small sizes). */
+  arrowRight: "M4 12h16M13 5l7 7-7 7",
   plus: "M12 5v14M5 12h14",
   close: "M6 6l12 12M18 6 6 18",
   more: "M5 12h.01M12 12h.01M19 12h.01",

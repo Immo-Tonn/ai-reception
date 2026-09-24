@@ -24,7 +24,9 @@ export function AnalyticsView({
   const { items: appointments } = useAppointments(workspaceSlug);
   const { items: invoices } = useInvoices(workspaceSlug);
   const { items: leads } = useLeads(workspaceSlug);
-  const demoServices = useMemo(() => getWorkspaceConfig(workspaceSlug).services, [workspaceSlug]);
+  const workspace = useMemo(() => getWorkspaceConfig(workspaceSlug), [workspaceSlug]);
+  const demoServices = workspace.services;
+  const pageIntro = workspace.analyticsIntro?.[locale];
 
   const [periodDays, setPeriodDays] = useState<AnalyticsPeriod>(30);
   const [service, setService] = useState<string>("all");
@@ -62,6 +64,8 @@ export function AnalyticsView({
       <header className={styles.header}>
         <h1 className={styles.title}>{messages.title}</h1>
       </header>
+
+      {pageIntro && <p className={styles.pageIntro}>{pageIntro}</p>}
 
       <div className={styles.filters}>
         <select

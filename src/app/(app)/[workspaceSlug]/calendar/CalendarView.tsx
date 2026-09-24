@@ -19,6 +19,8 @@ import type { Appointment, AppointmentStatus } from "@/features/appointments/typ
 import { getWorkspaceConfig } from "@/features/workspace/registry";
 import { demoWorkingHours } from "@/features/workingHours/demoData";
 import { useClients } from "@/features/clients/useClients";
+import { resolveServiceLabel } from "@/features/services/label";
+import { getStaffLabel } from "@/features/staff/label";
 import type { Locale, Messages } from "@/lib/i18n";
 import styles from "./page.module.css";
 
@@ -56,6 +58,7 @@ function buildWeekStrip(centerDate: string) {
 export function CalendarView({
   workspaceSlug,
   locale,
+  common,
   calendar,
   appointment,
   dashboard,
@@ -68,6 +71,7 @@ export function CalendarView({
 }: {
   workspaceSlug: string;
   locale: Locale;
+  common: Messages["common"];
   calendar: Messages["calendar"];
   appointment: Messages["appointment"];
   dashboard: Messages["dashboard"];
@@ -88,13 +92,17 @@ export function CalendarView({
   const demoServices = workspace.services;
   const demoStaff = workspace.staff;
   const demoResources = workspace.resources;
+  const youLabel = common.you;
+  const staffLabelOverride = workspace.staffLabel?.[locale];
+  const resourceLabelOverride = workspace.resourceLabel?.[locale];
+  const noResourceLabelOverride = workspace.noResourceLabel?.[locale];
 
   const { items: appointments, create, update, remove } = useAppointments(workspaceSlug);
   const { log, entries: auditEntries } = useAuditLog(workspaceSlug);
   const { items: waitingListEntries } = useWaitingList(workspaceSlug);
   const { items: clients, create: createClient } = useClients(workspaceSlug);
 
-  const [selectedDate, setSelectedDate] = useState("2026-09-22");
+  const [selectedDate, setSelectedDate] = useState(searchParams.get("date") ?? "2026-09-22");
   const [staffFilter, setStaffFilter] = useState<string>("all");
   const [desktopView, setDesktopView] = useState<DesktopView>("day");
 
@@ -104,11 +112,22 @@ export function CalendarView({
 
   // Store only the id and derive the live object from `appointments` on
   // every render — holding the Appointment object itself would freeze a
-  // stale snapshot in the sheet after a status change, move, etc.
-  const [quickActionsTargetId, setQuickActionsTargetId] = useState<string | null>(null);
+  // stale snapshot in the sheet after a status change, move, etc. A
+  // `?appointment=<id>` deep link (e.g. Today's "needs attention" items)
+  // opens straight on that appointment's Quick Actions instead of the
+  // day list, so client/service/date/time/status and Confirm/Open
+  // client are visible immediately.
+  const [quickActionsTargetId, setQuickActionsTargetId] = useState<string | null>(
+    searchParams.get("appointment"),
+  );
   const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
   const [lastCancelMatchCount, setLastCancelMatchCount] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Brief highlight + confirmation on the row for an appointment just
+  // created via Save — otherwise a save onto a date outside the current
+  // view (e.g. next week) looks like nothing happened at all.
+  const [justSavedId, setJustSavedId] = useState<string | null>(null);
+  const [savedFeedbackVisible, setSavedFeedbackVisible] = useState(false);
 
   const quickActionsTarget = appointments.find((a) => a.id === quickActionsTargetId) ?? null;
   const moveTarget = appointments.find((a) => a.id === moveTargetId) ?? null;
@@ -153,6 +172,21 @@ export function CalendarView({
           summary: `${appt.client} · ${appt.service} · ${appt.date} ${appt.time}`,
           source: "user",
         });
+      }
+      // Land on the new appointment: jump the day view to its date (it
+      // may be outside the current week/month view, or the view may
+      // have been on Week/Month/Staff), clear any staff filter that
+      // would hide it, and briefly highlight the row so a save that
+      // lands elsewhere in time doesn't look like it silently failed.
+      const first = result.appointments[0];
+      if (first) {
+        setSelectedDate(first.date);
+        setDesktopView("day");
+        setStaffFilter("all");
+        setJustSavedId(first.id);
+        setSavedFeedbackVisible(true);
+        setTimeout(() => setJustSavedId(null), 3000);
+        setTimeout(() => setSavedFeedbackVisible(false), 2500);
       }
       return;
     }
@@ -262,7 +296,7 @@ export function CalendarView({
       <button
         key={item.id}
         type="button"
-        className={styles.row}
+        className={`${styles.row} ${item.id === justSavedId ? styles.rowJustSaved : ""}`}
         onClick={() => setQuickActionsTargetId(item.id)}
       >
         <span className={styles.rowTime}>{item.time}</span>
@@ -271,7 +305,11 @@ export function CalendarView({
         </span>
         <span className={styles.rowBody}>
           <span className={styles.rowTitle}>{isMasked ? dashboard.statusBusy : item.client}</span>
-          {!isMasked && <span className={styles.rowSubtitle}>{item.service}</span>}
+          {!isMasked && (
+            <span className={styles.rowSubtitle}>
+              {resolveServiceLabel(item.service, demoServices, locale)}
+            </span>
+          )}
         </span>
         <span className={styles.rowMeta}>
           <span className={styles.rowDuration}>{item.durationMinutes} min</span>
@@ -313,7 +351,7 @@ export function CalendarView({
   // ---- Desktop: Staff view columns (single day, one column per staff) ----
   const staffColumns: TimeGridColumn[] = demoStaff.map((s) => ({
     key: s.id,
-    label: s.name,
+    label: getStaffLabel(s.name, youLabel),
     appointments: appointments.filter((a) => a.date === selectedDate && a.staff === s.name),
   }));
 
@@ -405,7 +443,7 @@ export function CalendarView({
               className={`${styles.staffChip} ${staffFilter === name ? styles.staffChipActive : ""}`}
               onClick={() => setStaffFilter(name)}
             >
-              {name}
+              {getStaffLabel(name, youLabel)}
             </button>
           ))}
         </div>
@@ -424,6 +462,8 @@ export function CalendarView({
           <div className={styles.gridScroll}>
             <TimeGrid
               columns={weekColumns}
+              services={demoServices}
+              locale={locale}
               dashboardMessages={dashboard}
               onSelect={(a) => setQuickActionsTargetId(a.id)}
             />
@@ -449,6 +489,8 @@ export function CalendarView({
           <div className={styles.gridScroll}>
             <TimeGrid
               columns={staffColumns}
+              services={demoServices}
+              locale={locale}
               dashboardMessages={dashboard}
               onSelect={(a) => setQuickActionsTargetId(a.id)}
             />
@@ -511,7 +553,7 @@ export function CalendarView({
                 className={`${styles.staffChip} ${staffFilter === name ? styles.staffChipActive : ""}`}
                 onClick={() => setStaffFilter(name)}
               >
-                {name}
+                {getStaffLabel(name, youLabel)}
               </button>
             ))}
           </div>
@@ -530,6 +572,8 @@ export function CalendarView({
         {desktopView === "week" && (
           <TimeGrid
             columns={weekColumns}
+            services={demoServices}
+            locale={locale}
             dashboardMessages={dashboard}
             onSelect={(a) => setQuickActionsTargetId(a.id)}
           />
@@ -553,6 +597,8 @@ export function CalendarView({
         {desktopView === "staff" && (
           <TimeGrid
             columns={staffColumns}
+            services={demoServices}
+            locale={locale}
             dashboardMessages={dashboard}
             onSelect={(a) => setQuickActionsTargetId(a.id)}
           />
@@ -568,6 +614,7 @@ export function CalendarView({
         onClose={closeSheet}
         onSave={handleSave}
         onDelete={editing ? handleDelete : undefined}
+        locale={locale}
         messages={appointment}
         statusMessages={appointmentStatus}
         conflictMessages={conflict}
@@ -583,6 +630,10 @@ export function CalendarView({
         onCreateClient={(client) => createClient(client)}
         prefillClient={prefillClient}
         clientLabelOverride={workspace.clientLabel}
+        staffLabelOverride={staffLabelOverride}
+        resourceLabelOverride={resourceLabelOverride}
+        noResourceLabelOverride={noResourceLabelOverride}
+        youLabel={youLabel}
         key={editing?.id ?? "create"}
       />
 
@@ -590,6 +641,8 @@ export function CalendarView({
         open={Boolean(quickActionsTarget)}
         onClose={() => setQuickActionsTargetId(null)}
         appointment={quickActionsTarget}
+        services={demoServices}
+        locale={locale}
         messages={quickActions}
         statusMessages={appointmentStatus}
         waitingListMatchCount={lastCancelMatchCount}
@@ -625,6 +678,13 @@ export function CalendarView({
         locale={locale}
         messages={auditLog}
       />
+
+      {savedFeedbackVisible && (
+        <div className={styles.savedBanner} role="status">
+          <Icon name="check" size={16} />
+          {appointment.savedFeedback}
+        </div>
+      )}
     </main>
   );
 }

@@ -13,7 +13,11 @@
  * call, any fetch to workspace/appointment/client/finance data.
  */
 
-const VERSION = "serviceos-sw-v1";
+// Bumped so `activate` purges any cache namespace from before this file
+// existed — including one holding a stale dev-mode JS chunk that caused
+// a hydration mismatch (cache-first served pre-edit code against fresh
+// SSR HTML). Bump again if this ever needs to force another cache-out.
+const VERSION = "serviceos-sw-v2";
 const STATIC_CACHE = `${VERSION}-static`;
 
 const PRECACHE_URLS = [
@@ -22,7 +26,32 @@ const PRECACHE_URLS = [
   "/icons/icon-512.png",
 ];
 
+// Turbopack/webpack dev-mode chunk URLs aren't reliably content-hashed
+// the way a production build's are, so cache-first for `/_next/static/`
+// is only safe in production. A browser always byte-checks THIS file
+// itself on every `register()` call, bypassing any SW's own fetch
+// interception — so shipping this check here self-heals a browser that
+// already installed an earlier, unconditionally-caching version of this
+// worker, without depending on any other (possibly stale-cached) app
+// JS to run first.
+function isDevHost(hostname) {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(hostname)
+  );
+}
+
+const DEV_HOST = isDevHost(self.location.hostname);
+
 self.addEventListener("install", (event) => {
+  if (DEV_HOST) {
+    self.skipWaiting();
+    return;
+  }
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => cache.addAll(PRECACHE_URLS)),
   );
@@ -40,7 +69,13 @@ self.addEventListener("activate", (event) => {
           keys.filter((key) => key.startsWith("serviceos-sw-") && key !== STATIC_CACHE).map((key) => caches.delete(key)),
         ),
       )
-      .then(() => self.clients.claim()),
+      .then(() => self.clients.claim())
+      .then(() => {
+        // On a dev host, this worker has nothing left to do — hand
+        // control back so every subsequent request goes straight to
+        // the network, then remove the registration entirely.
+        if (DEV_HOST) return self.registration.unregister();
+      }),
   );
 });
 
@@ -55,6 +90,8 @@ function isSafeStaticAsset(url) {
 }
 
 self.addEventListener("fetch", (event) => {
+  if (DEV_HOST) return; // network-only, unconditionally, while this un-registers
+
   const request = event.request;
   if (request.method !== "GET") return; // never touch writes (Server Actions, forms)
 

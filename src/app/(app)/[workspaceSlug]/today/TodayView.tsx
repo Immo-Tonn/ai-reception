@@ -3,9 +3,10 @@
 import type { KeyboardEvent } from "react";
 import { Icon } from "@/components/ui";
 import { useAppointments } from "@/features/appointments/useAppointments";
-import { useClients } from "@/features/clients/useClients";
 import { useInvoices } from "@/features/finance/useInvoices";
 import { calculateOutstanding } from "@/features/finance/calculations";
+import { getWorkspaceConfig } from "@/features/workspace/registry";
+import { resolveServiceLabel } from "@/features/services/label";
 import { localIsoDate } from "@/lib/date/localIsoDate";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency, formatDate } from "@/lib/i18n/format";
@@ -51,7 +52,7 @@ export function TodayView({
 }) {
   const { items: appointments } = useAppointments(workspaceSlug);
   const { items: invoices } = useInvoices(workspaceSlug);
-  const { items: clients } = useClients(workspaceSlug);
+  const workspaceServices = getWorkspaceConfig(workspaceSlug).services;
 
   const today = new Date();
   const todayIso = localIsoDate(today);
@@ -69,30 +70,31 @@ export function TodayView({
 
   const attentionItems: AttentionItem[] = [];
   if (pendingToday.length > 0) {
-    // A single unconfirmed client resolves to their own profile (Contact
-    // tab has the phone/email to actually reach them); with more than
-    // one, or no matching ClientRecord, Calendar's own Quick Actions
-    // (Confirm) is the closest existing screen — same list this count
-    // was computed from.
-    const onlyPendingClient =
-      pendingToday.length === 1
-        ? clients.find((c) => c.name === pendingToday[0].client)
-        : undefined;
+    // A single unconfirmed appointment deep-links straight to Calendar's
+    // Quick Actions for that exact appointment — client, service,
+    // date/time, status and the Confirm/Open client actions are all
+    // already there, so this opens on the specific record instead of a
+    // list the user has to search again. With more than one pending
+    // appointment there's no single target, so it falls back to the
+    // day's list.
+    const onlyPendingAppointment = pendingToday.length === 1 ? pendingToday[0] : undefined;
     attentionItems.push({
       id: "confirm",
       text: dashboard.attentionConfirm.replace("{count}", String(pendingToday.length)),
-      href: onlyPendingClient
-        ? `/${workspaceSlug}/clients/${onlyPendingClient.id}`
+      href: onlyPendingAppointment
+        ? `/${workspaceSlug}/calendar?appointment=${onlyPendingAppointment.id}&date=${onlyPendingAppointment.date}`
         : `/${workspaceSlug}/calendar`,
     });
   }
   if (firstUnpaidInvoice) {
-    // No per-invoice detail screen exists yet — Finance is the closest
-    // existing state (the invoice list itself, with its status badge).
+    // No dedicated Invoice Detail route exists yet — Finance is the
+    // closest existing screen, opened with the invoice pre-selected so
+    // it's highlighted and scrolled into view instead of making the
+    // user find it again in the list.
     attentionItems.push({
       id: "invoice",
       text: dashboard.attentionInvoice.replace("{number}", firstUnpaidInvoice.number),
-      href: `/${workspaceSlug}/finance`,
+      href: `/${workspaceSlug}/finance?invoice=${firstUnpaidInvoice.number.replace(/^#/, "")}`,
     });
   }
 
@@ -191,7 +193,11 @@ export function TodayView({
                     <p className={styles.scheduleTitle}>
                       {isPrivate ? dashboard.statusBusy : item.client}
                     </p>
-                    {!isPrivate && <p className={styles.scheduleSubtitle}>{item.service}</p>}
+                    {!isPrivate && (
+                      <p className={styles.scheduleSubtitle}>
+                        {resolveServiceLabel(item.service, workspaceServices, locale)}
+                      </p>
+                    )}
                   </div>
                   <div className={styles.scheduleMeta}>
                     <span className={styles.scheduleDuration}>{item.durationMinutes} min</span>

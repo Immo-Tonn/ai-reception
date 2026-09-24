@@ -16,7 +16,7 @@ export default async function PublicBookingPage({
 }) {
   const { workspaceSlug } = await params;
   const locale = await getRequestLocale();
-  const { booking } = getMessages(locale);
+  const { common, booking, client } = getMessages(locale);
   const branding = getWorkspaceBranding(workspaceSlug);
 
   return (
@@ -24,7 +24,9 @@ export default async function PublicBookingPage({
       workspaceSlug={workspaceSlug}
       locale={locale}
       booking={booking}
+      client={client}
       branding={branding}
+      youLabel={common.you}
       headerActions={<Preferences />}
     />
   );

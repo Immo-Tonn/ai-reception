@@ -1,4 +1,4 @@
-import { useId, type InputHTMLAttributes } from "react";
+import { forwardRef, useId, type InputHTMLAttributes } from "react";
 import styles from "./Input.module.css";
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -6,7 +6,10 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: string;
 }
 
-export function Input({ label, error, id, className, ...props }: InputProps) {
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
+  { label, error, id, className, ...props },
+  ref,
+) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
 
@@ -16,6 +19,7 @@ export function Input({ label, error, id, className, ...props }: InputProps) {
         {label}
       </label>
       <input
+        ref={ref}
         id={inputId}
         className={[styles.input, error ? styles.error : "", className]
           .filter(Boolean)
@@ -25,10 +29,10 @@ export function Input({ label, error, id, className, ...props }: InputProps) {
         {...props}
       />
       {error ? (
-        <span id={`${inputId}-error`} className={styles.errorText}>
+        <span id={`${inputId}-error`} className={styles.errorText} role="alert">
           {error}
         </span>
       ) : null}
     </div>
   );
-}
+});

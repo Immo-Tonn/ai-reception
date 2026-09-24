@@ -24,6 +24,16 @@
   margin-bottom: var(--space-4);
 }
 
+/* Short, industry-specific context line — WorkspaceConfig.workIntro, not
+   a generic tutorial. Pulls up under the header instead of adding a
+   second full margin gap. */
+.pageIntro {
+  margin: calc(var(--space-4) * -1) 0 var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  max-width: 60ch;
+}
+
 .title {
   font-size: 1.5rem;
   font-weight: var(--font-weight-semibold);

@@ -6,9 +6,15 @@
   background: var(--color-paper);
 }
 
+/* flex-wrap lets Preferences (language + theme switchers in headerRight)
+   drop to its own row on narrow phones instead of squeezing businessName
+   down to a couple of characters — the actual cause of "Beauty ..."
+   truncation (§ business identity must never be unreadable). */
 .header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  row-gap: var(--space-2);
   gap: var(--space-3);
   padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--color-border);
@@ -27,7 +33,11 @@
 }
 
 .businessName {
-  min-width: 0;
+  flex: 1 1 auto;
+  /* Never shrinks below ~10-12 characters — beyond that point the row
+     wraps (headerRight drops to its own line) instead of truncating the
+     name into something unreadable like "Beauty ...". */
+  min-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -64,6 +74,19 @@
   max-width: 480px;
   width: 100%;
   margin: 0 auto;
+}
+
+/* Details step only: on desktop this is a real form page, not a phone
+   screen stretched wide — a slightly wider centered column reads better
+   than either the 480px mobile cap or a full-bleed page (§ desktop
+   layout must not just be the mobile form, stretched). Mobile is
+   unaffected (max-width never makes a viewport narrower than it already
+   is). */
+@media (min-width: 768px) {
+  .contentDetails {
+    max-width: 640px;
+    padding-top: var(--space-8);
+  }
 }
 
 .stepTitle {
@@ -208,15 +231,45 @@
   margin-bottom: var(--space-1);
 }
 
-/* Details form */
+/* Details step: helper text under the step title, explaining WHY these
+   fields are being asked for (§ page hierarchy). */
+.detailsHelper {
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+  /* Pulls up into stepTitle's own bottom margin, leaving a tighter
+     title→helper gap than helper→summary-card. */
+  margin-top: calc(var(--space-5) * -1 + var(--space-2));
+  margin-bottom: var(--space-5);
+}
+
+/* Details form — each field is its own vertical label→input stack (via
+   the shared Input component for name/email/phone; `.field` reproduces
+   the same stacking for the one plain field, notes). Strictly vertical
+   at every width per §4 — this is a stack, not a form-wide grid, so
+   desktop just gets a wider column via `.contentDetails`, never
+   side-by-side label/input pairs. */
 .form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 
-.textarea {
-  min-height: 72px;
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.fieldLabel {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-ink);
+}
+
+.notesTextarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 96px;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
@@ -227,25 +280,35 @@
   resize: vertical;
 }
 
-.label {
-  font-size: var(--font-size-small);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-ink);
+.notesTextarea:focus-visible {
+  border-color: var(--color-accent-blue);
+  outline: none;
 }
 
-/* Summary card, shown from the details step onward */
+.fieldHint {
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+}
+
+/* Summary card, shown from the details step onward — a real surface
+   card (not a pale tint wash) with a business-colored accent bar, so the
+   what/when/who of the booking stays legible in both themes instead of
+   fading into the background. */
 .summaryCard {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  padding: var(--space-4);
+  padding: var(--space-4) var(--space-5);
   border-radius: var(--radius-md);
-  background: var(--tint-blue);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent-blue);
+  background: var(--color-surface);
   margin-bottom: var(--space-5);
 }
 
 .summaryLine {
-  font-size: var(--font-size-body);
+  font-size: var(--font-size-body-l);
+  font-weight: var(--font-weight-semibold);
 }
 
 .summaryLineMuted {
@@ -290,6 +353,21 @@
   bottom: 0;
 }
 
+/* Caps the buttons themselves to match `.contentDetails` so they don't
+   stretch edge-to-edge on a wide desktop window (§ desktop must not just
+   be the mobile form, stretched) — the bar's background/border stay
+   full-bleed since this only affects the row of buttons inside. */
+@media (min-width: 768px) {
+  .footer {
+    justify-content: center;
+  }
+
+  .footerBack,
+  .footerNext {
+    max-width: 300px;
+  }
+}
+
 .footerBack {
   flex-shrink: 0;
 }
@@ -303,4 +381,13 @@
   font-size: 11px;
   color: var(--color-muted);
   padding: var(--space-3);
+}
+
+.createAccountLink {
+  display: block;
+  text-align: center;
+  margin-top: var(--space-4);
+  font-size: var(--font-size-small);
+  color: var(--color-accent-blue);
+  font-weight: var(--font-weight-medium);
 }

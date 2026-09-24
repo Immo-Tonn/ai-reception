@@ -1,0 +1,117 @@
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  margin-bottom: var(--space-4);
+}
+
+.summaryTitle {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-semibold);
+}
+
+.summaryMeta {
+  font-size: var(--font-size-small);
+  color: var(--text-secondary);
+}
+
+.summaryAmount {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+  margin-top: var(--space-2);
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.fieldRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-primary);
+}
+
+.fieldLabel {
+  font-size: var(--font-size-small);
+  color: var(--text-secondary);
+}
+
+.fieldValue {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 52px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  text-align: left;
+  width: 100%;
+}
+
+.itemIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.badgePaid {
+  background: var(--tint-mint);
+  color: var(--color-status-confirmed);
+}
+
+.badgeUnpaid {
+  background: var(--tint-peach);
+  color: var(--color-status-no-show);
+}
+
+.badgePartial {
+  background: var(--tint-yellow);
+  color: var(--color-status-pending);
+}
+
+.closeRow {
+  margin-top: var(--space-4);
+}

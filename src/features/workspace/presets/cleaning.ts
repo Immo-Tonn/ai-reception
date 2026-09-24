@@ -1,6 +1,7 @@
 import type { WorkspaceConfig } from "../types";
 import type { ServiceDefinition } from "@/features/services/types";
 import type { StaffMember } from "@/features/staff/types";
+import type { ResourceDefinition } from "@/features/resources/types";
 import type { ClientRecord } from "@/features/clients/types";
 import type { Appointment } from "@/features/appointments/types";
 
@@ -8,6 +9,12 @@ const services: ServiceDefinition[] = [
   {
     id: "svc-regular-cleaning",
     name: "Regular cleaning",
+    translations: {
+      en: "Regular cleaning",
+      de: "Regelmäßige Reinigung",
+      uk: "Звичайне прибирання",
+      ru: "Обычная уборка",
+    },
     durationMinutes: 90,
     price: 80,
     currency: "EUR",
@@ -19,17 +26,24 @@ const services: ServiceDefinition[] = [
   {
     id: "svc-deep-cleaning",
     name: "Deep cleaning",
+    translations: {
+      en: "Deep cleaning",
+      de: "Grundreinigung",
+      uk: "Генеральне прибирання",
+      ru: "Генеральная уборка",
+    },
     durationMinutes: 180,
     price: 180,
     currency: "EUR",
     bufferBeforeMinutes: 0,
     bufferAfterMinutes: 30,
     allowedStaffIds: [],
-    requiredResourceType: null,
+    requiredResourceType: "equipment",
   },
   {
     id: "svc-windows",
     name: "Windows",
+    translations: { en: "Windows", de: "Fenster", uk: "Миття вікон", ru: "Мытьё окон" },
     durationMinutes: 60,
     price: 50,
     currency: "EUR",
@@ -44,6 +58,48 @@ const staff: StaffMember[] = [
   { id: "staff-julia", name: "Julia", colorToken: "--color-accent-mint" },
   { id: "staff-tom", name: "Tom", colorToken: "--color-accent-blue" },
   { id: "staff-you", name: "You", colorToken: "--color-accent-lavender" },
+];
+
+const resources: ResourceDefinition[] = [
+  {
+    id: "res-vacuum",
+    name: "Industrial vacuum",
+    type: "equipment",
+    translations: {
+      de: "Industriesauger",
+      en: "Industrial vacuum",
+      uk: "Промисловий пилосос",
+      ru: "Промышленный пылесос",
+    },
+  },
+  {
+    id: "res-steamer",
+    name: "Steam cleaner",
+    type: "equipment",
+    translations: {
+      de: "Dampfreiniger",
+      en: "Steam cleaner",
+      uk: "Пароочисник",
+      ru: "Пароочиститель",
+    },
+  },
+  {
+    id: "res-equipment-set",
+    name: "Equipment set 1",
+    type: "equipment",
+    translations: {
+      de: "Ausrüstungsset 1",
+      en: "Equipment set 1",
+      uk: "Комплект обладнання 1",
+      ru: "Комплект оборудования 1",
+    },
+  },
+  {
+    id: "res-vehicle",
+    name: "Vehicle 1",
+    type: "vehicle",
+    translations: { de: "Fahrzeug 1", en: "Vehicle 1", uk: "Автомобіль 1", ru: "Автомобиль 1" },
+  },
 ];
 
 const clients: ClientRecord[] = [
@@ -128,7 +184,7 @@ const appointments: Appointment[] = [
     client: "Fischer Residence",
     service: "Deep cleaning",
     staff: "Tom",
-    resourceId: null,
+    resourceId: "res-vacuum",
     date: "2026-09-22",
     time: "16:00",
     durationMinutes: 180,
@@ -163,18 +219,57 @@ const appointments: Appointment[] = [
   },
 ];
 
-/** Cleaning — property-based service business, no vehicles/rooms needed. */
+/** Cleaning — property-based service business; resources are equipment
+ * and the service vehicle, not rooms (properties are the clients). */
 export const cleaningWorkspace: WorkspaceConfig = {
   slug: "demo-cleaning",
   industry: "cleaning",
   name: "Cleaning Service",
   tagline: "Regular cleaning, deep cleaning, windows",
   emoji: "🧽",
+  clientDescription: {
+    de: "Reinigung von Haus und Räumlichkeiten",
+    en: "Home and premises cleaning",
+    uk: "Прибирання дому та приміщень",
+    ru: "Уборка дома и помещений",
+  },
   clientLabel: "Property",
   clientLabelPlural: "Properties",
+  staffLabel: { de: "Mitarbeiter", en: "Staff member", uk: "Працівник", ru: "Сотрудник" },
+  resourceLabel: {
+    de: "Fahrzeug / Ausrüstung",
+    en: "Vehicle / equipment",
+    uk: "Автомобіль / обладнання",
+    ru: "Автомобиль / оборудование",
+  },
+  noResourceLabel: {
+    de: "Kein Fahrzeug/Ausrüstung nötig",
+    en: "No vehicle/equipment needed",
+    uk: "Без автомобіля/обладнання",
+    ru: "Без автомобиля/оборудования",
+  },
+  workLabel: { de: "Aufträge", en: "Jobs", uk: "Замовлення", ru: "Заказы" },
+  workIntro: {
+    de: "Verwalten Sie Kundenanfragen und Aufträge von der ersten Anfrage bis zur Bezahlung.",
+    en: "Manage customer requests and jobs from first contact through to payment.",
+    uk: "Керуйте запитами та замовленнями на послуги від звернення клієнта до оплати.",
+    ru: "Управляйте запросами и заказами на услуги от обращения клиента до оплаты.",
+  },
+  financeIntro: {
+    de: "Rechnungen, Zahlungen und Umsatz Ihres Unternehmens.",
+    en: "Invoices, payments and revenue for your business.",
+    uk: "Рахунки, оплати та дохід вашого бізнесу.",
+    ru: "Счета, оплаты и выручка вашего бизнеса.",
+  },
+  analyticsIntro: {
+    de: "Wichtige Kennzahlen auf Basis von Terminen, Aufträgen, Kunden und Finanzen.",
+    en: "Key business metrics based on appointments, jobs, clients and finance.",
+    uk: "Ключові показники бізнесу на основі записів, замовлень, клієнтів та фінансів.",
+    ru: "Ключевые показатели бизнеса на основе записей, заказов, клиентов и финансов.",
+  },
   services,
   staff,
-  resources: [],
+  resources,
   clients,
   appointments,
 };

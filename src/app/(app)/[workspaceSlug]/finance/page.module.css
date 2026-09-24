@@ -24,6 +24,13 @@
   margin-bottom: var(--space-5);
 }
 
+.pageIntro {
+  margin: calc(var(--space-5) * -1) 0 var(--space-4);
+  color: var(--color-muted);
+  font-size: var(--font-size-small);
+  max-width: 60ch;
+}
+
 .title {
   font-size: 1.5rem;
   font-weight: var(--font-weight-semibold);
@@ -162,6 +169,45 @@
 
 .row + .row {
   border-top: 1px solid var(--color-border);
+}
+
+/* The interactive invoice-row variant — a real <button>, full width,
+   with its own hover/pressed/focus feedback (rows without an invoice,
+   e.g. the empty state, stay plain <div>s using just `.row`). */
+.rowButton {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.rowButton:hover {
+  background: var(--color-paper);
+}
+
+.rowButton:active {
+  background: var(--tint-blue);
+}
+
+.rowButton:focus-visible {
+  outline: 2px solid var(--color-accent-blue);
+  outline-offset: -2px;
+}
+
+.rowChevron {
+  color: var(--color-muted);
+  flex-shrink: 0;
+}
+
+/* A `?invoice=` deep link (Today's "needs attention" item) lands here —
+   make it unmistakable which row that was. */
+.rowHighlighted {
+  background: var(--tint-blue);
+  box-shadow: inset 2px 0 0 var(--color-accent-blue);
 }
 
 .rowBody {

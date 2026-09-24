@@ -17,10 +17,13 @@ import { findConflicts, findNextAvailableSlot } from "@/features/appointments/co
 import { expandRecurrenceDates } from "@/features/appointments/recurrence";
 import { checkAvailability } from "@/features/workingHours/logic";
 import type { ServiceDefinition } from "@/features/services/types";
+import { getServiceLabel } from "@/features/services/label";
 import type { StaffMember } from "@/features/staff/types";
+import { getStaffLabel } from "@/features/staff/label";
 import type { ResourceDefinition } from "@/features/resources/types";
+import { getResourceLabel } from "@/features/resources/label";
 import type { WorkingHoursProfile } from "@/features/workingHours/types";
-import type { Messages } from "@/lib/i18n";
+import type { Locale, Messages } from "@/lib/i18n";
 import styles from "./AppointmentSheet.module.css";
 
 export type AppointmentSaveResult =
@@ -31,8 +34,12 @@ export type AppointmentSaveResult =
 interface AppointmentSheetProps {
   open: boolean;
   onClose: () => void;
-  onSave: (result: AppointmentSaveResult) => void;
+  /** May be async (e.g. awaits the repository write) — the sheet stays
+   * open and shows an inline error if this rejects, instead of closing
+   * on a save that never actually persisted. */
+  onSave: (result: AppointmentSaveResult) => void | Promise<void>;
   onDelete?: () => void;
+  locale: Locale;
   messages: Messages["appointment"];
   statusMessages: Messages["appointmentStatus"];
   conflictMessages: Messages["conflict"];
@@ -48,6 +55,10 @@ interface AppointmentSheetProps {
   onCreateClient: (client: ClientRecord) => void;
   prefillClient?: string;
   clientLabelOverride?: string;
+  staffLabelOverride?: string;
+  resourceLabelOverride?: string;
+  noResourceLabelOverride?: string;
+  youLabel: string;
 }
 
 function todayIso() {
@@ -59,6 +70,7 @@ export function AppointmentSheet({
   onClose,
   onSave,
   onDelete,
+  locale,
   messages,
   statusMessages,
   conflictMessages,
@@ -74,6 +86,10 @@ export function AppointmentSheet({
   onCreateClient,
   prefillClient,
   clientLabelOverride,
+  staffLabelOverride,
+  resourceLabelOverride,
+  noResourceLabelOverride,
+  youLabel,
 }: AppointmentSheetProps) {
   const isEditing = Boolean(initialValue);
   const isSeries = Boolean(initialValue?.seriesId);
@@ -88,7 +104,11 @@ export function AppointmentSheet({
   );
   const [price, setPrice] = useState(initialValue?.price ?? services[0]?.price ?? 0);
   const [notes, setNotes] = useState(initialValue?.notes ?? "");
-  const [status, setStatus] = useState<AppointmentStatus>(initialValue?.status ?? "pending");
+  // Internal appointment (Owner/Staff, this form) defaults to CONFIRMED —
+  // only a client-created Public Booking defaults to PENDING (see
+  // publicBooking.service.ts). Editing an existing appointment always
+  // keeps its own status regardless of this default.
+  const [status, setStatus] = useState<AppointmentStatus>(initialValue?.status ?? "confirmed");
   const [resourceId, setResourceId] = useState<string | null>(initialValue?.resourceId ?? null);
   const [visibility, setVisibility] = useState<Visibility>(initialValue?.visibility ?? "normal");
   const [financialBucket, setFinancialBucket] = useState<FinancialBucket>(
@@ -98,6 +118,9 @@ export function AppointmentSheet({
   const [recurrenceCount, setRecurrenceCount] = useState(4);
   const [recurrenceIntervalDays, setRecurrenceIntervalDays] = useState(10);
   const [applyToSeries, setApplyToSeries] = useState(false);
+  const [validationError, setValidationError] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const selectedService = services.find((s) => s.name === serviceName);
 
@@ -174,8 +197,15 @@ export function AppointmentSheet({
     };
   }
 
-  function handleSave() {
-    if (!client.trim() || !staff) return;
+  async function handleSave() {
+    setSaveError(false);
+    if (!client.trim() || !staff) {
+      setValidationError(true);
+      return;
+    }
+    setValidationError(false);
+
+    let result: AppointmentSaveResult;
 
     if (!isEditing && recurrenceFreq !== "none") {
       const seriesId = `series-${Date.now()}`;
@@ -210,48 +240,52 @@ export function AppointmentSheet({
           ...buildBaseFields(),
         });
       }
-      onSave({ mode: "create", appointments: created });
-      onClose();
-      return;
-    }
-
-    if (isEditing && initialValue) {
+      result = { mode: "create", appointments: created };
+    } else if (isEditing && initialValue) {
       const patch: Partial<Appointment> = {
         ...buildBaseFields(),
         durationMinutes: duration,
         ...(applyToSeries ? {} : { date, time }),
       };
 
-      if (isSeries && applyToSeries && initialValue.seriesId) {
-        onSave({
-          mode: "updateSeries",
-          seriesId: initialValue.seriesId,
-          fromDate: initialValue.date,
-          patch,
-        });
-      } else {
-        onSave({ mode: "updateOne", id: initialValue.id, patch: { ...patch, date, time } });
-      }
-      onClose();
-      return;
+      result =
+        isSeries && applyToSeries && initialValue.seriesId
+          ? {
+              mode: "updateSeries",
+              seriesId: initialValue.seriesId,
+              fromDate: initialValue.date,
+              patch,
+            }
+          : { mode: "updateOne", id: initialValue.id, patch: { ...patch, date, time } };
+    } else {
+      // Single, non-recurring create.
+      result = {
+        mode: "create",
+        appointments: [
+          {
+            id: `${Date.now()}`,
+            date,
+            time,
+            durationMinutes: duration,
+            seriesId: null,
+            recurrence: null,
+            ...buildBaseFields(),
+          },
+        ],
+      };
     }
 
-    // Single, non-recurring create.
-    onSave({
-      mode: "create",
-      appointments: [
-        {
-          id: `${Date.now()}`,
-          date,
-          time,
-          durationMinutes: duration,
-          seriesId: null,
-          recurrence: null,
-          ...buildBaseFields(),
-        },
-      ],
-    });
-    onClose();
+    setSaving(true);
+    try {
+      await onSave(result);
+      onClose();
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error("Failed to save appointment", error);
+      setSaveError(true);
+    } finally {
+      setSaving(false);
+    }
   }
 
   const visibilityOptions: { value: Visibility; title: string; hint: string }[] = [
@@ -336,14 +370,14 @@ export function AppointmentSheet({
           >
             {services.map((item) => (
               <option key={item.id} value={item.name}>
-                {item.name}
+                {getServiceLabel(item, locale)}
               </option>
             ))}
           </select>
         </div>
 
         <div className={styles.field}>
-          <label className={styles.label}>{messages.staffLabel}</label>
+          <label className={styles.label}>{staffLabelOverride ?? messages.staffLabel}</label>
           <select
             className={styles.select}
             value={staff}
@@ -351,7 +385,7 @@ export function AppointmentSheet({
           >
             {eligibleStaff.map((item) => (
               <option key={item.id} value={item.name}>
-                {item.name}
+                {getStaffLabel(item.name, youLabel)}
               </option>
             ))}
           </select>
@@ -359,16 +393,16 @@ export function AppointmentSheet({
 
         {selectedService?.requiredResourceType && (
           <div className={styles.field}>
-            <label className={styles.label}>{messages.resourceLabel}</label>
+            <label className={styles.label}>{resourceLabelOverride ?? messages.resourceLabel}</label>
             <select
               className={styles.select}
               value={resourceId ?? ""}
               onChange={(event) => setResourceId(event.target.value || null)}
             >
-              <option value="">{messages.resourceNone}</option>
+              <option value="">{noResourceLabelOverride ?? messages.resourceNone}</option>
               {eligibleResources.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.name}
+                  {getResourceLabel(item, locale)}
                 </option>
               ))}
             </select>
@@ -539,6 +573,7 @@ export function AppointmentSheet({
 
         <div className={styles.section}>
           <span className={styles.sectionLabel}>{messages.visibilityLabel}</span>
+          <span className={styles.sectionHint}>{messages.visibilitySectionHint}</span>
           <div className={styles.optionRow}>
             {visibilityOptions.map((option) => (
               <button
@@ -561,6 +596,7 @@ export function AppointmentSheet({
 
         <div className={styles.section}>
           <span className={styles.sectionLabel}>{messages.financialBucketLabel}</span>
+          <span className={styles.sectionHint}>{messages.financialBucketSectionHint}</span>
           <div className={styles.optionRow}>
             {bucketOptions.map((option) => (
               <button
@@ -581,13 +617,22 @@ export function AppointmentSheet({
           <span className={styles.separationNote}>{messages.separationNote}</span>
         </div>
 
+        {(validationError || saveError) && (
+          <div className={styles.warningCard}>
+            <span className={styles.warningTitle}>
+              <Icon name="close" size={14} />
+              {validationError ? messages.validationRequired : messages.saveError}
+            </span>
+          </div>
+        )}
+
         <div className={styles.actions}>
           {isEditing && onDelete ? (
             <Button variant="secondary" className={styles.deleteButton} onClick={onDelete}>
               {messages.delete}
             </Button>
           ) : null}
-          <Button fullWidth onClick={handleSave}>
+          <Button fullWidth onClick={handleSave} disabled={saving}>
             {messages.save}
           </Button>
         </div>

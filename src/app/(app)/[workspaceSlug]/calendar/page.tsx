@@ -10,6 +10,7 @@ export default async function CalendarPage({
   const { workspaceSlug } = await params;
   const locale = await getRequestLocale();
   const {
+    common,
     calendar,
     appointment,
     dashboard,
@@ -25,6 +26,7 @@ export default async function CalendarPage({
     <CalendarView
       workspaceSlug={workspaceSlug}
       locale={locale}
+      common={common}
       calendar={calendar}
       appointment={appointment}
       dashboard={dashboard}

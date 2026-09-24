@@ -2,7 +2,9 @@
 
 import type { Appointment } from "@/features/appointments/types";
 import { getGridPlacement, gridHourLabels, GRID_ROW_COUNT } from "@/features/appointments/gridLayout";
-import type { Messages } from "@/lib/i18n";
+import type { ServiceDefinition } from "@/features/services/types";
+import { resolveServiceLabel } from "@/features/services/label";
+import type { Locale, Messages } from "@/lib/i18n";
 import styles from "./TimeGrid.module.css";
 
 export interface TimeGridColumn {
@@ -13,10 +15,14 @@ export interface TimeGridColumn {
 
 export function TimeGrid({
   columns,
+  services,
+  locale,
   dashboardMessages,
   onSelect,
 }: {
   columns: TimeGridColumn[];
+  services: ServiceDefinition[];
+  locale: Locale;
   dashboardMessages: Messages["dashboard"];
   onSelect: (appointment: Appointment) => void;
 }) {
@@ -68,7 +74,7 @@ export function TimeGrid({
                   </span>
                   <span className={styles.blockMeta}>
                     {appointment.time}
-                    {!isMasked ? ` · ${appointment.service}` : ""}
+                    {!isMasked ? ` · ${resolveServiceLabel(appointment.service, services, locale)}` : ""}
                   </span>
                 </button>
               );

@@ -14,20 +14,31 @@ export function NewInvoiceSheet({
   onSave,
   messages,
   appointmentMessages,
+  initialValue,
 }: {
   open: boolean;
   onClose: () => void;
   onSave: (invoice: Invoice) => void;
   messages: Messages["finance"];
   appointmentMessages: Messages["appointment"];
+  /** Editing an existing invoice instead of creating one — pass a
+   * `key={invoice.id}` at the call site so each invoice gets its own
+   * fresh form state (same pattern as AppointmentSheet). */
+  initialValue?: Invoice | null;
 }) {
-  const [client, setClient] = useState("");
-  const [amount, setAmount] = useState(0);
-  const [bucket, setBucket] = useState<FinancialBucket>("main");
-  const [visibility, setVisibility] = useState<Visibility>("normal");
+  const isEditing = Boolean(initialValue);
+  const [client, setClient] = useState(initialValue?.client ?? "");
+  const [amount, setAmount] = useState(initialValue?.amount ?? 0);
+  const [bucket, setBucket] = useState<FinancialBucket>(initialValue?.bucket ?? "main");
+  const [visibility, setVisibility] = useState<Visibility>(initialValue?.visibility ?? "normal");
 
   function handleSave() {
     if (!client.trim()) return;
+    if (isEditing && initialValue) {
+      onSave({ ...initialValue, client, amount, bucket, visibility });
+      onClose();
+      return;
+    }
     onSave({
       id: String(Date.now()),
       number: `#${Math.floor(1000 + Math.random() * 9000)}`,
@@ -46,7 +57,7 @@ export function NewInvoiceSheet({
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title={messages.newInvoice}>
+    <Sheet open={open} onClose={onClose} title={isEditing ? messages.editInvoice : messages.newInvoice}>
       <div className={styles.form}>
         <Input
           label={messages.newInvoiceClientLabel}
@@ -86,7 +97,7 @@ export function NewInvoiceSheet({
         </div>
         <span className={styles.separationNote}>{appointmentMessages.separationNote}</span>
         <Button fullWidth onClick={handleSave}>
-          {messages.newInvoiceSave}
+          {isEditing ? messages.saveInvoice : messages.newInvoiceSave}
         </Button>
       </div>
     </Sheet>

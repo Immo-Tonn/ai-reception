@@ -6,6 +6,7 @@ import { Button, Icon } from "@/components/ui";
 import { useLeads, useQuotes, useJobs, useProjects } from "@/features/work/useWork";
 import { useInvoices } from "@/features/finance/useInvoices";
 import { useAuditLog } from "@/features/auditLog/useAuditLog";
+import { getWorkspaceConfig } from "@/features/workspace/registry";
 import type { Lead, LeadStage, Quote, QuoteStatus, Job, JobStatus, Project, ProjectStatus } from "@/features/work/types";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency } from "@/lib/i18n/format";
@@ -26,6 +27,9 @@ export function WorkView({
   appointmentMessages: Messages["appointment"];
 }) {
   const searchParams = useSearchParams();
+  const workspace = getWorkspaceConfig(workspaceSlug);
+  const pageTitle = workspace.workLabel?.[locale] ?? messages.title;
+  const pageIntro = workspace.workIntro?.[locale];
   const { items: leads, create: createLead, update: updateLead } = useLeads(workspaceSlug);
   const { items: quotes, create: createQuote, update: updateQuote } = useQuotes(workspaceSlug);
   const { items: jobs, create: createJob, update: updateJob } = useJobs(workspaceSlug);
@@ -184,7 +188,7 @@ export function WorkView({
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>{messages.title}</h1>
+        <h1 className={styles.title}>{pageTitle}</h1>
         <Button className={styles.newButton} onClick={() => setSheetOpen(true)}>
           {kindForTab[tab] === "lead"
             ? messages.newLead
@@ -195,6 +199,8 @@ export function WorkView({
                 : messages.newProject}
         </Button>
       </header>
+
+      {pageIntro && <p className={styles.pageIntro}>{pageIntro}</p>}
 
       <div className={styles.tabRow}>
         {tabs.map((item) => (

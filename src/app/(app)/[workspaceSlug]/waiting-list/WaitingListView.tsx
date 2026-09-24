@@ -12,10 +12,12 @@ export function WaitingListView({
   workspaceSlug,
   locale,
   messages,
+  youLabel,
 }: {
   workspaceSlug: string;
   locale: Locale;
   messages: Messages["waitingList"];
+  youLabel: string;
 }) {
   const { items, create } = useWaitingList(workspaceSlug);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -65,6 +67,8 @@ export function WaitingListView({
         onSave={create}
         messages={messages}
         workspaceSlug={workspaceSlug}
+        locale={locale}
+        youLabel={youLabel}
       />
     </main>
   );

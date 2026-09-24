@@ -1,4 +1,5 @@
 import { Icon, type IconName } from "@/components/ui";
+import { getWorkspaceConfig } from "@/features/workspace/registry";
 import { getMessages, type Messages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { BackButton } from "./BackButton";
@@ -22,6 +23,8 @@ export default async function MorePage({
   const { workspaceSlug } = await params;
   const locale = await getRequestLocale();
   const { nav, more, common } = getMessages(locale);
+  const workspace = getWorkspaceConfig(workspaceSlug);
+  const visibleItems = items.filter((item) => item.key !== "work" || workspace.workEnabled !== false);
 
   return (
     <main className={styles.page}>
@@ -30,12 +33,14 @@ export default async function MorePage({
         <h1 className={styles.title}>{more.title}</h1>
       </header>
       <div className={styles.list}>
-        {items.map((item) => (
+        {visibleItems.map((item) => (
           <a key={item.segment} href={`/${workspaceSlug}/${item.segment}`} className={styles.item}>
             <span className={styles.itemIcon}>
               <Icon name={item.icon} size={18} />
             </span>
-            <span className={styles.itemLabel}>{nav[item.key]}</span>
+            <span className={styles.itemLabel}>
+              {item.key === "work" ? (workspace.workLabel?.[locale] ?? nav.work) : nav[item.key]}
+            </span>
             <span className={styles.itemChevron}>
               <Icon name="chevronRight" size={18} />
             </span>
