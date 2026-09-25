@@ -18,7 +18,7 @@ export const de: Messages = {
   },
   business: {
     backToHome: "ServiceOS",
-    title: "Ihr ruhiger digitaler Administrator für Dienstleistungsunternehmen",
+    title: "Ihr ruhiger digitaler Administrator für Dienstleistungs­unternehmen",
     subtitle:
       "Terminplanung, Kunden, Aufträge, Finanzen und ein KI-Assistent, der Ihr Geschäft kennt — und nachfragt, bevor er etwas Wichtiges tut.",
     ctaSignup: "Unternehmen erstellen",

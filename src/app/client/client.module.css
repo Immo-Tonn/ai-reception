@@ -215,6 +215,10 @@
   letter-spacing: -0.02em;
   line-height: 1.2;
   margin-bottom: var(--space-3);
+  /* Safety net for long unbreakable words on narrow screens. Long German
+     compounds in intro titles carry a soft hyphen (­) in the locale
+     string, so they normally break there with a visible hyphen first. */
+  overflow-wrap: break-word;
 }
 
 .introSubtitle {
