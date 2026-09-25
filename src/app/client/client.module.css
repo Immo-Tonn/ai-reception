@@ -260,6 +260,32 @@
   background: var(--color-paper);
 }
 
+/* Business intro on desktop: widen the column so the title and subtitle
+   each settle into two balanced lines, while the actions keep the
+   narrow 420px width of the mobile column. */
+@media (min-width: 1024px) {
+  .introBodyWide {
+    max-width: 920px;
+  }
+
+  .introBodyWide .introTitle {
+    text-wrap: balance;
+  }
+
+  .introBodyWide .introSubtitle {
+    max-width: 620px;
+    margin-inline: auto;
+    text-wrap: balance;
+  }
+
+  .introBodyWide .introPrimaryButton,
+  .introBodyWide .introSecondaryButton {
+    width: 100%;
+    max-width: 380px;
+    margin-inline: auto;
+  }
+}
+
 .businessList {
   display: flex;
   flex-direction: column;

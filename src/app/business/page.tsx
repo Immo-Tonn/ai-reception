@@ -30,7 +30,7 @@ export default async function BusinessIntroPage() {
         <Preferences />
       </div>
 
-      <div className={styles.introBody}>
+      <div className={`${styles.introBody} ${styles.introBodyWide}`}>
         <h1 className={styles.introTitle}>{business.title}</h1>
         <p className={styles.introSubtitle}>{business.subtitle}</p>
 
