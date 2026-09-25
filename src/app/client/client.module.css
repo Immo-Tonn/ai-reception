@@ -164,6 +164,12 @@
   z-index: 1;
 }
 
+/* The top bar holds the language dropdown — it must stack above the intro
+   body, otherwise the open menu renders underneath the title. */
+.heroScreen > .topBar {
+  z-index: 2;
+}
+
 .topBar {
   display: flex;
   align-items: center;
