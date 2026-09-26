@@ -164,6 +164,12 @@
   z-index: 1;
 }
 
+/* The top bar holds the language dropdown — it must stack above the intro
+   body, otherwise the open menu renders underneath the title. */
+.heroScreen > .topBar {
+  z-index: 2;
+}
+
 .topBar {
   display: flex;
   align-items: center;
@@ -215,6 +221,10 @@
   letter-spacing: -0.02em;
   line-height: 1.2;
   margin-bottom: var(--space-3);
+  /* Safety net for long unbreakable words on narrow screens. Long German
+     compounds in intro titles carry a soft hyphen (­) in the locale
+     string, so they normally break there with a visible hyphen first. */
+  overflow-wrap: break-word;
 }
 
 .introSubtitle {
@@ -258,6 +268,32 @@
 
 .introSecondaryButton:hover {
   background: var(--color-paper);
+}
+
+/* Business intro on desktop: widen the column so the title and subtitle
+   each settle into two balanced lines, while the actions keep the
+   narrow 420px width of the mobile column. */
+@media (min-width: 1024px) {
+  .introBodyWide {
+    max-width: 920px;
+  }
+
+  .introBodyWide .introTitle {
+    text-wrap: balance;
+  }
+
+  .introBodyWide .introSubtitle {
+    max-width: 620px;
+    margin-inline: auto;
+    text-wrap: balance;
+  }
+
+  .introBodyWide .introPrimaryButton,
+  .introBodyWide .introSecondaryButton {
+    width: 100%;
+    max-width: 380px;
+    margin-inline: auto;
+  }
 }
 
 .businessList {
