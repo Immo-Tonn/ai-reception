@@ -248,3 +248,12 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+.formError {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-2, 8px);
+  background: var(--panel-status-negative-bg);
+  color: var(--panel-status-negative-text);
+  font-size: 0.875rem;
+}
