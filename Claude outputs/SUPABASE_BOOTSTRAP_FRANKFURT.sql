@@ -2,18 +2,12 @@
 -- ServiceOS (ai-reception) — единый bootstrap-скрипт для НОВОГО проекта
 -- Supabase в регионе Central EU (Frankfurt).
 --
--- Это объединение того, что раньше было выполнено в проекте Ireland в
--- НЕСКОЛЬКО шагов (создание таблиц + включение RLS + выдача прав
--- service_role) — в один скрипт, чтобы воссоздать точно такое же
--- состояние базы за один запуск.
---
 -- Как использовать:
 --   1. Создайте новый проект в Supabase Dashboard, регион Central EU
 --      (Frankfurt).
 --   2. Откройте в нём SQL Editor → New query.
 --   3. Вставьте содержимое этого файла целиком и нажмите Run.
---   4. В Authentication → Providers отключите "Confirm email" (как в
---      старом проекте, для тестирования).
+--   4. В Authentication → Providers отключите "Confirm email".
 --   5. Project Settings → API Keys — скопируйте Project URL, anon/
 --      publishable key и service_role/secret key в .env.local.
 --
@@ -26,7 +20,6 @@
 
 -- ============================================================================
 -- ЧАСТЬ 1 — Схема (таблицы, типы, индексы)
--- Идентично SUPABASE_BOOTSTRAP_ONCE.sql, использованному в проекте Ireland.
 -- ============================================================================
 
 -- ServiceOS — 0001: workspaces, membership, roles/permissions
@@ -433,8 +426,7 @@ alter table audit_logs enable row level security;
 -- service_role обходит RLS (атрибут BYPASSRLS у роли), НО это не отменяет
 -- обычные Postgres GRANT на уровне таблицы — Postgres сначала проверяет
 -- GRANT, и только потом RLS-политики. Без этого блока каждый запрос
--- через service_role будет падать с "permission denied for table X",
--- именно это и произошло в проекте Ireland.
+-- через service_role будет падать с "permission denied for table X".
 --
 -- GRANT ALL — на все существующие сейчас таблицы/последовательности.
 -- ALTER DEFAULT PRIVILEGES — чтобы то же самое автоматически
@@ -448,7 +440,7 @@ alter default privileges in schema public grant all on sequences to service_role
 
 -- ============================================================================
 -- Готово. После выполнения этого скрипта:
---   - 19 таблиц созданы, с той же структурой, что в проекте Ireland;
+--   - 19 таблиц созданы;
 --   - RLS включён на всех, политик нет (deny-all для anon/authenticated);
 --   - service_role имеет полный доступ (нет "permission denied").
 --
