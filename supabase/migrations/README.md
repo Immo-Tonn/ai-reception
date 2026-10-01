@@ -18,6 +18,7 @@ by the ones before it.
 | `0004_scheduling.sql` | `appointment_series`, `appointments`, `appointment_resources`, `waiting_list` |
 | `0005_invoicing.sql` | `invoices`, `invoice_items`, `payments` |
 | `0006_audit_log.sql` | `audit_logs` |
+| `0007_onboarding_booking_mode.sql` | `workspaces.booking_mode` (adds a column, no new table) |
 
 ## Design notes that mirror the app layer
 
@@ -34,11 +35,6 @@ by the ones before it.
 - `audit_logs` columns match `src/features/auditLog/types.ts` field for
   field.
 
-## Not yet applied
+## Applied
 
-No Supabase project is connected in this environment. To apply later:
-
-```bash
-supabase link --project-ref <project-ref>
-supabase db push
-```
+`0001`–`0006` (plus the service_role GRANT fix and the `profiles.id -> auth.users.id` cascading FK) have been run against the live Supabase project via the SQL Editor — there is no `supabase` CLI link set up in this repo, so new migrations are applied the same way: run the new file's SQL directly in the project's SQL Editor.

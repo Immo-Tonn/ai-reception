@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Icon, Input } from "@/components/ui";
 import type { Messages } from "@/lib/i18n";
+import { completeOnboardingAction } from "@/server/actions/onboarding.actions";
 import styles from "./page.module.css";
 
 type Messages_ = Messages["onboarding"];
@@ -33,6 +34,24 @@ const industries: IndustryKey[] = [
   "industryOther",
 ];
 
+/** `workspaces.industry` is free text, not an enum (unlike the 4-preset
+ * demo `IndustryKey` in `src/features/workspace/types.ts`, which is a
+ * completely different vocabulary for a completely different purpose —
+ * see that file's own comment). This is just a stable, human-readable
+ * slug for what got picked here. */
+const industrySlugs: Record<IndustryKey, string> = {
+  industryBeauty: "beauty",
+  industryCleaning: "cleaning",
+  industryAuto: "auto",
+  industryRepair: "repair",
+  industryPhotography: "photography",
+  industryEducation: "education",
+  industryConsulting: "consulting",
+  industryAgency: "agency",
+  industryFitness: "fitness",
+  industryOther: "other",
+};
+
 type ModeKey = "modeAppointments" | "modeJobs" | "modeProjects";
 type ModeHintKey = "modeAppointmentsHint" | "modeJobsHint" | "modeProjectsHint";
 
@@ -42,6 +61,12 @@ const modes: { key: ModeKey; hint: ModeHintKey }[] = [
   { key: "modeProjects", hint: "modeProjectsHint" },
 ];
 
+const bookingModes: Record<ModeKey, "appointments" | "jobs" | "projects"> = {
+  modeAppointments: "appointments",
+  modeJobs: "jobs",
+  modeProjects: "projects",
+};
+
 interface Service {
   name: string;
   duration: string;
@@ -50,7 +75,13 @@ interface Service {
 
 const TOTAL_STEPS = 6;
 
-export function OnboardingWizard({ messages }: { messages: Messages_ }) {
+export function OnboardingWizard({
+  messages,
+  workspaceSlug,
+}: {
+  messages: Messages_;
+  workspaceSlug: string;
+}) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [industry, setIndustry] = useState<IndustryKey | null>(null);
@@ -59,20 +90,48 @@ export function OnboardingWizard({ messages }: { messages: Messages_ }) {
   const [draft, setDraft] = useState<Service>({ name: "", duration: "", price: "" });
   const [defaultHours, setDefaultHours] = useState(true);
   const [includePrivateBucket, setIncludePrivateBucket] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, startSaving] = useTransition();
 
   const progress = ((step + 1) / TOTAL_STEPS) * 100;
 
   function goBack() {
-    if (step === 0) {
-      router.push("/signup");
-      return;
-    }
+    if (step === 0) return;
+    setError(null);
     setStep((value) => value - 1);
+  }
+
+  function finish() {
+    // `industry`/`mode` are guaranteed non-null here: `canContinue` blocks
+    // leaving step 0/1 without picking one, and this button only exists
+    // on the last step.
+    setError(null);
+    startSaving(async () => {
+      const result = await completeOnboardingAction(workspaceSlug, {
+        industry: industrySlugs[industry!],
+        bookingMode: bookingModes[mode!],
+        services: services
+          .filter((service) => service.name.trim().length > 0)
+          .map((service) => ({
+            name: service.name.trim(),
+            durationMinutes: Number(service.duration) || 30,
+            price: Number(service.price) || 0,
+          })),
+        useDefaultHours: defaultHours,
+        includePrivateBucket,
+      });
+
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      router.push(`/${workspaceSlug}/today`);
+    });
   }
 
   function goNext() {
     if (step === TOTAL_STEPS - 1) {
-      router.push("/demo/today");
+      finish();
       return;
     }
     setStep((value) => value + 1);
@@ -90,7 +149,13 @@ export function OnboardingWizard({ messages }: { messages: Messages_ }) {
   return (
     <div className={styles.screen}>
       <header className={styles.header}>
-        <button type="button" className={styles.backButton} onClick={goBack} aria-label={messages.back}>
+        <button
+          type="button"
+          className={styles.backButton}
+          onClick={goBack}
+          aria-label={messages.back}
+          disabled={step === 0 || isSaving}
+        >
           <Icon name="arrowLeft" size={18} strokeWidth={1.8} />
         </button>
         <div className={styles.progressTrack}>
@@ -102,6 +167,8 @@ export function OnboardingWizard({ messages }: { messages: Messages_ }) {
             .replace("{total}", String(TOTAL_STEPS))}
         </span>
       </header>
+
+      {error ? <p className={styles.formError}>{error}</p> : null}
 
       <div className={styles.content}>
         {step === 0 && (
@@ -282,7 +349,12 @@ export function OnboardingWizard({ messages }: { messages: Messages_ }) {
 
       <div className={styles.footer}>
         {step < TOTAL_STEPS - 1 && step >= 2 && (
-          <Button variant="secondary" className={styles.footerSkip} onClick={goNext}>
+          <Button
+            variant="secondary"
+            className={styles.footerSkip}
+            onClick={goNext}
+            disabled={isSaving}
+          >
             {messages.skip}
           </Button>
         )}
@@ -290,9 +362,9 @@ export function OnboardingWizard({ messages }: { messages: Messages_ }) {
           className={styles.footerNext}
           fullWidth
           onClick={goNext}
-          disabled={!canContinue}
+          disabled={!canContinue || isSaving}
         >
-          {step === TOTAL_STEPS - 1 ? messages.finish : messages.next}
+          {step === TOTAL_STEPS - 1 ? (isSaving ? messages.saving : messages.finish) : messages.next}
         </Button>
       </div>
     </div>

@@ -11,7 +11,8 @@ import type { ResourceDefinition } from "@/features/resources/types";
 import type { AuditLogEntry } from "@/features/auditLog/types";
 import { demoInvoices } from "@/features/finance/demoData";
 import { demoWaitingList } from "@/features/waitingList/demoData";
-import { getWorkspaceConfig } from "@/features/workspace/registry";
+import { getWorkspaceConfig, isDemoWorkspaceSlug } from "@/features/workspace/registry";
+import { getSupabaseServicesRepository } from "./servicesSupabaseRepository";
 
 /**
  * One mock repository instance per (workspace, entity), created lazily
@@ -40,13 +41,31 @@ export const getServerAppointmentsRepository = registryFactory<Appointment>(
 export const getServerClientsRepository = registryFactory<ClientRecord>(
   (workspaceId) => getWorkspaceConfig(workspaceId).clients,
 );
-export const getServerInvoicesRepository = registryFactory<Invoice>(() => demoInvoices);
-export const getServerWaitingListRepository = registryFactory<WaitingListEntry>(
-  () => demoWaitingList,
+// Real workspaces have no demo invoices/waiting-list entries of their
+// own yet (Track B hasn't migrated these two entities to Supabase) — an
+// unrecognized id (every real workspace) gets an empty list, never the
+// demo presets' data.
+export const getServerInvoicesRepository = registryFactory<Invoice>((id) =>
+  isDemoWorkspaceSlug(id) ? demoInvoices : [],
 );
-export const getServerServicesRepository = registryFactory<ServiceDefinition>(
+export const getServerWaitingListRepository = registryFactory<WaitingListEntry>((id) =>
+  isDemoWorkspaceSlug(id) ? demoWaitingList : [],
+);
+
+// Services: the four demo presets keep running on the in-memory mock
+// repository (unchanged); every real workspace (an id that isn't one of
+// the four demo slugs) is backed by the real `services` table in
+// Supabase, scoped by workspace_id, via the service_role admin client.
+const mockServicesRepository = registryFactory<ServiceDefinition>(
   (workspaceId) => getWorkspaceConfig(workspaceId).services,
 );
+export function getServerServicesRepository(workspaceId: string): Repository<ServiceDefinition> {
+  if (isDemoWorkspaceSlug(workspaceId)) {
+    return mockServicesRepository(workspaceId);
+  }
+  return getSupabaseServicesRepository(workspaceId);
+}
+
 export const getServerStaffRepository = registryFactory<StaffMember>(
   (workspaceId) => getWorkspaceConfig(workspaceId).staff,
 );
