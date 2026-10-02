@@ -2,18 +2,31 @@ import { createLocalRepository } from "@/lib/repository/createLocalRepository";
 import type { Repository } from "@/lib/repository/types";
 import type { Appointment } from "./types";
 import { backfillAppointmentIds } from "./identity";
-import { getWorkspaceConfig } from "@/features/workspace/registry";
+import { getWorkspaceConfig, isDemoWorkspaceSlug } from "@/features/workspace/registry";
+import { createRemoteAppointmentsRepository } from "./remoteRepository";
 
 const cache = new Map<string, Repository<Appointment>>();
 
 /**
- * Local/demo adapter. Reads backfill `staffId`/`serviceId` (from the
+ * DEMO workspaces: local adapter (localStorage). REAL workspaces: remote adapter
+ * (`remoteRepository.ts`, shared database). Local reads backfill `staffId`/`serviceId` (from the
  * workspace catalog, by display name) on legacy records saved before those
  * fields existed — in memory only, stored data is never rewritten, so old
  * localStorage data keeps working and nothing is lost on rollback. The
  * shared backend must do this backfill as a real migration.
  */
 export function getAppointmentsRepository(workspaceSlug: string): Repository<Appointment> {
+  // Real workspace: the shared database (via Server Actions). Demo: browser localStorage.
+  if (!isDemoWorkspaceSlug(workspaceSlug)) {
+    const remoteKey = `remote:${workspaceSlug}`;
+    let remote = cache.get(remoteKey);
+    if (!remote) {
+      remote = createRemoteAppointmentsRepository(workspaceSlug);
+      cache.set(remoteKey, remote);
+    }
+    return remote;
+  }
+
   const key = `serviceos:${workspaceSlug}:appointments`;
   let repository = cache.get(key);
   if (!repository) {

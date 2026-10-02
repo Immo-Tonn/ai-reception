@@ -248,3 +248,13 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+.formError {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: var(--font-size-small);
+}

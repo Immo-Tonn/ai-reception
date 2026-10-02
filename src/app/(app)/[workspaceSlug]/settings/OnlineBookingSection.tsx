@@ -15,12 +15,15 @@ export function OnlineBookingSection({
   distribution,
   baseSource,
   labels,
+  showDemoNote,
 }: {
   workspaceSlug: string;
   /** `null` when no public address is configured — nothing shareable can be built. */
   distribution: BookingDistribution | null;
   baseSource: PublicBaseUrlSource;
   labels: Messages["settings"]["onlineBooking"];
+  /** Only demo workspaces keep bookings in the visitor's own browser. */
+  showDemoNote: boolean;
 }) {
   return (
     <section className={styles.section} aria-labelledby="online-booking-title">
@@ -66,7 +69,7 @@ export function OnlineBookingSection({
         </>
       )}
 
-      <p className={styles.demoNote}>{labels.demoNote}</p>
+      {showDemoNote && <p className={styles.demoNote}>{labels.demoNote}</p>}
     </section>
   );
 }

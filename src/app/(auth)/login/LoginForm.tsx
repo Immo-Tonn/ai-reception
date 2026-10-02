@@ -1,24 +1,29 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useActionState } from "react";
 import { Button, Input } from "@/components/ui";
 import type { Messages } from "@/lib/i18n";
+import { signInOwnerAction, type LoginState } from "./actions";
 import styles from "./page.module.css";
 
-export function LoginForm({ messages }: { messages: Messages["login"] }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+const initialState: LoginState = {};
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsSubmitting(true);
-    // TODO: wire up to Supabase Auth (lib/auth).
-    setIsSubmitting(false);
-  }
+export function LoginForm({
+  messages,
+  errors,
+}: {
+  messages: Messages["login"];
+  errors: Messages["authErrors"];
+}) {
+  const [state, formAction, isPending] = useActionState(signInOwnerAction, initialState);
 
   return (
-    <form className={styles.form} onSubmit={handleSubmit}>
+    <form className={styles.form} action={formAction}>
+      {state.error ? (
+        <p className={styles.formError} role="alert">
+          {errors[state.error]}
+        </p>
+      ) : null}
       <Input
         label={messages.emailLabel}
         type="email"
@@ -26,8 +31,6 @@ export function LoginForm({ messages }: { messages: Messages["login"] }) {
         placeholder={messages.emailPlaceholder}
         autoComplete="email"
         required
-        value={email}
-        onChange={(event) => setEmail(event.target.value)}
       />
       <Input
         label={messages.passwordLabel}
@@ -36,11 +39,9 @@ export function LoginForm({ messages }: { messages: Messages["login"] }) {
         placeholder="••••••••"
         autoComplete="current-password"
         required
-        value={password}
-        onChange={(event) => setPassword(event.target.value)}
       />
-      <Button type="submit" fullWidth disabled={isSubmitting}>
-        {isSubmitting ? messages.submitting : messages.submit}
+      <Button type="submit" fullWidth disabled={isPending}>
+        {isPending ? messages.submitting : messages.submit}
       </Button>
     </form>
   );

@@ -307,7 +307,7 @@ function ReschedulePanel({
     if (!service) return;
     setLoading(true);
     setSelectedSlot(null);
-    getPublicBookingService()
+    getPublicBookingService(row.workspaceSlug)
       .getAvailableSlots(row.workspaceSlug, service.id, staffMember?.id ?? null, selectedDate)
       .then(setSlots)
       .finally(() => setLoading(false));

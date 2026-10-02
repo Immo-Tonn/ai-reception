@@ -28,7 +28,7 @@ describe("Public Booking application boundary", () => {
   beforeEach(installFakeLocalStorage);
 
   it("books through PublicBookingService and returns a result for the success screen", async () => {
-    const service = getPublicBookingService();
+    const service = getPublicBookingService(slug);
     const salon = findWorkspaceConfig(slug)!;
     const svc = salon.services[0];
 
@@ -59,7 +59,7 @@ describe("Public Booking application boundary", () => {
   });
 
   it("re-validates at write time: the same specialist+time cannot be booked twice", async () => {
-    const service = getPublicBookingService();
+    const service = getPublicBookingService(slug);
     const svc = findWorkspaceConfig(slug)!.services[0];
     const staffId = (await service.getAvailableSlots(slug, svc.id, null, date))[0].staffId;
     const request = { serviceId: svc.id, staffId, date, time: "09:00", client: guest };
@@ -69,7 +69,7 @@ describe("Public Booking application boundary", () => {
   });
 
   it("reuses the client record instead of duplicating it, and links by clientId", async () => {
-    const service = getPublicBookingService();
+    const service = getPublicBookingService(slug);
     const svc = findWorkspaceConfig(slug)!.services[0];
     const first = await service.createBooking(slug, {
       serviceId: svc.id, staffId: null, date, time: "13:00", client: guest,
@@ -85,7 +85,7 @@ describe("Public Booking application boundary", () => {
   });
 
   it("an unknown workspace offers no slots and cannot be booked", async () => {
-    const service = getPublicBookingService();
+    const service = getPublicBookingService(slug);
     expect(await service.getAvailableSlots("nope", "svc-haircut", null, date)).toEqual([]);
     await expect(
       service.createBooking("nope", { serviceId: "svc-haircut", staffId: null, date, time: "09:00", client: guest }),
@@ -107,11 +107,11 @@ describe("shared booking rules", () => {
     id, name: id, email, phone, tags: [], lastVisit: null, upcoming: [], history: [], notes: "",
   });
 
-  it("matches by email OR phone, and refuses to guess when they point at different records", () => {
+  it("matches by email OR phone; when both match different records the e-mail owner wins (e-mail is unique per workspace)", () => {
     const list = [client("a", "a@x.de", "+49 1"), client("b", "b@x.de", "+49 2")];
     expect(matchExistingClient(list, { email: " A@x.de ", phone: "" })?.id).toBe("a");
     expect(matchExistingClient(list, { email: "", phone: "+49 2" })?.id).toBe("b");
-    expect(matchExistingClient(list, { email: "a@x.de", phone: "+49 2" })).toBeUndefined();
+    expect(matchExistingClient(list, { email: "a@x.de", phone: "+49 2" })?.id).toBe("a");
   });
 
   it("a public appointment is always pending / normal / main and carries stable ids", () => {

@@ -18,6 +18,14 @@ export class BookingUnavailableError extends Error {
   }
 }
 
+/** The visitor (or their address) made too many booking attempts; try again later. */
+export class BookingRateLimitedError extends Error {
+  constructor() {
+    super("Too many attempts. Please try again later.");
+    this.name = "BookingRateLimitedError";
+  }
+}
+
 export interface ClientBookingDetails {
   name: string;
   email: string;
@@ -57,10 +65,15 @@ export function normalizePhone(phone: string): string {
 
 /**
  * Find the existing client **within one workspace** (same person at two
- * businesses = two unlinked records). Matches normalized email OR phone —
- * never name alone — and returns `undefined` when the match is ambiguous
- * (email and phone point at different records): create a new record
- * rather than guess.
+ * businesses = two unlinked records). E-mail is the unique identity inside a
+ * workspace (the database enforces one client per e-mail), so an e-mail match
+ * WINS; the normalized phone is the fallback. Never matches on name alone.
+ *
+ * (Earlier versions refused to guess when e-mail and phone pointed at two
+ * different records and created a third. With e-mail unique per workspace
+ * that record could not be stored, so the e-mail owner is chosen instead.
+ * `public.create_public_booking` implements the same rule in SQL; a test
+ * compares both.)
  */
 export function matchExistingClient(
   existing: ClientRecord[],
@@ -70,10 +83,8 @@ export function matchExistingClient(
   const normPhone = normalizePhone(details.phone);
 
   const byEmail = normEmail ? existing.find((c) => normalizeEmail(c.email) === normEmail) : undefined;
-  const byPhone = normPhone ? existing.find((c) => normalizePhone(c.phone) === normPhone) : undefined;
-
-  if (byEmail && byPhone) return byEmail.id === byPhone.id ? byEmail : undefined;
-  return byEmail ?? byPhone;
+  if (byEmail) return byEmail;
+  return normPhone ? existing.find((c) => normalizePhone(c.phone) === normPhone) : undefined;
 }
 
 export function buildNewClientRecord(id: string, details: ClientBookingDetails): ClientRecord {

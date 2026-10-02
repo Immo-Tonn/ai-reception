@@ -1,9 +1,11 @@
 import type { AvailableSlot } from "@/features/appointments/availability";
 import type { PublicBookingRequest, PublicBookingResult } from "./bookingRules";
+import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { localDemoBookingService } from "./localDemoBookingService";
+import { remotePublicBookingService } from "./remotePublicBookingService";
 
 export type { PublicBookingRequest, PublicBookingResult };
-export { BookingUnavailableError } from "./bookingRules";
+export { BookingUnavailableError, BookingRateLimitedError } from "./bookingRules";
 
 /**
  * THE application boundary for Public Booking. BookingWizard (and the
@@ -11,11 +13,10 @@ export { BookingUnavailableError } from "./bookingRules";
  *
  *   BookingWizard → PublicBookingService → adapter → persistence
  *
- * Today the only adapter is `localDemoBookingService` (visitor's own
- * browser localStorage — a booking made there is NOT visible to the
- * business on another device). When the shared backend exists, add a
- * `remoteBookingService` implementing this interface (HTTP/Supabase) and
- * return it from `getPublicBookingService()`; no UI changes.
+ * Two adapters behind this one interface: `localDemoBookingService` (demo
+ * workspaces, the visitor's own browser) and `remotePublicBookingService`
+ * (real workspaces, shared Supabase backend via Server Actions). The UI does
+ * not know which one it is talking to.
  */
 export interface PublicBookingService {
   /**
@@ -36,6 +37,12 @@ export interface PublicBookingService {
   createBooking(workspaceSlug: string, request: PublicBookingRequest): Promise<PublicBookingResult>;
 }
 
-export function getPublicBookingService(): PublicBookingService {
-  return localDemoBookingService;
+/**
+ * Demo workspaces keep the browser-local adapter (works with no backend at
+ * all). A real workspace books through the SHARED backend: Server Actions ->
+ * `PublicBookingService` (server) -> Supabase — the guest's booking lands in
+ * the same database the business Calendar reads.
+ */
+export function getPublicBookingService(workspaceSlug: string): PublicBookingService {
+  return isDemoWorkspaceSlug(workspaceSlug) ? localDemoBookingService : remotePublicBookingService;
 }

@@ -48,6 +48,7 @@ export function computeAvailableSlots(params: {
    * (e.g. `new Date()`, or now + a lead-time) so this stays pure and
    * testable — nothing in here reads the clock. Interpreted in the same
    * (browser-local) time the rest of the engine uses for `date`/`time`.
+   * Server callers pass `nowAsWallClock(now, workspaceTimeZone)`.
    */
   notBefore?: Date;
 }): AvailableSlot[] {
@@ -70,46 +71,118 @@ export function computeAvailableSlots(params: {
 
       if (notBefore && new Date(`${date}T${time}:00`).getTime() < notBefore.getTime()) continue;
 
-      const availability = checkAvailability(
-        staff.id,
-        date,
-        time,
-        service.durationMinutes,
-        workingHours,
-        staff.name,
-      );
-      if (!availability.available) continue;
-
-      const candidateBase = {
-        id: "candidate",
-        staff: staff.name,
-        staffId: staff.id,
-        date,
-        time,
-        durationMinutes: service.durationMinutes,
-        service: service.name,
-        serviceId: service.id,
-      };
+      const check = (resourceId: string | null) =>
+        checkSlotAvailable({ service, staff, resourceId, date, time, existingAppointments, allServices, workingHours });
 
       let resourceId: string | null = null;
       if (service.requiredResourceType) {
-        const freeResource = candidateResources.find(
-          (resource) =>
-            !findConflicts({ ...candidateBase, resourceId: resource.id }, existingAppointments, allServices)
-              .hasConflict,
-        );
+        const freeResource = candidateResources.find((resource) => check(resource.id).available);
         if (!freeResource) continue;
         resourceId = freeResource.id;
+      } else if (!check(null).available) {
+        continue;
       }
-
-      const conflict = findConflicts({ ...candidateBase, resourceId }, existingAppointments, allServices);
-      if (conflict.hasConflict) continue;
 
       slots.push({ time, staffId: staff.id, staffName: staff.name, resourceId });
     }
   }
 
   return slots.sort((a, b) => a.time.localeCompare(b.time));
+}
+
+export interface SlotCheck {
+  available: boolean;
+  reason?: "dayOff" | "outsideHours" | "onBreak" | "timeOff" | "blocked" | "staffConflict" | "resourceConflict";
+}
+
+/**
+ * THE single rule for "may this person (and resource) take this wall-clock
+ * time?" — working hours / breaks / time off / blocks, then staff and
+ * resource collisions with service buffers. `computeAvailableSlots` (Public
+ * Booking, Business slot suggestions) and the Business appointment-creation
+ * check both go through it, so the two can never disagree. The database's
+ * exclusion constraints (migration 0011) then back this up under concurrency.
+ *
+ * `ignoreAppointmentId` lets an edit/move not collide with itself.
+ */
+export function checkSlotAvailable(params: {
+  service: Pick<ServiceDefinition, "id" | "name" | "durationMinutes">;
+  staff: Pick<StaffMember, "id" | "name">;
+  resourceId: string | null;
+  date: string;
+  time: string;
+  existingAppointments: Appointment[];
+  allServices: ServiceDefinition[];
+  workingHours: WorkingHoursProfile[];
+  ignoreAppointmentId?: string;
+}): SlotCheck {
+  const { service, staff, resourceId, date, time, existingAppointments, allServices, workingHours } = params;
+
+  const hours = checkAvailability(staff.id, date, time, service.durationMinutes, workingHours, staff.name);
+  if (!hours.available) return { available: false, reason: hours.reason };
+
+  const conflict = findConflicts(
+    {
+      id: params.ignoreAppointmentId ?? "candidate",
+      staff: staff.name,
+      staffId: staff.id,
+      resourceId,
+      date,
+      time,
+      durationMinutes: service.durationMinutes,
+      service: service.name,
+      serviceId: service.id,
+    },
+    existingAppointments,
+    allServices,
+  );
+  if (conflict.staffConflict) return { available: false, reason: "staffConflict" };
+  if (conflict.resourceConflict) return { available: false, reason: "resourceConflict" };
+  return { available: true };
+}
+
+/**
+ * Catalog-level entry point shared by every caller (browser demo adapter,
+ * demo server mock, real workspaces — Public Booking and Business alike):
+ * picks the eligible staff and candidate resources for a service, then runs
+ * `computeAvailableSlots`.
+ */
+export function computeSlotsFor(params: {
+  serviceId: string;
+  /** `null` = any eligible specialist. */
+  staffId: string | null;
+  services: ServiceDefinition[];
+  staff: StaffMember[];
+  resources: ResourceDefinition[];
+  existingAppointments: Appointment[];
+  workingHours: WorkingHoursProfile[];
+  date: string;
+  notBefore?: Date;
+}): AvailableSlot[] {
+  const { serviceId, staffId, services, staff, resources } = params;
+  const service = services.find((s) => s.id === serviceId);
+  if (!service) return [];
+
+  const eligibleStaff = staffId
+    ? staff.filter((s) => s.id === staffId && (service.allowedStaffIds.length === 0 || service.allowedStaffIds.includes(s.id)))
+    : service.allowedStaffIds.length > 0
+      ? staff.filter((s) => service.allowedStaffIds.includes(s.id))
+      : staff;
+
+  const candidateResources = service.requiredResourceType
+    ? resources.filter((r) => r.type === service.requiredResourceType)
+    : [];
+
+  return computeAvailableSlots({
+    service,
+    eligibleStaff,
+    candidateResources,
+    existingAppointments: params.existingAppointments,
+    allServices: services,
+    workingHours: params.workingHours,
+    date: params.date,
+    notBefore: params.notBefore,
+  });
 }
 
 /**

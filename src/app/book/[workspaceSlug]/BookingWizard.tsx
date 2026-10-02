@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, Icon, Input } from "@/components/ui";
-import { findWorkspaceConfig } from "@/features/workspace/registry";
 import { uniqueSlotTimes, type AvailableSlot } from "@/features/appointments/availability";
 import {
   getPublicBookingService,
   BookingUnavailableError,
+  BookingRateLimitedError,
   type PublicBookingResult,
 } from "@/features/publicBooking/bookingService";
 import {
@@ -46,6 +46,8 @@ export function BookingWizard({
   client,
   branding,
   youLabel,
+  services,
+  staffList,
   chromeless = false,
   headerActions,
 }: {
@@ -55,13 +57,14 @@ export function BookingWizard({
   client: Messages["client"];
   branding: WorkspaceBranding;
   youLabel: string;
+  /** Catalog of THIS workspace, loaded by the server page (demo preset or the database). */
+  services: ServiceDefinition[];
+  staffList: StaffMember[];
   chromeless?: boolean;
   headerActions?: ReactNode;
 }) {
   const { identity } = useClientAuth();
   const [step, setStep] = useState<Step>("service");
-  const [services, setServices] = useState<ServiceDefinition[]>([]);
-  const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null | "any">("any");
   const [selectedDate, setSelectedDate] = useState(localIsoDate(new Date()));
@@ -97,12 +100,6 @@ export function BookingWizard({
   const showEmailError = Boolean(fieldErrors.email) && (touched.email || submitAttempted);
   const showPhoneError = Boolean(fieldErrors.phone) && (touched.phone || submitAttempted);
 
-  useEffect(() => {
-    const workspace = findWorkspaceConfig(workspaceSlug);
-    setServices(workspace?.services ?? []);
-    setStaffList(workspace?.staff ?? []);
-  }, [workspaceSlug]);
-
   // A signed-in client (see /client/login, /client/signup) doesn't have
   // to retype their details every booking — guest checkout still works
   // without ever touching this (§ booking never depends on registration).
@@ -117,13 +114,17 @@ export function BookingWizard({
     if (step !== "time" || !selectedServiceId) return;
     setSlotsLoading(true);
     const staffId = selectedStaffId === "any" ? null : selectedStaffId;
-    getPublicBookingService()
+    getPublicBookingService(workspaceSlug)
       .getAvailableSlots(workspaceSlug, selectedServiceId, staffId, selectedDate)
       // "Any specialist" yields one slot per free specialist per time — the
       // visitor sees each time once; the assignee is resolved at booking.
       .then((all) => setSlots(uniqueSlotTimes(all)))
+      .catch((err) => {
+        setSlots([]);
+        if (err instanceof BookingRateLimitedError) setError(booking.rateLimitedError);
+      })
       .finally(() => setSlotsLoading(false));
-  }, [step, workspaceSlug, selectedServiceId, selectedStaffId, selectedDate]);
+  }, [step, workspaceSlug, selectedServiceId, selectedStaffId, selectedDate, booking.rateLimitedError]);
 
   // Embed resizing (§3): tell the embedding page how tall we are so an
   // iframe embed can size itself instead of showing a scrollbar. Messages
@@ -185,7 +186,7 @@ export function BookingWizard({
     setSubmitting(true);
     setError(null);
     try {
-      const booked = await getPublicBookingService().createBooking(workspaceSlug, {
+      const booked = await getPublicBookingService(workspaceSlug).createBooking(workspaceSlug, {
         serviceId: selectedService.id,
         staffId: selectedStaffId === "any" ? null : selectedStaffId,
         date: selectedDate,
@@ -199,7 +200,7 @@ export function BookingWizard({
         // eslint-disable-next-line no-console
         console.error("Public booking failed", err);
       }
-      setError(booking.slotTakenError);
+      setError(err instanceof BookingRateLimitedError ? booking.rateLimitedError : booking.slotTakenError);
       setStep("time");
     } finally {
       setSubmitting(false);
@@ -343,6 +344,7 @@ export function BookingWizard({
               {booking.stepDate}
             </button>
             <h1 className={styles.stepTitle}>{booking.stepTime}</h1>
+            {error && <p className={styles.errorText}>{error}</p>}
             {slotsLoading ? null : slots.length === 0 ? (
               <div className={styles.empty}>
                 <span className={styles.emptyTitle}>{booking.noSlotsTitle}</span>

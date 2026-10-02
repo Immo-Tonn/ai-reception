@@ -2,6 +2,66 @@
 
 ---
 
+## PRE-PUBLISH FIXES (ветка `backend/shared-supabase-foundation`)
+
+- **C1:** Finance/Invoices, Waiting List, Work (leads/quotes/jobs/projects), Inbox (и Analytics, который берёт из них данные) для НЕ-demo workspace стартуют пустыми: `isDemoWorkspaceSlug(slug) ? demoData : []`. Demo-workspaces не изменились. Тест: `src/features/__tests__/realWorkspaceNoDemoData.test.ts`.
+- **C2:** миграция `0015_service_role_default_privileges.sql` — default privileges ТОЛЬКО для `service_role` на будущие tables/sequences (anon/authenticated и RLS не затронуты).
+- **C3 — окружения:** проект `ai-reception` — только reference/временное окружение, не незаменимая инфраструктура. По последнему аудиту там применены `0001`–`0007`; **`0008`–`0015` на него НЕ применять**. Основной E2E — на отдельном контролируемом **ServiceOS Dev Supabase** (чистый проект, `0001 → 0015`, новый signup/provisioning; старые workspace `ai-reception` не используются, backfill для них не делается).
+- **Roadmap / known limitations (не реализовано):** N2 `/auth/callback` + «забыл пароль»; N3 пагинация/окно дат списков (лимит PostgREST 1000); N4 авто-обновление Calendar; N5 уведомления о новой брони; N6 UI staff/ресурсов/рабочих часов/`auto_confirm_bookings`; N7 GDPR (экспорт/удаление клиента); N8 browser-E2E.
+
+---
+
+## ТЕКУЩАЯ ЗАДАЧА — Shared Supabase Backend, Phase 2: Shared Booking (ветка `backend/shared-supabase-foundation`) ✅ ГОТОВО К РЕВЬЮ
+
+> **Живой Supabase `ai-reception` НЕ изменялся, миграции 0008–0014 к нему НЕ применялись** (нет админ-доступа). Всё проверено на изолированном Postgres (PGlite, воспроизводит миграции с нуля) + тестовом клиенте, исполняющем реальные supabase-js вызовы репозиториев против этой БД. Live E2E — позже на проекте под нашим контролем (сценарий в отчёте / `docs/BOOTSTRAP_NEW_SUPABASE.md` §6).
+
+**Главный критерий выполнен (на изолированной БД):** гость (без аккаунта) → Public Booking service → shared Postgres → Business-репозитории (владелец под RLS) видят ту же строку в Calendar и Clients; запись переживает «reload» (новые экземпляры репозиториев). Тест: `src/server/booking/__tests__/sharedBackend.test.ts`, `businessServices.test.ts`.
+
+**Что сделано**
+- Миграции: `0011` (EXCLUDE-констрейнты staff/resource по `busy_from/busy_until` с буферами сервиса, триггер окна, guard кросс-workspace ссылок, `auto_confirm_bookings`, нормализованный телефон), `0012` (RLS clients/appointments/resources/series/audit; Visibility enforced в БД; `list_masked_appointments`; `resolve_financial_bucket`), `0013` (гостевое API: catalog/busy/create — только service_role, одна транзакция), `0014` (rate limiting в PostgreSQL, хеши, без PII).
+- Public Booking реального workspace: `/book/<slug>` → каталог из БД → Server Actions (`publicBooking.actions.ts`) → `server/booking/publicBooking.service.ts` (zod, rate limit IP/email/телефон, пересчёт слотов тем же движком, `create_public_booking`). Цена/статус/visibility/bucket решает БД. Гонка = 23P01 от констрейнта → «слот занят». Demo работает без Supabase (локальный адаптер).
+- Единый движок: `checkSlotAvailable` + `computeSlotsFor` (features/appointments/availability.ts) используют и Public Booking, и Business `appointments.service`, и demo.
+- Business Calendar/Clients реального workspace читают shared БД: Supabase-репозитории (appointments, clients, staff, resources, audit, services) за `Repository<T>`; клиентский `createRemoteRepository` вызывает Server Actions; каталог (услуги/staff/ресурсы/часы) приходит из layout через `WorkspaceCatalogProvider`.
+- Часовые пояса: `lib/time/zonedTime.ts` (только Intl; DST-случаи покрыты тестами). Слоты — wall-clock бизнеса; БД хранит `timestamptz`.
+- RateLimiter: интерфейс + PostgreSQL-реализация (production), memory-реализация только для тестов.
+- Auth: убран user enumeration при регистрации (одинаковый ответ «проверьте почту»); при выключенном Confirm email (dev) разница наблюдаема — в production Confirm email включить.
+- Клиент-матчинг: e-mail побеждает (в БД уникален на workspace), телефон — запасной (SQL и TS синхронизированы тестом).
+
+**Осталось на localStorage:** Waiting list, Invoices/Finance, Work (Leads/Quotes/Jobs/Projects), Inbox, Audit (клиентский лог в UI Calendar), client-area «Мои записи» (demo). Real workspace: Finance/Waiting list/Work не имеют серверного пути (Phase 3–4).
+
+**Ограничения:** breaks/timeOff/blocks рабочих часов не имеют таблиц (рабочие часы — только недельное расписание); `resources.type` — enum БД (room/vehicle/equipment/custom), demo-типы (lift/tire…) для реальных workspace недоступны; `ClientRecord.customFields` не сохраняются; `notes` ↔ `client_notes`; Calendar для ролей без `appointments.view` не показывает ничего; ESLint: оставлены существующие `set-state-in-effect` ошибки.
+
+**Следующий шаг:** применить `0008–0014` на проект, которым управляем → live E2E (A: бронь → B: Calendar) → Phase 3 (Waiting list, Invoices/Finance, Audit).
+
+---
+
+## ТЕКУЩАЯ ЗАДАЧА — Shared Supabase Backend, Phase 1 (ветка `backend/shared-supabase-foundation`, stacked на PR #4) ✅ ГОТОВО К РЕВЬЮ
+
+> **Зависит от PR #4** (`fix/booking-distribution-foundation`): использует `PublicBookingService`, stable ids, `findWorkspaceConfig`, `publicBaseUrl`. PR backend должен ссылаться на #4.
+> **Живой Supabase `ai-reception` НЕ изменялся, миграции к нему НЕ применялись.** Source of truth структуры backend = репозиторий + `supabase/migrations/`; проект `ai-reception` — временное/reference-окружение. Как поднять на новом проекте: `docs/BOOTSTRAP_NEW_SUPABASE.md`.
+
+**Что сделано (Phase 1)**
+- Infrastructure: `src/lib/supabase/{config,server,admin}.ts`. ENV-only, без идентификаторов проекта. Без ENV demo/public работают (`isSupabaseConfigured()`); `src/proxy.ts` (Next 16, вместо middleware) обновляет сессию только при наличии `sb-` cookie и ничего не делает без ENV.
+- Business Auth: интерфейс `BusinessAuthProvider` (`server/auth/businessAuth.ts`) + адаптер Supabase (`supabaseBusinessAuth.ts`). Email/password. Ошибки — коды (`AuthErrorCode`) → i18n DE/EN/UK/RU, сырых сообщений провайдера в UI нет. Google/Apple/Microsoft НЕ реализованы.
+- Session: `getSession(slug)`; demo-slug → demo-сессия (без Supabase); реальный → user-клиент под RLS (`resolveSession.ts`). Чужой/неизвестный workspace = 404.
+- Provisioning: RPC `provision_workspace` (service role) — профиль, workspace, owner, MAIN+PRIVATE buckets, staff «You», рабочие часы; атомарно и идемпотентно; при сбое Auth-пользователь удаляется. Onboarding: RPC `complete_onboarding` — один раз, под RLS.
+- RLS: включён на всех 19 таблицах; политики Phase 1 (workspaces, members, profiles, services, service_staff, staff, buckets, working_hours); остальные таблицы deny-all до своей фазы. `service_role` только в 3 модулях (тест это фиксирует).
+- Services: Supabase-репозиторий за `Repository<T>`, actions возвращают `ActionResult` (коды), UI Settings → Services (адаптирован из Sa-Ev).
+- Reserved slugs: SQL `is_slug_allowed` + `lib/workspace/reservedSlugs.ts` (тест сверяет списки).
+- Реальный workspace больше не получает данные Salon (`getWorkspaceConfig` → пустой конфиг); in-memory mock запрещён для реальных workspace.
+
+**Миграции (НЕ применены к live):** `0007` booking_mode (на live уже есть), `0008` hardening (slug/FK/триггеры, `NOT VALID`), `0009` RLS + политики, `0010` provisioning/onboarding.
+
+**Тесты:** миграции проигрываются с нуля в in-process Postgres (PGlite, dev-зависимость) — изоляция tenants, роли, идемпотентность, forged membership, anon; статические проверки (нет drop/delete, search_path у definer, allow-list service-role, secret scan).
+
+**Остаётся на localStorage:** Clients, Appointments, Calendar, Waiting list, Invoices/Finance, Audit log, Work, Inbox — для реальных workspace Phase 2+ (в UI показывается уведомление). **Public Booking по-прежнему browser-local demo; кросс-девайс бронь — Phase 2.**
+
+**Известные ограничения:** `getSession` ходит в Supabase Auth на каждый запрос реального workspace; нет rate limiting на регистрацию (только лимиты Supabase Auth); регистрация раскрывает «email занят»; тумблер «private bucket» в онбординге косметический (оба bucket создаются всегда); `resources.type` enum не менялся (решение отложено); online-booking секция в Settings скрыта для реальных workspace (публичная бронь реального workspace — Phase 2).
+
+**Следующий шаг:** подтверждение применения 0007+ к `ai-reception` (после ревью) → Phase 2 (clients, staff, resources, appointments, `SupabasePublicBookingService`, RateLimiter, EXCLUDE-констрейнты против double booking, cross-device acceptance).
+
+---
+
 ## ТЕКУЩАЯ ЗАДАЧА — Booking / Distribution Fix Pass (ветка `fix/booking-distribution-foundation`) ✅ ГОТОВО К РЕВЬЮ
 
 > **ВАЖНО для команды.** Public Booking UX/Distribution foundation готов, но production cross-device persistence требует shared backend. До интеграции backend запись, созданная в браузере клиента, не является общей записью бизнеса.

@@ -56,6 +56,13 @@ export interface Appointment {
   notes: string;
   visibility: Visibility;
   financialBucket: FinancialBucket;
+  /**
+   * Which concrete financial account (bucket row). `financialBucket` is only
+   * its class (main / private / custom) — the stable identity is this id, so a
+   * workspace may have several custom accounts. Optional: demo/local data and
+   * records written before shared persistence have only the class.
+   */
+  financialBucketId?: string;
   status: AppointmentStatus;
   paid: boolean;
   /** Present on every occurrence of a recurring series, shared by all of them. */

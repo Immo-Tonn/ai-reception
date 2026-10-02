@@ -16,8 +16,7 @@ import { useAuditLog } from "@/features/auditLog/useAuditLog";
 import { useWaitingList } from "@/features/waitingList/useWaitingList";
 import { matchWaitingList } from "@/features/waitingList/matching";
 import type { Appointment, AppointmentStatus } from "@/features/appointments/types";
-import { getWorkspaceConfig } from "@/features/workspace/registry";
-import { demoWorkingHours } from "@/features/workingHours/demoData";
+import { useWorkspaceConfig, useWorkspaceWorkingHours } from "@/features/workspace/WorkspaceCatalog";
 import { useClients } from "@/features/clients/useClients";
 import { resolveServiceLabel } from "@/features/services/label";
 import { getStaffLabel } from "@/features/staff/label";
@@ -88,7 +87,8 @@ export function CalendarView({
   // The one Calendar/Appointment engine, configured per industry — see
   // src/features/workspace. Swapping `/demo-salon` for `/demo-werkstatt`
   // changes only this lookup's result, never the components below it.
-  const workspace = useMemo(() => getWorkspaceConfig(workspaceSlug), [workspaceSlug]);
+  const workspace = useWorkspaceConfig(workspaceSlug);
+  const workingHours = useWorkspaceWorkingHours(workspaceSlug);
   const demoServices = workspace.services;
   const demoStaff = workspace.staff;
   const demoResources = workspace.resources;
@@ -625,7 +625,7 @@ export function CalendarView({
         services={demoServices}
         staffList={demoStaff}
         resources={demoResources}
-        workingHours={demoWorkingHours}
+        workingHours={workingHours}
         clients={clients}
         onCreateClient={(client) => createClient(client)}
         prefillClient={prefillClient}
@@ -664,7 +664,7 @@ export function CalendarView({
         appointment={moveTarget}
         allAppointments={appointments}
         services={demoServices}
-        workingHours={demoWorkingHours}
+        workingHours={workingHours}
         messages={move}
         conflictMessages={conflict}
         onConfirm={(date, time) => moveTarget && handleMoveConfirm(moveTarget, date, time)}

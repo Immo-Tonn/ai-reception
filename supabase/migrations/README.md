@@ -1,13 +1,15 @@
 # ServiceOS — PostgreSQL / Supabase migrations
 
-Not connected to a real Supabase project yet — these are prepared ahead of
-time so the swap from `src/server/repository/mockRepository.ts` to a real
-Postgres adapter is a matter of implementing `Repository<T>` against these
-tables, not designing a schema under pressure later.
+These migrations are the **single source of truth** for the ServiceOS backend
+structure: schema, constraints, indexes, functions, triggers and Row Level
+Security all live here. Any Supabase project — the current test project or a
+brand-new one — is reproduced by running them in order. See
+`docs/BOOTSTRAP_NEW_SUPABASE.md`. Never edit an applied migration; add a new
+numbered file.
 
 ## Order
 
-Run in filename order (`0001` → `0006`); each depends on tables created
+Run in filename order (`0001` → `0015`); each depends on tables created
 by the ones before it.
 
 | File | Tables |
@@ -18,6 +20,15 @@ by the ones before it.
 | `0004_scheduling.sql` | `appointment_series`, `appointments`, `appointment_resources`, `waiting_list` |
 | `0005_invoicing.sql` | `invoices`, `invoice_items`, `payments` |
 | `0006_audit_log.sql` | `audit_logs` |
+| `0007_onboarding_booking_mode.sql` | `workspaces.booking_mode` (idempotent) |
+| `0008_workspace_hardening.sql` | `onboarding_completed_at`, reserved-slug rule (`is_slug_allowed`), `profiles.id → auth.users` FK, immutable slug/identity triggers (constraints `NOT VALID`) |
+| `0009_rls_helpers_and_policies.sql` | RLS enabled on all tables, helper functions, Phase 1 policies (workspaces, members, profiles, services, staff, buckets, working hours) |
+| `0010_provisioning_and_onboarding.sql` | `provision_workspace()` (service role only) and `complete_onboarding()` (user, RLS) |
+| `0011_booking_integrity.sql` | `btree_gist`; `busy_from`/`busy_until` (trigger, includes service buffers); **EXCLUDE constraints** against staff and resource double booking; `appointments.resource_id`; cross-workspace reference guard triggers; `workspaces.auto_confirm_bookings`; normalized client phone |
+| `0012_booking_rls_and_helpers.sql` | RLS for clients, appointments (Visibility enforced in the DB), resources, series, audit log; `can_see_appointment`, `list_masked_appointments`, `resolve_financial_bucket`, `workspace_financial_bucket_kinds` |
+| `0013_public_booking.sql` | Guest booking API (service role only): `get_public_booking_catalog`, `get_public_busy`, `create_public_booking` (one transaction: validate, find-or-create client, insert appointment, audit) |
+| `0015_service_role_default_privileges.sql` | Default privileges for the service role on future tables/sequences (service role only; no change to anon/authenticated or RLS) |
+| `0014_rate_limits.sql` | `rate_limits` table + `rate_limit_hit()` (PostgreSQL rate limiting, hashed subjects, service role only) |
 
 ## Design notes that mirror the app layer
 
@@ -34,11 +45,14 @@ by the ones before it.
 - `audit_logs` columns match `src/features/auditLog/types.ts` field for
   field.
 
-## Not yet applied
+## Applying
 
-No Supabase project is connected in this environment. To apply later:
+Empty project: run `0001` → `0015` in order (SQL Editor, or `supabase db push`).
+`0001`–`0006` use `create type` without `if not exists`, so they run once, on
+an empty database. `0007`–`0015` are idempotent. A project that already has
+`0001`–`0006` needs only `0007`+.
 
-```bash
-supabase link --project-ref <project-ref>
-supabase db push
-```
+Tests (`npm test`) replay every migration from scratch in an in-process
+Postgres and exercise tenant isolation and role permissions
+(`src/server/db/__tests__`). Seed/demo data is deliberately NOT part of the
+migrations.

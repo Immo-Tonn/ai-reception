@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { findWorkspaceConfig } from "@/features/workspace/registry";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
-import { getWorkspaceBranding } from "@/features/branding/demoData";
+import { loadPublicPageData } from "@/server/booking/pageData";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
 import { BookingWizard } from "./BookingWizard";
 
@@ -17,11 +15,10 @@ export default async function PublicBookingPage({
   params: Promise<{ workspaceSlug: string }>;
 }) {
   const { workspaceSlug } = await params;
-  // Unknown slug = 404, never another business's catalog (see registry.findWorkspaceConfig).
-  if (!findWorkspaceConfig(workspaceSlug)) notFound();
   const locale = await getRequestLocale();
   const { common, booking, client } = getMessages(locale);
-  const branding = getWorkspaceBranding(workspaceSlug);
+  // Unknown slug = 404 inside (never another business's catalog).
+  const { branding, services, staff } = await loadPublicPageData(workspaceSlug);
 
   return (
     <BookingWizard
@@ -30,6 +27,8 @@ export default async function PublicBookingPage({
       booking={booking}
       client={client}
       branding={branding}
+      services={services}
+      staffList={staff}
       youLabel={common.you}
       headerActions={<Preferences />}
     />

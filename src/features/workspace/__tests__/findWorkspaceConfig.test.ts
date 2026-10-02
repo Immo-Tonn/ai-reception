@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findWorkspaceConfig, getWorkspaceConfig } from "../registry";
+import { findWorkspaceConfig, getWorkspaceConfig, isDemoWorkspaceSlug } from "../registry";
 
 describe("workspace lookup for public routes", () => {
   it("does not fall back to Salon for an unknown slug", () => {
@@ -15,7 +15,16 @@ describe("workspace lookup for public routes", () => {
     },
   );
 
-  it("the authenticated app shell keeps its demo fallback", () => {
-    expect(getWorkspaceConfig("totally-unknown-xyz").slug).toBe("demo-salon");
+  it("a real workspace gets an empty config, never Salon's demo data", () => {
+    const config = getWorkspaceConfig("totally-unknown-xyz");
+    expect(config.slug).toBe("totally-unknown-xyz");
+    expect(config.clients).toEqual([]);
+    expect(config.appointments).toEqual([]);
+    expect(config.services).toEqual([]);
+  });
+
+  it("tells demo workspaces apart from real ones", () => {
+    expect(isDemoWorkspaceSlug("demo-salon")).toBe(true);
+    expect(isDemoWorkspaceSlug("my-real-salon")).toBe(false);
   });
 });

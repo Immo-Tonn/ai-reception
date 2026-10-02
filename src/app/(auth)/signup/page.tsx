@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default async function SignupPage() {
   const locale = await getRequestLocale();
-  const { signup, common } = getMessages(locale);
+  const { signup, common, authErrors } = getMessages(locale);
 
   return (
     <main className={styles.screen}>
@@ -39,7 +39,7 @@ export default async function SignupPage() {
               <p className={styles.formSubtitle}>{signup.subtitle}</p>
             </div>
 
-            <SignupForm messages={signup} />
+            <SignupForm messages={signup} errors={authErrors} />
 
             <p className={styles.signupPrompt}>
               {signup.loginPrompt}{" "}

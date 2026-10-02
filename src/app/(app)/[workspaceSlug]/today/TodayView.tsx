@@ -5,7 +5,7 @@ import { Icon } from "@/components/ui";
 import { useAppointments } from "@/features/appointments/useAppointments";
 import { useInvoices } from "@/features/finance/useInvoices";
 import { calculateOutstanding } from "@/features/finance/calculations";
-import { getWorkspaceConfig } from "@/features/workspace/registry";
+import { useWorkspaceConfig } from "@/features/workspace/WorkspaceCatalog";
 import { resolveServiceLabel } from "@/features/services/label";
 import { localIsoDate } from "@/lib/date/localIsoDate";
 import type { Locale, Messages } from "@/lib/i18n";
@@ -52,7 +52,7 @@ export function TodayView({
 }) {
   const { items: appointments } = useAppointments(workspaceSlug);
   const { items: invoices } = useInvoices(workspaceSlug);
-  const workspaceServices = getWorkspaceConfig(workspaceSlug).services;
+  const workspaceServices = useWorkspaceConfig(workspaceSlug).services;
 
   const today = new Date();
   const todayIso = localIsoDate(today);

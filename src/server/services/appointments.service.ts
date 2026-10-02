@@ -5,7 +5,10 @@ import {
   getServerAppointmentsRepository,
   getServerAuditLogRepository,
   getServerServicesRepository,
+  getServerStaffRepository,
+  getServerWorkingHours,
 } from "@/server/repository/registry";
+import { RepositoryConflictError } from "@/server/repository/errors";
 import {
   createAppointmentSchema,
   updateAppointmentSchema,
@@ -14,21 +17,12 @@ import {
   type UpdateAppointmentInput,
   type MoveAppointmentInput,
 } from "@/server/validation/appointment.schema";
-import { findConflicts } from "@/features/appointments/conflicts";
-import { demoWorkingHours } from "@/features/workingHours/demoData";
-import { checkAvailability } from "@/features/workingHours/logic";
+import { checkSlotAvailable } from "@/features/appointments/availability";
+import { BusinessRuleError } from "./businessRuleError";
 import { applyVisibility, applyVisibilityToList, type VisibleAppointment } from "./masking";
 import type { Appointment } from "@/features/appointments/types";
 
-export class BusinessRuleError extends Error {
-  constructor(
-    message: string,
-    public code: "staff_conflict" | "resource_conflict" | "outside_working_hours",
-  ) {
-    super(message);
-    this.name = "BusinessRuleError";
-  }
-}
+export { BusinessRuleError };
 
 async function auditLog(
   session: Session,
@@ -37,7 +31,7 @@ async function auditLog(
   const repo = getServerAuditLogRepository(session.workspaceId);
   await repo.create({
     ...entry,
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: crypto.randomUUID(),
     timestamp: new Date().toISOString(),
   });
 }
@@ -68,34 +62,57 @@ async function checkBusinessRules(
   > &
     Partial<Pick<Appointment, "staffId" | "serviceId">>,
 ) {
-  const repo = getServerAppointmentsRepository(session.workspaceId);
-  const servicesRepo = getServerServicesRepository(session.workspaceId);
-  const [existing, services] = await Promise.all([repo.list(), servicesRepo.list()]);
+  const [existing, services, staffList, workingHours] = await Promise.all([
+    getServerAppointmentsRepository(session.workspaceId).list(),
+    getServerServicesRepository(session.workspaceId).list(),
+    getServerStaffRepository(session.workspaceId).list(),
+    getServerWorkingHours(session.workspaceId),
+  ]);
 
-  const availability = checkAvailability(
-    candidate.staffId ?? candidate.staff,
-    candidate.date,
-    candidate.time,
-    candidate.durationMinutes,
-    demoWorkingHours,
-    candidate.staff,
-  );
-  if (!availability.available) {
-    throw new BusinessRuleError(
-      `${candidate.staff} is not available at ${candidate.date} ${candidate.time} (${availability.reason}).`,
-      "outside_working_hours",
-    );
-  }
+  const service =
+    services.find((s) => (candidate.serviceId ? s.id === candidate.serviceId : s.name === candidate.service)) ??
+    ({ id: candidate.serviceId ?? "", name: candidate.service, durationMinutes: candidate.durationMinutes } as const);
+  const staff =
+    staffList.find((s) => (candidate.staffId ? s.id === candidate.staffId : s.name === candidate.staff)) ??
+    ({ id: candidate.staffId ?? candidate.staff, name: candidate.staff } as const);
 
-  const conflict = findConflicts(candidate, existing, services);
-  if (conflict.staffConflict) {
-    throw new BusinessRuleError(
-      `${candidate.staff} already has an appointment at this time.`,
-      "staff_conflict",
-    );
+  // The SAME rule Public Booking uses (`checkSlotAvailable`): working hours,
+  // staff and resource collisions with buffers. The database's exclusion
+  // constraints back it up if two requests race.
+  const result = checkSlotAvailable({
+    service: { ...service, durationMinutes: candidate.durationMinutes },
+    staff,
+    resourceId: candidate.resourceId,
+    date: candidate.date,
+    time: candidate.time,
+    existingAppointments: existing,
+    allServices: services,
+    workingHours,
+    ignoreAppointmentId: candidate.id,
+  });
+  if (result.available) return;
+
+  if (result.reason === "staffConflict") {
+    throw new BusinessRuleError(`${candidate.staff} already has an appointment at this time.`, "staff_conflict");
   }
-  if (conflict.resourceConflict) {
+  if (result.reason === "resourceConflict") {
     throw new BusinessRuleError("The selected resource is already booked at this time.", "resource_conflict");
+  }
+  throw new BusinessRuleError(
+    `${candidate.staff} is not available at ${candidate.date} ${candidate.time} (${result.reason}).`,
+    "outside_working_hours",
+  );
+}
+
+/** A database-level collision (two requests raced past the check above) is the same business rule. */
+async function writeOrConflict<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (error instanceof RepositoryConflictError) {
+      throw new BusinessRuleError("This time was just taken.", "staff_conflict");
+    }
+    throw error;
   }
 }
 
@@ -109,6 +126,8 @@ export async function createAppointment(
   await checkBusinessRules(session, {
     id: "new",
     staff: data.staff,
+    staffId: data.staffId,
+    serviceId: data.serviceId,
     resourceId: data.resourceId,
     date: data.date,
     time: data.time,
@@ -116,21 +135,22 @@ export async function createAppointment(
     service: data.service,
   });
 
-  const appointment: Appointment = {
+  const draft: Appointment = {
     ...data,
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    seriesId: null,
-    recurrence: null,
+    id: crypto.randomUUID(),
+    seriesId: data.seriesId ?? null,
+    recurrence: data.recurrence ?? null,
   };
 
   const repo = getServerAppointmentsRepository(session.workspaceId);
-  await repo.create(appointment);
+  // Real repositories assign the stable id themselves; use what they return.
+  const appointment = await writeOrConflict(() => repo.create(draft));
 
   await auditLog(session, {
     action: "created",
     entityType: "appointment",
     entityId: appointment.id,
-    summary: `${appointment.client} · ${appointment.service} · ${appointment.date} ${appointment.time}`,
+    summary: `${appointment.service} · ${appointment.date} ${appointment.time}`,
     source: "user",
   });
 
@@ -153,6 +173,8 @@ export async function updateAppointment(
   await checkBusinessRules(session, {
     id,
     staff: merged.staff,
+    staffId: merged.staffId,
+    serviceId: merged.serviceId,
     resourceId: merged.resourceId,
     date: merged.date,
     time: merged.time,
@@ -160,7 +182,7 @@ export async function updateAppointment(
     service: merged.service,
   });
 
-  const updated = await repo.update(id, patch);
+  const updated = await writeOrConflict(() => repo.update(id, patch));
 
   await auditLog(session, {
     action: patch.status && patch.status !== before.status ? "statusChanged" : "updated",
@@ -169,7 +191,7 @@ export async function updateAppointment(
     summary:
       patch.status && patch.status !== before.status
         ? `Status: ${before.status} → ${patch.status}`
-        : `${before.client} updated`,
+        : "Appointment updated",
     source: "user",
   });
 
@@ -189,13 +211,13 @@ export async function moveAppointment(
 
   await checkBusinessRules(session, { ...before, id, date, time });
 
-  const updated = await repo.update(id, { date, time });
+  const updated = await writeOrConflict(() => repo.update(id, { date, time }));
 
   await auditLog(session, {
     action: "moved",
     entityType: "appointment",
     entityId: id,
-    summary: `${before.client}: ${before.time} → ${time} (${date})`,
+    summary: `${before.time} → ${time} (${date})`,
     source: "user",
   });
 
@@ -217,9 +239,24 @@ export async function cancelAppointment(
     action: "cancelled",
     entityType: "appointment",
     entityId: id,
-    summary: `${before.client} · ${before.service} · ${before.date} ${before.time}`,
+    summary: `${before.service} · ${before.date} ${before.time}`,
     source: "user",
   });
 
   return updated;
+}
+
+export async function removeAppointment(session: Session, id: string): Promise<void> {
+  assertCan(session.role, "appointments.cancel");
+  const repo = getServerAppointmentsRepository(session.workspaceId);
+  const before = await repo.get(id);
+  if (!before) return;
+  await repo.remove(id);
+  await auditLog(session, {
+    action: "deleted",
+    entityType: "appointment",
+    entityId: id,
+    summary: `${before.service} · ${before.date} ${before.time}`,
+    source: "user",
+  });
 }

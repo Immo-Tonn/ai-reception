@@ -2,11 +2,7 @@ import { findWorkspaceConfig } from "@/features/workspace/registry";
 import { getAppointmentsRepository } from "@/features/appointments/repository";
 import { getClientsRepository } from "@/features/clients/repository";
 import { getAuditLogRepository } from "@/features/auditLog/repository";
-import {
-  computeAvailableSlots,
-  pickSlot,
-  type AvailableSlot,
-} from "@/features/appointments/availability";
+import { computeSlotsFor, pickSlot, type AvailableSlot } from "@/features/appointments/availability";
 import { demoWorkingHours } from "@/features/workingHours/demoData";
 import type { PublicBookingService } from "./bookingService";
 import {
@@ -39,27 +35,14 @@ async function loadSlots(
 ): Promise<AvailableSlot[]> {
   const workspace = findWorkspaceConfig(workspaceSlug);
   if (!workspace) return [];
-  const { services, staff: staffList, resources } = workspace;
 
-  const service = services.find((s) => s.id === serviceId);
-  if (!service) return [];
-
-  const eligibleStaff = staffId
-    ? staffList.filter((s) => s.id === staffId)
-    : service.allowedStaffIds.length > 0
-      ? staffList.filter((s) => service.allowedStaffIds.includes(s.id))
-      : staffList;
-
-  const candidateResources = service.requiredResourceType
-    ? resources.filter((r) => r.type === service.requiredResourceType)
-    : [];
-
-  return computeAvailableSlots({
-    service,
-    eligibleStaff,
-    candidateResources,
+  return computeSlotsFor({
+    serviceId,
+    staffId,
+    services: workspace.services,
+    staff: workspace.staff,
+    resources: workspace.resources,
     existingAppointments: await getAppointmentsRepository(workspaceSlug).list(),
-    allServices: services,
     workingHours: demoWorkingHours,
     date,
     notBefore: new Date(),

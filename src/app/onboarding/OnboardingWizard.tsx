@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Icon, Input } from "@/components/ui";
 import type { Messages } from "@/lib/i18n";
+import { completeOnboardingAction } from "@/server/actions/onboarding.actions";
 import styles from "./page.module.css";
 
 type Messages_ = Messages["onboarding"];
@@ -50,7 +51,39 @@ interface Service {
 
 const TOTAL_STEPS = 6;
 
-export function OnboardingWizard({ messages }: { messages: Messages_ }) {
+/** `workspaces.industry` is free text, not the 4-preset demo `IndustryKey`
+ * vocabulary — these are just stable slugs for what was picked. */
+const industrySlugs: Record<IndustryKey, string> = {
+  industryBeauty: "beauty",
+  industryCleaning: "cleaning",
+  industryAuto: "auto",
+  industryRepair: "repair",
+  industryPhotography: "photography",
+  industryEducation: "education",
+  industryConsulting: "consulting",
+  industryAgency: "agency",
+  industryFitness: "fitness",
+  industryOther: "other",
+};
+
+const bookingModes: Record<ModeKey, "appointments" | "jobs" | "projects"> = {
+  modeAppointments: "appointments",
+  modeJobs: "jobs",
+  modeProjects: "projects",
+};
+
+/**
+ * With a `workspaceSlug` (the real flow right after sign-up) the answers are
+ * saved on the server and the owner lands in their workspace. Without one
+ * (the legacy `/onboarding` preview) nothing is saved and it ends in the demo.
+ */
+export function OnboardingWizard({
+  messages,
+  workspaceSlug,
+}: {
+  messages: Messages_;
+  workspaceSlug?: string;
+}) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [industry, setIndustry] = useState<IndustryKey | null>(null);
@@ -59,22 +92,53 @@ export function OnboardingWizard({ messages }: { messages: Messages_ }) {
   const [draft, setDraft] = useState<Service>({ name: "", duration: "", price: "" });
   const [defaultHours, setDefaultHours] = useState(true);
   const [includePrivateBucket, setIncludePrivateBucket] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const [isSaving, startSaving] = useTransition();
 
   const progress = ((step + 1) / TOTAL_STEPS) * 100;
 
   function goBack() {
     if (step === 0) {
-      router.push("/signup");
+      if (!workspaceSlug) router.push("/signup");
       return;
     }
+    setSaveError(false);
     setStep((value) => value - 1);
+  }
+
+  function finish() {
+    if (!workspaceSlug || !industry || !mode) {
+      router.push("/demo-salon/today");
+      return;
+    }
+    setSaveError(false);
+    startSaving(async () => {
+      const result = await completeOnboardingAction(workspaceSlug, {
+        industry: industrySlugs[industry],
+        bookingMode: bookingModes[mode],
+        services: services
+          .filter((service) => service.name.trim().length > 0)
+          .map((service) => ({
+            name: service.name.trim(),
+            durationMinutes: Number(service.duration) || 30,
+            price: Number(service.price) || 0,
+          })),
+        useDefaultHours: defaultHours,
+      });
+      if (!result.ok) {
+        setSaveError(true);
+        return;
+      }
+      router.push(`/${workspaceSlug}/today`);
+    });
   }
 
   function goNext() {
     if (step === TOTAL_STEPS - 1) {
-      router.push("/demo/today");
+      finish();
       return;
     }
+    setSaveError(false);
     setStep((value) => value + 1);
   }
 
@@ -90,7 +154,13 @@ export function OnboardingWizard({ messages }: { messages: Messages_ }) {
   return (
     <div className={styles.screen}>
       <header className={styles.header}>
-        <button type="button" className={styles.backButton} onClick={goBack} aria-label={messages.back}>
+        <button
+          type="button"
+          className={styles.backButton}
+          onClick={goBack}
+          aria-label={messages.back}
+          disabled={isSaving || (step === 0 && Boolean(workspaceSlug))}
+        >
           <Icon name="arrowLeft" size={18} strokeWidth={1.8} />
         </button>
         <div className={styles.progressTrack}>
@@ -104,6 +174,11 @@ export function OnboardingWizard({ messages }: { messages: Messages_ }) {
       </header>
 
       <div className={styles.content}>
+        {saveError && (
+          <p className={styles.formError} role="alert">
+            {messages.saveError}
+          </p>
+        )}
         {step === 0 && (
           <>
             <h1 className={styles.stepTitle}>{messages.industryTitle}</h1>
@@ -282,7 +357,7 @@ export function OnboardingWizard({ messages }: { messages: Messages_ }) {
 
       <div className={styles.footer}>
         {step < TOTAL_STEPS - 1 && step >= 2 && (
-          <Button variant="secondary" className={styles.footerSkip} onClick={goNext}>
+          <Button variant="secondary" className={styles.footerSkip} onClick={goNext} disabled={isSaving}>
             {messages.skip}
           </Button>
         )}
@@ -290,9 +365,9 @@ export function OnboardingWizard({ messages }: { messages: Messages_ }) {
           className={styles.footerNext}
           fullWidth
           onClick={goNext}
-          disabled={!canContinue}
+          disabled={!canContinue || isSaving}
         >
-          {step === TOTAL_STEPS - 1 ? messages.finish : messages.next}
+          {step === TOTAL_STEPS - 1 ? (isSaving ? messages.saving : messages.finish) : messages.next}
         </Button>
       </div>
     </div>

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default async function LoginPage() {
   const locale = await getRequestLocale();
-  const { login, common } = getMessages(locale);
+  const { login, common, authErrors } = getMessages(locale);
 
   return (
     <main className={styles.screen}>
@@ -38,7 +38,7 @@ export default async function LoginPage() {
               <p className={styles.formSubtitle}>{login.subtitle}</p>
             </div>
 
-            <LoginForm messages={login} />
+            <LoginForm messages={login} errors={authErrors} />
 
             <div className={styles.formFoot}>
               <span className={styles.divider}>{login.orDivider}</span>
