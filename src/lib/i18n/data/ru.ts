@@ -489,7 +489,7 @@ export const ru: Messages = {
     confirmBooking: "Подтвердить запись",
     submitting: "Записываем…",
     confirmationTitle: "Вы записаны",
-    confirmationDescription: "Мы отправили подтверждение на {email}. До встречи!",
+    confirmationDescription: "Спасибо — ваша запись подтверждена. До встречи!",
     confirmationSummary: "Итог записи",
     bookAnother: "Записаться ещё раз",
     slotTakenError: "Это время только что заняли. Выберите другое.",

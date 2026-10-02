@@ -489,7 +489,7 @@ export const uk: Messages = {
     confirmBooking: "Підтвердити запис",
     submitting: "Записуємо…",
     confirmationTitle: "Вас записано",
-    confirmationDescription: "Ми надіслали підтвердження на {email}. До зустрічі!",
+    confirmationDescription: "Дякуємо — ваш запис підтверджено. До зустрічі!",
     confirmationSummary: "Підсумок запису",
     bookAnother: "Записатися ще раз",
     slotTakenError: "Цей час щойно зайняли. Оберіть інший.",

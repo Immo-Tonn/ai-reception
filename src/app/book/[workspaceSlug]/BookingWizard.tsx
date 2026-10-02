@@ -156,6 +156,7 @@ export function BookingWizard({
         date: selectedDate,
         time: selectedSlot.time,
         client: { name, email, phone, notes },
+        locale,
       });
       goTo("confirmation");
     } catch (err) {
@@ -409,7 +410,7 @@ export function BookingWizard({
             </span>
             <h1 className={styles.stepTitle}>{booking.confirmationTitle}</h1>
             <p className={styles.confirmationDescription}>
-              {booking.confirmationDescription.replace("{email}", email)}
+              {booking.confirmationDescription}
             </p>
             <div className={styles.summaryCard}>
               <span className={styles.summaryLine}>{getServiceLabel(selectedService, locale)}</span>

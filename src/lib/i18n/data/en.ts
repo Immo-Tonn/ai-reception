@@ -513,7 +513,7 @@ export const en = {
     confirmBooking: "Confirm booking",
     submitting: "Booking…",
     confirmationTitle: "You're booked",
-    confirmationDescription: "We've sent a confirmation to {email}. See you soon!",
+    confirmationDescription: "Thank you — your booking is confirmed. See you soon!",
     confirmationSummary: "Booking summary",
     bookAnother: "Book another appointment",
     slotTakenError: "That time was just taken. Please choose another.",

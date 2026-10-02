@@ -489,7 +489,7 @@ export const de: Messages = {
     confirmBooking: "Buchung bestätigen",
     submitting: "Wird gebucht…",
     confirmationTitle: "Sie sind gebucht",
-    confirmationDescription: "Wir haben eine Bestätigung an {email} gesendet. Bis bald!",
+    confirmationDescription: "Vielen Dank — Ihr Termin ist bestätigt. Bis bald!",
     confirmationSummary: "Buchungsübersicht",
     bookAnother: "Weiteren Termin buchen",
     slotTakenError: "Diese Zeit wurde soeben vergeben. Bitte wählen Sie eine andere.",

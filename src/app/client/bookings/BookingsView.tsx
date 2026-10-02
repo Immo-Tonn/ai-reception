@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/calendar/StatusBadge";
 import { useClientAuth } from "@/features/clientAuth/useClientAuth";
 import { listMyBookings, type ClientBookingRow } from "@/features/publicBooking/myBookings";
 import { getClientAvailableSlots, type AvailableSlot } from "@/features/publicBooking/availability";
-import { getAppointmentsRepository } from "@/features/appointments/repository";
+import { cancelClientBooking, rescheduleClientBooking } from "@/features/publicBooking/manageBooking";
 import { getWorkspaceConfig } from "@/features/workspace/registry";
 import { resolveServiceLabel } from "@/features/services/label";
 import { getStaffLabel } from "@/features/staff/label";
@@ -80,7 +80,9 @@ export function BookingsView({
   const visible = tab === "upcoming" ? upcoming : past;
 
   async function handleCancel(row: ClientBookingRow) {
-    await getAppointmentsRepository(row.workspaceSlug).update(row.appointment.id, { status: "cancelled" });
+    if (identity) {
+      await cancelClientBooking(row.workspaceSlug, row.appointment, identity, locale);
+    }
     setCancelTargetId(null);
     setToast(client.bookingCancelled);
     setTimeout(() => setToast(null), 2500);
@@ -288,6 +290,7 @@ function ReschedulePanel({
   onRescheduled: () => void;
 }) {
   const { appointment } = row;
+  const { identity } = useClientAuth();
   const dateStrip = buildDateStrip();
   const workspace = getWorkspaceConfig(row.workspaceSlug);
   const service = workspace.services.find((s) => s.name === appointment.service);
@@ -311,12 +314,20 @@ function ReschedulePanel({
   async function handleConfirm() {
     if (!selectedSlot) return;
     setSaving(true);
-    await getAppointmentsRepository(row.workspaceSlug).update(appointment.id, {
-      date: selectedDate,
-      time: selectedSlot.time,
-      staff: selectedSlot.staffName,
-      resourceId: selectedSlot.resourceId,
-    });
+    if (identity) {
+      await rescheduleClientBooking(
+        row.workspaceSlug,
+        appointment,
+        {
+          date: selectedDate,
+          time: selectedSlot.time,
+          staff: selectedSlot.staffName,
+          resourceId: selectedSlot.resourceId,
+        },
+        identity,
+        locale,
+      );
+    }
     setSaving(false);
     onRescheduled();
   }

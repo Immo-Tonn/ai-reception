@@ -4,7 +4,10 @@ import { getClientsRepository } from "@/features/clients/repository";
 import { getAuditLogRepository } from "@/features/auditLog/repository";
 import type { Appointment } from "@/features/appointments/types";
 import type { ClientRecord } from "@/features/clients/types";
+import type { Locale } from "@/lib/i18n";
+import type { NotificationService } from "@/features/notifications/notificationService";
 import { getClientAvailableSlots } from "./availability";
+import { notifyBookingEvent } from "./bookingNotifications";
 
 export class BookingUnavailableError extends Error {
   constructor() {
@@ -92,7 +95,11 @@ export async function createClientBooking(
     date: string;
     time: string;
     client: ClientBookingDetails;
+    /** Language for the client's confirmation message (defaults to "en"). */
+    locale?: Locale;
   },
+  /** Injectable for tests; defaults to the app-wide NotificationService. */
+  notifications?: NotificationService,
 ): Promise<Appointment> {
   const slots = await getClientAvailableSlots(workspaceSlug, input.serviceId, input.staffId, input.date);
   const chosenSlot = input.staffId
@@ -136,6 +143,19 @@ export async function createClientBooking(
     summary: `Public booking: ${appointment.client} · ${appointment.service} · ${appointment.date} ${appointment.time}`,
     source: "public",
   });
+
+  // Booking is saved. Notify AFTER, and never let it affect the result:
+  // notifyBookingEvent reports and swallows its own failures.
+  await notifyBookingEvent(
+    "BOOKING_CONFIRMED",
+    {
+      workspaceSlug,
+      appointment,
+      contact: { name: client.name, email: input.client.email, phone: input.client.phone },
+      locale: input.locale ?? "en",
+    },
+    notifications,
+  );
 
   return appointment;
 }

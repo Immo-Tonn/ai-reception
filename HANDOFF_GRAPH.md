@@ -2,6 +2,61 @@
 
 ---
 
+## NOTIFICATIONS FOUNDATION ✅ ЗАВЕРШЕНО — в ветке `task/task-1-ui-finish`
+
+Provider-agnostic задел под уведомления. Supabase, реальные email/SMS/
+push-провайдеры, ключи и платные сервисы НЕ подключались. Не смержено в
+main, не запушено.
+
+**Схема:** Booking flow → `NotificationService` → интерфейс
+`NotificationProvider` → адаптер. Сегодня есть только Console/Mock
+адаптер (`ok: true, delivered: false` — он НЕ отправляет и не врёт об
+этом).
+
+**Файлы (`src/features/notifications/`):** `types.ts` (каналы EMAIL/SMS/
+PUSH/IN_APP, события, payload, preferences), `NotificationProvider.ts`,
+`providers/ConsoleNotificationProvider.ts`, `notificationService.ts`
+(`createNotificationService` + app-wide `notificationService`),
+`preferences.ts`, `templates/{email,sms,shared}.ts`. Плюс
+`src/lib/errorReporter.ts` (пока только log, точка для будущего
+reporter/retry), `src/features/publicBooking/bookingNotifications.ts`
+(whitelist-payload + `notifyBookingEvent`), `manageBooking.ts`
+(cancel/reschedule клиента).
+
+**События:** BOOKING_CONFIRMED (публичная бронь), BOOKING_RESCHEDULED и
+BOOKING_CANCELLED (My Bookings), BOOKING_REMINDER — только шаблоны,
+**scheduler НЕ реализован** (появится вместе с backend).
+
+**Гарантии:** сначала запись сохраняется, потом уведомление; любая ошибка
+уведомления репортится и глотается — бронь не отменяется. Payload
+собирается явным whitelist (workspace/бизнес, имя, email, phone,
+услуга, дата, время, специалист, id записи) — internal notes,
+visibility, financial bucket, цена/paid не попадают клиенту.
+Preferences: email=true если есть email, sms=false, push=false.
+
+**Шаблоны:** email (text+HTML, с экранированием) и короткие SMS на
+DE/EN/UK/RU для всех 4 событий. Тексты не обещают несуществующего.
+
+**Важное исправление UX:** экран успеха брони раньше говорил «Мы
+отправили подтверждение на {email}» — это ложь без провайдера. Теперь во
+всех 4 языках: «Спасибо — ваша запись подтверждена».
+
+**Тесты:** +15 (confirmed/rescheduled/cancelled raise events; сбой
+уведомления не ломает бронь; whitelist payload; локали DE/EN/UK/RU и
+fallback; HTML-escape; Console не заявляет delivery; preferences).
+Итого 74/74. typecheck чисто, build OK. Живая проверка в браузере:
+бронь → один mock-лог EMAIL «(mock — not sent)», ровно 1 запись.
+
+**Статусы:** Notifications — FOUNDATION READY · Real Email / Real SMS /
+Push — NOT CONNECTED · Supabase scheduler/reminders — NOT CONNECTED.
+
+**Resume From Here (notifications):** реальный провайдер = один новый
+адаптер `NotificationProvider`, регистрируется в `notificationService.ts`;
+вызывающий код не меняется. Для напоминаний нужен scheduler после
+Supabase. Retry-очередь — через `reportError`/будущий reporter.
+
+---
+
 ## TASK 1 (UI finish) ✅ ЗАВЕРШЕНО — ветка `task/task-1-ui-finish` (от `team/main` 5027202)
 
 Только UI/терминология. Backend/Supabase (`team/Sa-Ev`) НЕ тронут и не
