@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button, Input, Sheet } from "@/components/ui";
 import type { FinancialBucket, Visibility } from "@/features/appointments/types";
+import { selectableBuckets, selectableVisibilities } from "@/features/appointments/selectableOptions";
 import type { Messages } from "@/lib/i18n";
 import styles from "./page.module.css";
 
@@ -73,6 +74,18 @@ export function WorkItemSheet({
 
   const showAmount = kind === "quote" || kind === "job";
 
+  const visibilityLabel: Record<Visibility, string> = {
+    normal: appointmentMessages.visibilityNormal,
+    private: appointmentMessages.visibilityPrivate,
+    ownerOnly: appointmentMessages.visibilityOwnerOnly,
+    custom: appointmentMessages.visibilityCustom,
+  };
+  const bucketLabel: Record<FinancialBucket, string> = {
+    main: appointmentMessages.bucketMain,
+    private: appointmentMessages.bucketPrivate,
+    custom: appointmentMessages.bucketCustom,
+  };
+
   return (
     <Sheet open={open} onClose={onClose} title={sheetTitle}>
       <div className={styles.form}>
@@ -110,21 +123,14 @@ export function WorkItemSheet({
         <div className={styles.field}>
           <span className={styles.label}>{messages.visibilityLabel}</span>
           <div className={styles.optionRow}>
-            {(
-              [
-                ["normal", appointmentMessages.visibilityNormal],
-                ["private", appointmentMessages.visibilityPrivate],
-                ["ownerOnly", appointmentMessages.visibilityOwnerOnly],
-                ["custom", appointmentMessages.visibilityCustom],
-              ] as [Visibility, string][]
-            ).map(([value, label]) => (
+            {selectableVisibilities.map((value) => (
               <button
                 key={value}
                 type="button"
                 className={`${styles.option} ${visibility === value ? styles.optionSelected : ""}`}
                 onClick={() => setVisibility(value)}
               >
-                {label}
+                {visibilityLabel[value]}
               </button>
             ))}
           </div>
@@ -133,20 +139,14 @@ export function WorkItemSheet({
         <div className={styles.field}>
           <span className={styles.label}>{messages.financialBucketLabel}</span>
           <div className={styles.optionRow}>
-            {(
-              [
-                ["main", appointmentMessages.bucketMain],
-                ["private", appointmentMessages.bucketPrivate],
-                ["custom", appointmentMessages.bucketCustom],
-              ] as [FinancialBucket, string][]
-            ).map(([value, label]) => (
+            {selectableBuckets.map((value) => (
               <button
                 key={value}
                 type="button"
                 className={`${styles.option} ${financialBucket === value ? styles.optionSelected : ""}`}
                 onClick={() => setFinancialBucket(value)}
               >
-                {label}
+                {bucketLabel[value]}
               </button>
             ))}
           </div>

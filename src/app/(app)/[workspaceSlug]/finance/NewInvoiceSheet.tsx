@@ -4,6 +4,10 @@ import { useState } from "react";
 import { Button, Input, Sheet } from "@/components/ui";
 import { localIsoDate } from "@/lib/date/localIsoDate";
 import type { FinancialBucket, Visibility } from "@/features/appointments/types";
+import {
+  bucketOptions,
+  visibilityOptions,
+} from "@/features/appointments/selectableOptions";
 import type { Invoice } from "@/features/finance/types";
 import type { Messages } from "@/lib/i18n";
 import styles from "./NewInvoiceSheet.module.css";
@@ -27,6 +31,19 @@ export function NewInvoiceSheet({
   initialValue?: Invoice | null;
 }) {
   const isEditing = Boolean(initialValue);
+  // Normal/Private and Main/Private in the form; a legacy ownerOnly/custom
+  // value on an invoice being edited still shows (see selectableOptions.ts).
+  const visibilityLabel: Record<Visibility, string> = {
+    normal: appointmentMessages.visibilityNormal,
+    private: appointmentMessages.visibilityPrivate,
+    ownerOnly: appointmentMessages.visibilityOwnerOnly,
+    custom: appointmentMessages.visibilityCustom,
+  };
+  const bucketLabel: Record<FinancialBucket, string> = {
+    main: appointmentMessages.bucketMain,
+    private: appointmentMessages.bucketPrivate,
+    custom: appointmentMessages.bucketCustom,
+  };
   const [client, setClient] = useState(initialValue?.client ?? "");
   const [amount, setAmount] = useState(initialValue?.amount ?? 0);
   const [bucket, setBucket] = useState<FinancialBucket>(initialValue?.bucket ?? "main");
@@ -78,8 +95,11 @@ export function NewInvoiceSheet({
             value={bucket}
             onChange={(event) => setBucket(event.target.value as FinancialBucket)}
           >
-            <option value="main">{messages.filterMain}</option>
-            <option value="private">{messages.filterPrivate}</option>
+            {bucketOptions(initialValue?.bucket).map((value) => (
+              <option key={value} value={value}>
+                {bucketLabel[value]}
+              </option>
+            ))}
           </select>
         </div>
         <div className={styles.field}>
@@ -89,10 +109,11 @@ export function NewInvoiceSheet({
             value={visibility}
             onChange={(event) => setVisibility(event.target.value as Visibility)}
           >
-            <option value="normal">{appointmentMessages.visibilityNormal}</option>
-            <option value="private">{appointmentMessages.visibilityPrivate}</option>
-            <option value="ownerOnly">{appointmentMessages.visibilityOwnerOnly}</option>
-            <option value="custom">{appointmentMessages.visibilityCustom}</option>
+            {visibilityOptions(initialValue?.visibility).map((value) => (
+              <option key={value} value={value}>
+                {visibilityLabel[value]}
+              </option>
+            ))}
           </select>
         </div>
         <span className={styles.separationNote}>{appointmentMessages.separationNote}</span>

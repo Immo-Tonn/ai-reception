@@ -2,6 +2,61 @@
 
 ---
 
+## TASK 1 (UI finish) ✅ ЗАВЕРШЕНО — ветка `task/task-1-ui-finish` (от `team/main` 5027202)
+
+Только UI/терминология. Backend/Supabase (`team/Sa-Ev`) НЕ тронут и не
+подтягивался. Tasks 2/3/4 НЕ начинались. Не смержено в main, не запушено.
+
+**Термин Lead → Request (только пользовательский текст).** DE Anfrage /
+EN Request / UK Запит / RU Запрос — вкладка Work, «Новый запрос»,
+пустое состояние, «Из запроса», кнопка в Inbox, блок Analytics
+(«Конверсия запросов: N из M запросов стали работой» — без «выиграно»).
+Внутри кода остались `Lead`, `leadId`, `leads`, `LeadStage`, ключи
+i18n `newLead`/`tabLeads`/… — Work engine и связи не затронуты. Client и
+Request по-прежнему разные сущности.
+
+**Won/Lost скрыты.** На карточке запроса остались только Новый /
+Связались / Смета отправлена. Значения `won`/`lost` в модели сохранены
+(конвертация Quote→Job по-прежнему ставит `won`, Analytics читает его).
+
+**Visibility в UI = Normal/Private** (DE Normal/Privat, EN Normal/Private,
+UK Звичайна/Приватна, RU Обычная/Приватная). **Financial account в UI =
+Main/Private** (DE Hauptgeschäft/Privat, EN Main business/Private, UK
+Основний бізнес/Приватний, RU Основной бизнес/Приватный). `ownerOnly`/
+`custom` и bucket `custom` остаются в domain/БД; скрыты из форм через
+`src/features/appointments/selectableOptions.ts`. Если редактируемая
+запись уже имеет скрытое значение, оно показывается и не перезаписывается.
+Одна и та же логика в: AppointmentSheet, WorkItemSheet («Новый запрос»),
+NewInvoiceSheet. Две оси независимы — все 4 комбинации допустимы, общего
+`isPrivate` нет (покрыто unit-тестом).
+
+**Подписи финансового счёта унифицированы** (убрано «бакет/Bucket» из
+Work и Analytics, фильтры Finance/Analytics используют те же полные
+названия; род у «Приватный» в onboarding исправлен).
+
+**Mobile (пункт 11).**
+- Шапка: на экранах с живым фоном (`/business`, `/client`) блок заголовка
+  и шапка были на одном `z-index`, поэтому заголовок просвечивал поверх
+  открытого меню языка. Шапка теперь выше (`z-index: 3`), может
+  переноситься на 2 строки (`flex-wrap`), BackLink не ломает подпись.
+- Длинные немецкие слова: перенос внутри колонки (`overflow-wrap` +
+  `hyphens: auto` только для `html[lang="de"]`; RU/UK — без дефисов).
+  Применено: intro-заголовки, login/signup, шаги booking, onboarding.
+- Вкладки Work переносятся, не обрезаются справа.
+- Проверка: 176 автоматических сканов (Light/Dark × DE/UK/RU/EN ×
+  375/440px × 11 экранов) — единственная находка (вкладки Work) исправлена;
+  визуально проверены форма «Новый запрос» и шапка/меню языка на 375px.
+  390px отдельно не снимался (между 375 и 440 — тот же layout).
+
+**Проверки:** typecheck чисто, tests 59/59, production build OK.
+
+**Resume From Here:** Task 1 закрыт. Ждём подтверждения на merge/push.
+Дальше — отдельно по решению команды: Task 2/3/4 и интеграция Supabase
+(аудит `team/Sa-Ev` см. в чате; рекомендация — `integration/…` от
+`team/main`).
+
+---
+
 ## ТЕКУЩАЯ ЗАДАЧА — Back navigation + Native mobile (Expo) foundation ✅ ЗАВЕРШЕНО
 
 Две части: (1) единый contextual Back pattern на secondary/flow экранах

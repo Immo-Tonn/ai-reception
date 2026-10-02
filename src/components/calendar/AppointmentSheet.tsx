@@ -13,6 +13,10 @@ import type {
   Visibility,
 } from "@/features/appointments/types";
 import { statusOrder } from "@/features/appointments/statusMeta";
+import {
+  visibilityOptions as visibilityOptionsFor,
+  bucketOptions as bucketOptionsFor,
+} from "@/features/appointments/selectableOptions";
 import { findConflicts, findNextAvailableSlot } from "@/features/appointments/conflicts";
 import { expandRecurrenceDates } from "@/features/appointments/recurrence";
 import { checkAvailability } from "@/features/workingHours/logic";
@@ -288,22 +292,28 @@ export function AppointmentSheet({
     }
   }
 
-  const visibilityOptions: { value: Visibility; title: string; hint: string }[] = [
-    { value: "normal", title: messages.visibilityNormal, hint: messages.visibilityNormalHint },
-    { value: "private", title: messages.visibilityPrivate, hint: messages.visibilityPrivateHint },
-    {
-      value: "ownerOnly",
-      title: messages.visibilityOwnerOnly,
-      hint: messages.visibilityOwnerOnlyHint,
-    },
-    { value: "custom", title: messages.visibilityCustom, hint: messages.visibilityCustomHint },
-  ];
+  // Normal/Private only in the product UI; a legacy ownerOnly/custom value on
+  // the record being edited still shows (see selectableOptions.ts).
+  const visibilityCopy: Record<Visibility, { title: string; hint: string }> = {
+    normal: { title: messages.visibilityNormal, hint: messages.visibilityNormalHint },
+    private: { title: messages.visibilityPrivate, hint: messages.visibilityPrivateHint },
+    ownerOnly: { title: messages.visibilityOwnerOnly, hint: messages.visibilityOwnerOnlyHint },
+    custom: { title: messages.visibilityCustom, hint: messages.visibilityCustomHint },
+  };
+  const visibilityChoices = visibilityOptionsFor(initialValue?.visibility).map((value) => ({
+    value,
+    ...visibilityCopy[value],
+  }));
 
-  const bucketOptions: { value: FinancialBucket; title: string }[] = [
-    { value: "main", title: messages.bucketMain },
-    { value: "private", title: messages.bucketPrivate },
-    { value: "custom", title: messages.bucketCustom },
-  ];
+  const bucketTitle: Record<FinancialBucket, string> = {
+    main: messages.bucketMain,
+    private: messages.bucketPrivate,
+    custom: messages.bucketCustom,
+  };
+  const bucketChoices = bucketOptionsFor(initialValue?.financialBucket).map((value) => ({
+    value,
+    title: bucketTitle[value],
+  }));
 
   const conflictMessage = conflict.staffConflict
     ? {
@@ -575,7 +585,7 @@ export function AppointmentSheet({
           <span className={styles.sectionLabel}>{messages.visibilityLabel}</span>
           <span className={styles.sectionHint}>{messages.visibilitySectionHint}</span>
           <div className={styles.optionRow}>
-            {visibilityOptions.map((option) => (
+            {visibilityChoices.map((option) => (
               <button
                 key={option.value}
                 type="button"
@@ -598,7 +608,7 @@ export function AppointmentSheet({
           <span className={styles.sectionLabel}>{messages.financialBucketLabel}</span>
           <span className={styles.sectionHint}>{messages.financialBucketSectionHint}</span>
           <div className={styles.optionRow}>
-            {bucketOptions.map((option) => (
+            {bucketChoices.map((option) => (
               <button
                 key={option.value}
                 type="button"

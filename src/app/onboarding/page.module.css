@@ -57,6 +57,7 @@
 }
 
 .stepTitle {
+  overflow-wrap: break-word;
   font-size: 1.5rem;
   font-weight: var(--font-weight-semibold);
   letter-spacing: -0.01em;
@@ -71,6 +72,7 @@
 }
 
 .stepSubtitle {
+  overflow-wrap: break-word;
   font-size: var(--font-size-body);
   color: var(--color-muted);
   margin-bottom: var(--space-6);
@@ -318,4 +320,11 @@
 
 .footerNext {
   flex: 1;
+}
+
+/* German compounds: hyphenate instead of overflowing the screen. */
+:global(html[lang="de"]) .stepTitle,
+:global(html[lang="de"]) .stepSubtitle {
+  hyphens: auto;
+  overflow-wrap: anywhere;
 }

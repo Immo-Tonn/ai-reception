@@ -157,18 +157,33 @@
   background-image: radial-gradient(ellipse 72% 62% at 50% 46%, rgba(126, 166, 255, 0.1), transparent 74%);
 }
 
-/* topBar/introBody need to sit above the gradient layers. */
+/* topBar/introBody sit above the gradient layers; the top bar sits ABOVE
+   the intro body so its open language/theme dropdown is never painted
+   over by the page title underneath it. */
 .heroScreen > .topBar,
 .heroScreen > .introBody {
   position: relative;
   z-index: 1;
 }
 
+.heroScreen > .topBar {
+  z-index: 3;
+}
+
 .topBar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
   padding: calc(var(--space-3) + env(safe-area-inset-top)) var(--space-4) var(--space-3);
+}
+
+/* Preferences (language + theme) stays right-aligned even when the bar
+   wraps onto a second row on very narrow phones; the back link never
+   shrinks/wraps its own label. */
+.topBar > :last-child {
+  margin-left: auto;
 }
 
 .body {
@@ -210,7 +225,10 @@
 }
 
 .introTitle {
-  font-size: var(--font-size-h1);
+  /* Long German compounds ("Dienstleistungsunternehmen") must wrap or
+     hyphenate inside the column, never push past the screen edge. */
+  overflow-wrap: break-word;
+  font-size: clamp(1.5rem, 1.2rem + 1.6vw, var(--font-size-h1));
   font-weight: var(--font-weight-semibold);
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -218,6 +236,7 @@
 }
 
 .introSubtitle {
+  overflow-wrap: break-word;
   color: var(--color-muted);
   font-size: var(--font-size-body);
   line-height: var(--line-height-relaxed);
@@ -388,4 +407,11 @@
   color: var(--color-muted);
   text-align: center;
   margin-top: var(--space-6);
+}
+
+/* German compounds are the one case where hyphenation is wanted. */
+:global(html[lang="de"]) .introTitle,
+:global(html[lang="de"]) .introSubtitle {
+  hyphens: auto;
+  overflow-wrap: anywhere;
 }
