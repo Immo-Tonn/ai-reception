@@ -51,5 +51,8 @@ export async function getAvailableSlots(
     allServices: services,
     workingHours: demoWorkingHours,
     date,
+    // `notBefore` intentionally not passed: slots are wall-clock dates in the
+    // business's timezone and the server clock is UTC. Pass it once workspaces
+    // carry a timezone (see HANDOFF_GRAPH.md — shared-backend requirements).
   });
 }

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { findWorkspaceConfig } from "@/features/workspace/registry";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { getWorkspaceBranding } from "@/features/branding/demoData";
@@ -15,6 +17,8 @@ export default async function PublicBookingPage({
   params: Promise<{ workspaceSlug: string }>;
 }) {
   const { workspaceSlug } = await params;
+  // Unknown slug = 404, never another business's catalog (see registry.findWorkspaceConfig).
+  if (!findWorkspaceConfig(workspaceSlug)) notFound();
   const locale = await getRequestLocale();
   const { common, booking, client } = getMessages(locale);
   const branding = getWorkspaceBranding(workspaceSlug);

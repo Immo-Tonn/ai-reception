@@ -23,3 +23,14 @@ const bySlug = new Map(demoWorkspaces.map((w) => [w.slug, w]));
 export function getWorkspaceConfig(workspaceSlug: string): WorkspaceConfig {
   return bySlug.get(workspaceSlug) ?? salonWorkspace;
 }
+
+/**
+ * Strict lookup: `undefined` for any slug that is not a known workspace.
+ * Public routes (`/book/[workspaceSlug]`) must use this and 404 — falling
+ * back to Salon there would show one business's catalog under another
+ * business's URL. (`getWorkspaceConfig` keeps its fallback for the
+ * authenticated app shell, which is demo-only until real workspaces exist.)
+ */
+export function findWorkspaceConfig(workspaceSlug: string): WorkspaceConfig | undefined {
+  return bySlug.get(workspaceSlug);
+}

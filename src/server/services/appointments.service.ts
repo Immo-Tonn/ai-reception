@@ -65,18 +65,20 @@ async function checkBusinessRules(
   candidate: Pick<
     Appointment,
     "id" | "staff" | "resourceId" | "date" | "time" | "durationMinutes" | "service"
-  >,
+  > &
+    Partial<Pick<Appointment, "staffId" | "serviceId">>,
 ) {
   const repo = getServerAppointmentsRepository(session.workspaceId);
   const servicesRepo = getServerServicesRepository(session.workspaceId);
   const [existing, services] = await Promise.all([repo.list(), servicesRepo.list()]);
 
   const availability = checkAvailability(
-    candidate.staff,
+    candidate.staffId ?? candidate.staff,
     candidate.date,
     candidate.time,
     candidate.durationMinutes,
     demoWorkingHours,
+    candidate.staff,
   );
   if (!availability.available) {
     throw new BusinessRuleError(

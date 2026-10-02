@@ -1,10 +1,20 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, Icon, Input } from "@/components/ui";
-import { getWorkspaceConfig } from "@/features/workspace/registry";
-import { getClientAvailableSlots, type AvailableSlot } from "@/features/publicBooking/availability";
-import { createClientBooking, BookingUnavailableError } from "@/features/publicBooking/createBooking";
+import { findWorkspaceConfig } from "@/features/workspace/registry";
+import { uniqueSlotTimes, type AvailableSlot } from "@/features/appointments/availability";
+import {
+  getPublicBookingService,
+  BookingUnavailableError,
+  type PublicBookingResult,
+} from "@/features/publicBooking/bookingService";
+import {
+  EMBED_RESIZE_MESSAGE,
+  parseHelloMessage,
+  resolveParentOrigin,
+} from "@/features/embed/messages";
 import { getClientDetailsFieldErrors } from "@/features/publicBooking/detailsValidation";
 import { getServiceLabel } from "@/features/services/label";
 import { getStaffLabel } from "@/features/staff/label";
@@ -57,6 +67,7 @@ export function BookingWizard({
   const [selectedDate, setSelectedDate] = useState(localIsoDate(new Date()));
   const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
+  const [result, setResult] = useState<PublicBookingResult | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -71,6 +82,7 @@ export function BookingWizard({
   // don't scold an untouched field either).
   const [touched, setTouched] = useState<{ name?: boolean; email?: boolean; phone?: boolean }>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   const nameFieldRef = useRef<HTMLInputElement>(null);
   const emailFieldRef = useRef<HTMLInputElement>(null);
   const phoneFieldRef = useRef<HTMLInputElement>(null);
@@ -86,9 +98,9 @@ export function BookingWizard({
   const showPhoneError = Boolean(fieldErrors.phone) && (touched.phone || submitAttempted);
 
   useEffect(() => {
-    const workspace = getWorkspaceConfig(workspaceSlug);
-    setServices(workspace.services);
-    setStaffList(workspace.staff);
+    const workspace = findWorkspaceConfig(workspaceSlug);
+    setServices(workspace?.services ?? []);
+    setStaffList(workspace?.staff ?? []);
   }, [workspaceSlug]);
 
   // A signed-in client (see /client/login, /client/signup) doesn't have
@@ -105,25 +117,48 @@ export function BookingWizard({
     if (step !== "time" || !selectedServiceId) return;
     setSlotsLoading(true);
     const staffId = selectedStaffId === "any" ? null : selectedStaffId;
-    getClientAvailableSlots(workspaceSlug, selectedServiceId, staffId, selectedDate)
-      .then(setSlots)
+    getPublicBookingService()
+      .getAvailableSlots(workspaceSlug, selectedServiceId, staffId, selectedDate)
+      // "Any specialist" yields one slot per free specialist per time — the
+      // visitor sees each time once; the assignee is resolved at booking.
+      .then((all) => setSlots(uniqueSlotTimes(all)))
       .finally(() => setSlotsLoading(false));
   }, [step, workspaceSlug, selectedServiceId, selectedStaffId, selectedDate]);
 
-  // Embed resizing (§3): tell the parent page how tall we are so an
-  // iframe embed can size itself instead of showing a scrollbar.
+  // Embed resizing (§3): tell the embedding page how tall we are so an
+  // iframe embed can size itself instead of showing a scrollbar. Messages
+  // go only to a known parent origin (never "*"): guessed from
+  // ancestorOrigins/referrer, or learned from the parent's hello message
+  // (accepted only from window.parent). See features/embed/messages.ts.
   useEffect(() => {
-    if (!chromeless || typeof window === "undefined") return;
+    if (!chromeless || typeof window === "undefined" || window.parent === window) return;
+    let parentOrigin = resolveParentOrigin({
+      ancestorOrigins: window.location.ancestorOrigins,
+      referrer: document.referrer,
+    });
     const send = () => {
-      window.parent?.postMessage(
-        { type: "serviceos-booking-resize", height: document.body.scrollHeight },
-        "*",
+      if (!parentOrigin) return;
+      window.parent.postMessage(
+        // Measure the wizard root, not html/body: those are `height: 100%`
+        // (globals.css) and so are never shorter than the iframe itself.
+        { type: EMBED_RESIZE_MESSAGE, height: rootRef.current?.offsetHeight ?? 0 },
+        parentOrigin,
       );
     };
+    const onMessage = (event: MessageEvent) => {
+      const origin = parseHelloMessage(event, window.parent);
+      if (!origin) return;
+      parentOrigin = origin;
+      send();
+    };
+    window.addEventListener("message", onMessage);
     send();
     const observer = new ResizeObserver(send);
-    observer.observe(document.body);
-    return () => observer.disconnect();
+    if (rootRef.current) observer.observe(rootRef.current);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      observer.disconnect();
+    };
   }, [chromeless, step]);
 
   function goTo(next: Step) {
@@ -150,13 +185,14 @@ export function BookingWizard({
     setSubmitting(true);
     setError(null);
     try {
-      await createClientBooking(workspaceSlug, {
+      const booked = await getPublicBookingService().createBooking(workspaceSlug, {
         serviceId: selectedService.id,
         staffId: selectedStaffId === "any" ? null : selectedStaffId,
         date: selectedDate,
         time: selectedSlot.time,
         client: { name, email, phone, notes },
       });
+      setResult(booked);
       goTo("confirmation");
     } catch (err) {
       if (!(err instanceof BookingUnavailableError)) {
@@ -173,7 +209,7 @@ export function BookingWizard({
   const progress = ((stepIndex(step) + 1) / steps.length) * 100;
 
   return (
-    <div className={styles.screen}>
+    <div ref={rootRef} className={`${styles.screen} ${chromeless ? styles.screenEmbedded : ""}`}>
       {!chromeless && (
         <header className={styles.header}>
           <span className={styles.logo} style={{ background: branding.primaryColor }}>
@@ -316,9 +352,9 @@ export function BookingWizard({
               <div className={styles.timeGrid}>
                 {slots.map((slot) => (
                   <button
-                    key={`${slot.time}-${slot.staffId}`}
+                    key={slot.time}
                     type="button"
-                    className={`${styles.timeSlot} ${selectedSlot?.time === slot.time && selectedSlot?.staffId === slot.staffId ? styles.timeSlotSelected : ""}`}
+                    className={`${styles.timeSlot} ${selectedSlot?.time === slot.time ? styles.timeSlotSelected : ""}`}
                     onClick={() => {
                       setSelectedSlot(slot);
                       goTo("details");
@@ -345,7 +381,10 @@ export function BookingWizard({
               <span className={styles.summaryLine}>{getServiceLabel(selectedService, locale)}</span>
               <span className={styles.summaryLineMuted}>
                 {formatDate(new Date(selectedDate + "T00:00:00"), locale, { dateStyle: "medium" })} ·{" "}
-                {selectedSlot.time} · {getStaffLabel(selectedSlot.staffName, youLabel)}
+                {selectedSlot.time} ·{" "}
+                {selectedStaffId === "any"
+                  ? booking.anyStaff
+                  : getStaffLabel(selectedSlot.staffName, youLabel)}
               </span>
             </div>
 
@@ -402,22 +441,40 @@ export function BookingWizard({
           </>
         )}
 
-        {step === "confirmation" && selectedService && selectedSlot && (
+        {step === "confirmation" && selectedService && result && (
           <>
             <span className={styles.confirmationIcon}>
               <Icon name="check" size={26} />
             </span>
             <h1 className={styles.stepTitle}>{booking.confirmationTitle}</h1>
-            <p className={styles.confirmationDescription}>
-              {booking.confirmationDescription.replace("{email}", email)}
-            </p>
-            <div className={styles.summaryCard}>
-              <span className={styles.summaryLine}>{getServiceLabel(selectedService, locale)}</span>
-              <span className={styles.summaryLineMuted}>
-                {formatDate(new Date(selectedDate + "T00:00:00"), locale, { dateStyle: "full" })} ·{" "}
-                {selectedSlot.time}
-              </span>
-            </div>
+            <p className={styles.confirmationDescription}>{booking.confirmationThanks}</p>
+            <dl className={styles.summaryCard}>
+              <div className={styles.summaryRow}>
+                <dt>{booking.businessLabel}</dt>
+                <dd>{branding.businessName}</dd>
+              </div>
+              <div className={styles.summaryRow}>
+                <dt>{booking.serviceLabel}</dt>
+                <dd>{getServiceLabel(selectedService, locale)}</dd>
+              </div>
+              <div className={styles.summaryRow}>
+                <dt>{booking.specialistLabel}</dt>
+                <dd>{getStaffLabel(result.staffName, youLabel)}</dd>
+              </div>
+              <div className={styles.summaryRow}>
+                <dt>{booking.dateTimeLabel}</dt>
+                <dd>
+                  {formatDate(new Date(result.date + "T00:00:00"), locale, { dateStyle: "full" })} ·{" "}
+                  {result.time}
+                </dd>
+              </div>
+              <div className={styles.summaryRow}>
+                <dt>{booking.statusLabel}</dt>
+                <dd>
+                  {result.status === "confirmed" ? booking.statusConfirmed : booking.statusPending}
+                </dd>
+              </div>
+            </dl>
             <Button
               fullWidth
               onClick={() => {
@@ -425,6 +482,7 @@ export function BookingWizard({
                 setSelectedServiceId(null);
                 setSelectedStaffId("any");
                 setSelectedSlot(null);
+                setResult(null);
                 setName("");
                 setEmail("");
                 setPhone("");
@@ -435,7 +493,11 @@ export function BookingWizard({
             >
               {booking.bookAnother}
             </Button>
-            {!identity && (
+            {identity ? (
+              <Link href="/client/bookings" className={styles.createAccountLink}>
+                {booking.myBookingsLink}
+              </Link>
+            ) : (
               <a href={`/client/signup?redirect=/client/bookings`} className={styles.createAccountLink}>
                 {client.createAccountPrompt}
               </a>

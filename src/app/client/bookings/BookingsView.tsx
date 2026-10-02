@@ -6,7 +6,9 @@ import { Icon } from "@/components/ui";
 import { StatusBadge } from "@/components/calendar/StatusBadge";
 import { useClientAuth } from "@/features/clientAuth/useClientAuth";
 import { listMyBookings, type ClientBookingRow } from "@/features/publicBooking/myBookings";
-import { getClientAvailableSlots, type AvailableSlot } from "@/features/publicBooking/availability";
+import { getPublicBookingService } from "@/features/publicBooking/bookingService";
+import type { AvailableSlot } from "@/features/appointments/availability";
+import { findServiceFor } from "@/features/appointments/identity";
 import { getAppointmentsRepository } from "@/features/appointments/repository";
 import { getWorkspaceConfig } from "@/features/workspace/registry";
 import { resolveServiceLabel } from "@/features/services/label";
@@ -290,8 +292,10 @@ function ReschedulePanel({
   const { appointment } = row;
   const dateStrip = buildDateStrip();
   const workspace = getWorkspaceConfig(row.workspaceSlug);
-  const service = workspace.services.find((s) => s.name === appointment.service);
-  const staffMember = workspace.staff.find((s) => s.name === appointment.staff);
+  const service = findServiceFor(appointment, workspace.services);
+  const staffMember = workspace.staff.find((s) =>
+    appointment.staffId ? s.id === appointment.staffId : s.name === appointment.staff,
+  );
 
   const [selectedDate, setSelectedDate] = useState(dateStrip[0]);
   const [slots, setSlots] = useState<AvailableSlot[]>([]);
@@ -303,7 +307,8 @@ function ReschedulePanel({
     if (!service) return;
     setLoading(true);
     setSelectedSlot(null);
-    getClientAvailableSlots(row.workspaceSlug, service.id, staffMember?.id ?? null, selectedDate)
+    getPublicBookingService()
+      .getAvailableSlots(row.workspaceSlug, service.id, staffMember?.id ?? null, selectedDate)
       .then(setSlots)
       .finally(() => setLoading(false));
   }, [row.workspaceSlug, service, staffMember, selectedDate]);
@@ -315,6 +320,7 @@ function ReschedulePanel({
       date: selectedDate,
       time: selectedSlot.time,
       staff: selectedSlot.staffName,
+      staffId: selectedSlot.staffId,
       resourceId: selectedSlot.resourceId,
     });
     setSaving(false);

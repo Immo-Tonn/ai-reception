@@ -2,6 +2,35 @@
 
 ---
 
+## ТЕКУЩАЯ ЗАДАЧА — Booking / Distribution Fix Pass (ветка `fix/booking-distribution-foundation`) ✅ ГОТОВО К РЕВЬЮ
+
+> **ВАЖНО для команды.** Public Booking UX/Distribution foundation готов, но production cross-device persistence требует shared backend. До интеграции backend запись, созданная в браузере клиента, не является общей записью бизнеса.
+
+**Что исправлено**
+- Availability: «любой специалист» больше не дублирует время (`uniqueSlotTimes` + `pickSlot` в `features/appointments/availability.ts`); прошедшее время сегодня не предлагается (`notBefore` — часы подаёт вызывающий код; он же — точка для будущего lead-time).
+- Неизвестный slug на `/book/*` и `/book/*/embed` → 404 (`findWorkspaceConfig`, без fallback на Salon). `getWorkspaceConfig` с fallback остаётся только для авторизованного app-shell. `/embed-demo` теперь использует `demo-salon`.
+- Embed security: `next.config.ts` — `frame-ancestors 'self'` + `X-Frame-Options: SAMEORIGIN` для всех страниц, кроме `/book/<slug>/embed` (там `frame-ancestors *`, без X-Frame-Options). postMessage: родитель принимает resize только от origin приложения И от окна своего iframe; iframe шлёт только на известный origin родителя (ancestorOrigins/referrer/«hello»), без `"*"` (`features/embed/messages.ts`, зеркало в `public/embed.js`).
+- Distribution UI: Settings → «Online booking»: публичная ссылка, ссылка для кнопки на сайте (`?source=website`), embed-snippet, QR (PNG/SVG), Copy. Все варианты ведут в `/book/[slug]`; QR кодирует ровно публичную ссылку. Новая зависимость: `qrcode` (+ `@types/qrcode`).
+- Public base URL — один helper `lib/config/publicBaseUrl.ts`: `NEXT_PUBLIC_APP_URL` → `VERCEL_PROJECT_PRODUCTION_URL` → `VERCEL_URL` → localhost (только локально) → «не настроено». Ссылки строит только `features/distribution/urls.ts`. Имя ENV — в `.env.example` (без значения; `.gitignore` теперь пропускает `.env.example`).
+- Booking write path: единая граница `PublicBookingService` (`features/publicBooking/bookingService.ts`); общие правила — `bookingRules.ts` (find-or-create клиента по email ИЛИ телефону, pending/normal/main, ids). Адаптер сейчас один — `localDemoBookingService.ts` (localStorage). `server/services/publicBooking.service.ts` использует те же правила, UI его по-прежнему не вызывает (будущий backend-адаптер). Старые `createBooking.ts` / `publicBooking/availability.ts` удалены.
+- Stable IDs: `Appointment.clientId/serviceId/staffId` (optional, обратная совместимость). Конфликты и буферы идут по id, имя — fallback только для старых записей (`features/appointments/identity.ts`). Локальный репозиторий backfill-ит staffId/serviceId в памяти, хранимые данные не переписываются. «Мои записи» и карточка клиента связывают по `clientId`. Календарная форма и перенос сохраняют ids. Профили рабочих часов по-прежнему ключуются именем (`checkAvailability(ownerId, …, ownerAlias)` матчит id, затем имя).
+- Success screen: бизнес, услуга, специалист, дата/время, статус; ссылка «Мои записи» только если есть client identity; ложное «мы отправили подтверждение» не используется (новый ключ `booking.confirmationThanks`).
+- Embed UX: фиксированные 640px убраны — высота по resize-сообщению, но не выше 90% окна; дефолтные тексты кнопки/закрытия на DE/EN/UK/RU (по `data-locale` → `<html lang>` → язык браузера).
+- Тесты: +37 (any-staff, past slots, unknown slug, clientId, staff-id conflicts, граница бронирования, embed-сообщения, URL, заголовки).
+
+**Осталось зависеть от shared backend (намеренно не делали)**
+- Реальная общая запись: адаптер вместо `localDemoBookingService` (HTTP/Supabase). Пока запись лежит в localStorage посетителя и бизнес её не увидит.
+- Часовой пояс workspace; серверный `notBefore` (сервер в UTC) — не передаётся намеренно.
+- Рабочие часы per-workspace (сейчас глобальный `demoWorkingHours`, ключи — имена) и миграция id в БД; backfill `clientId` для старых записей; Analytics всё ещё группирует по именам.
+- Allow-list доменов для embed на workspace (сейчас `frame-ancestors *` только для embed-страницы).
+- Резервирование слота на сервере, анти-спам/rate limit публичной брони.
+- `NEXT_PUBLIC_APP_URL` нужно выставить в Vercel (иначе берётся Vercel URL).
+
+**Sa-Ev не трогали** (ничего не мёржили/черри-пикали; Supabase не подключали). Google Calendar / Google Sign-In не начинали.
+**Следующий архитектурный этап:** Integration Foundation (Auth abstraction + External Calendar Foundation). Точка подключения `externalBusyIntervals` — `computeAvailableSlots` (комментарий в файле).
+
+---
+
 ## ТЕКУЩАЯ ЗАДАЧА — Back navigation + Native mobile (Expo) foundation ✅ ЗАВЕРШЕНО
 
 Две части: (1) единый contextual Back pattern на secondary/flow экранах

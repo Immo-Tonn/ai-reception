@@ -1,5 +1,6 @@
 "use client";
 
+import { belongsToClient } from "@/features/appointments/identity";
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/ui";
 import { useClients } from "@/features/clients/useClients";
@@ -45,7 +46,7 @@ export function ClientDetailView({
 
   const today = localIsoDate(new Date());
   const clientAppointments = useMemo(
-    () => (client ? appointments.filter((a) => a.client === client.name) : []),
+    () => (client ? appointments.filter((a) => belongsToClient(a, client)) : []),
     [appointments, client],
   );
   const upcoming = useMemo(

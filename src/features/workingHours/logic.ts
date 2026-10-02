@@ -26,8 +26,15 @@ export function checkAvailability(
   time: string,
   durationMinutes: number,
   profiles: WorkingHoursProfile[],
+  ownerAlias?: string,
 ): AvailabilityCheck {
-  const profile = profiles.find((p) => p.ownerId === ownerId) ?? profiles.find((p) => p.ownerId === "business");
+  // `ownerId` is the stable staff id; `ownerAlias` (the staff display name)
+  // only exists so demo profiles keyed by name keep matching until working
+  // hours are stored per workspace against real staff ids.
+  const profile =
+    profiles.find((p) => p.ownerId === ownerId) ??
+    (ownerAlias ? profiles.find((p) => p.ownerId === ownerAlias) : undefined) ??
+    profiles.find((p) => p.ownerId === "business");
   if (!profile) return { available: true };
 
   const start = toMinutes(time);

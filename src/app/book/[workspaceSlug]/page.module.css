@@ -6,6 +6,13 @@
   background: var(--color-paper);
 }
 
+/* Inside an iframe, 100dvh is the iframe's own height — a min-height of that
+   would keep the document at least as tall as the frame and the resize
+   message could never shrink it. Let the content define the height. */
+.screenEmbedded {
+  min-height: 0;
+}
+
 /* flex-wrap lets Preferences (language + theme switchers in headerRight)
    drop to its own row on narrow phones instead of squeezing businessName
    down to a couple of characters — the actual cause of "Beauty ..."
@@ -332,6 +339,28 @@
   border-left: 3px solid var(--color-accent-blue);
   background: var(--color-surface);
   margin-bottom: var(--space-5);
+}
+
+/* Confirmation summary: label/value rows that stack on narrow phones. */
+.summaryRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  justify-content: space-between;
+  padding: var(--space-1) 0;
+  margin: 0;
+}
+
+.summaryRow dt {
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+}
+
+.summaryRow dd {
+  margin: 0;
+  font-weight: var(--font-weight-medium);
+  text-align: end;
+  overflow-wrap: anywhere;
 }
 
 .summaryLine {

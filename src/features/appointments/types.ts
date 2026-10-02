@@ -32,9 +32,21 @@ export interface RecurrenceRule {
 
 export interface Appointment {
   id: string;
+  /** Display name — NOT an identity. Use `clientId` for linking. */
   client: string;
+  /** Display name — NOT an identity. Use `serviceId` for matching. */
   service: string;
+  /** Display name — NOT an identity. Use `staffId` for matching. */
   staff: string;
+  /**
+   * Stable references (optional for backward compatibility: records saved
+   * to localStorage before these existed have only the display names above,
+   * and the helpers in `identity.ts` fall back to name matching for them).
+   * New appointments always set all three where the entity is known.
+   */
+  clientId?: string;
+  serviceId?: string;
+  staffId?: string;
   resourceId: string | null;
   date: string; // ISO date, e.g. "2026-09-22"
   time: string; // "HH:mm"

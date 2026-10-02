@@ -37,11 +37,20 @@ export function MoveAppointmentSheet({
 
   if (!appointment) return null;
 
-  const availability = checkAvailability(appointment.staff, date, time, appointment.durationMinutes, workingHours);
+  const availability = checkAvailability(
+    appointment.staffId ?? appointment.staff,
+    date,
+    time,
+    appointment.durationMinutes,
+    workingHours,
+    appointment.staff,
+  );
   const conflict = findConflicts(
     {
       id: appointment.id,
       staff: appointment.staff,
+      staffId: appointment.staffId,
+      serviceId: appointment.serviceId,
       resourceId: appointment.resourceId,
       date,
       time,

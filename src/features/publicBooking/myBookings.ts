@@ -1,7 +1,8 @@
 import { demoWorkspaces } from "@/features/workspace/registry";
 import { getAppointmentsRepository } from "@/features/appointments/repository";
 import { getClientsRepository } from "@/features/clients/repository";
-import { normalizeEmail, normalizePhone } from "./createBooking";
+import { normalizeEmail, normalizePhone } from "./bookingRules";
+import { belongsToClient } from "@/features/appointments/identity";
 import type { Appointment } from "@/features/appointments/types";
 import type { ClientIdentity } from "@/features/clientAuth/types";
 
@@ -37,7 +38,7 @@ export async function listMyBookings(identity: ClientIdentity): Promise<ClientBo
 
       const appointments = await getAppointmentsRepository(workspace.slug).list();
       return appointments
-        .filter((a) => a.client === match.name)
+        .filter((a) => belongsToClient(a, match))
         .map((appointment): ClientBookingRow => ({
           workspaceSlug: workspace.slug,
           workspaceName: workspace.name,

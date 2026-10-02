@@ -7,18 +7,28 @@ import {
 } from "@/server/repository/registry";
 import { publicBookingSchema, type PublicBookingInput } from "@/server/validation/availability.schema";
 import { getAvailableSlots } from "./availability.service";
+import { pickSlot } from "@/features/appointments/availability";
 import type { Appointment } from "@/features/appointments/types";
-import type { ClientRecord } from "@/features/clients/types";
+import {
+  BookingUnavailableError,
+  buildNewClientRecord,
+  buildPublicAppointment,
+  buildPublicBookingAuditSummary,
+  matchExistingClient,
+} from "@/features/publicBooking/bookingRules";
 
-export class BookingUnavailableError extends Error {
-  constructor() {
-    super("That time is no longer available. Please pick another slot.");
-    this.name = "BookingUnavailableError";
-  }
+export { BookingUnavailableError };
+
+function newId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 /**
- * The public-facing booking write path (§2/§3 Public Booking). No
+ * The server-side booking write path — currently NOT called by any UI
+ * (the wizard goes through `PublicBookingService`, whose only adapter is
+ * the browser-local demo one). It is the intended body of the future
+ * shared-backend adapter and already shares all rules with it via
+ * `bookingRules`. No
  * `Session`/role on purpose — an anonymous website visitor calls this.
  * It can only ever produce a NORMAL-visibility, MAIN-bucket, pending
  * appointment: a stranger booking a haircut can never create a private
@@ -33,69 +43,40 @@ export async function createPublicBooking(
   // Re-check availability at write time — the slot list the browser saw
   // may be stale (someone else booked it a second ago).
   const slots = await getAvailableSlots(workspaceId, data.serviceId, data.staffId, data.date);
-  const chosenSlot = data.staffId
-    ? slots.find((s) => s.time === data.time && s.staffId === data.staffId)
-    : slots.find((s) => s.time === data.time);
+  const chosenSlot = pickSlot(slots, data.time, data.staffId);
   if (!chosenSlot) throw new BookingUnavailableError();
 
   const servicesRepo = getServerServicesRepository(workspaceId);
   const service = (await servicesRepo.list()).find((s) => s.id === data.serviceId);
   if (!service) throw new BookingUnavailableError();
 
-  // Find-or-create the client by email, same as a staff member would do
-  // manually — the public flow and the internal flow end up sharing one
-  // client list, not a shadow copy.
+  // Same find-or-create rules as the browser adapter (email OR phone,
+  // ambiguous -> new record) — shared via bookingRules, not re-implemented.
   const clientsRepo = getServerClientsRepository(workspaceId);
-  const existingClients = await clientsRepo.list();
-  let client = existingClients.find(
-    (c) => c.email.toLowerCase() === data.client.email.toLowerCase(),
-  );
+  let client = matchExistingClient(await clientsRepo.list(), data.client);
   if (!client) {
-    client = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      name: data.client.name,
-      email: data.client.email,
-      phone: data.client.phone,
-      tags: ["new"],
-      lastVisit: null,
-      upcoming: [],
-      history: [],
-      notes: "",
-    } satisfies ClientRecord;
+    client = buildNewClientRecord(newId(), data.client);
     await clientsRepo.create(client);
   }
 
-  const appointment: Appointment = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    client: client.name,
-    service: service.name,
-    staff: chosenSlot.staffName,
-    resourceId: chosenSlot.resourceId,
+  const appointment = buildPublicAppointment({
+    id: newId(),
+    service,
+    slot: chosenSlot,
     date: data.date,
     time: data.time,
-    durationMinutes: service.durationMinutes,
-    price: service.price,
-    currency: service.currency,
+    client,
     notes: data.client.notes,
-    visibility: "normal",
-    financialBucket: "main",
-    status: "pending",
-    paid: false,
-    seriesId: null,
-    recurrence: null,
-  };
+  });
 
-  const appointmentsRepo = getServerAppointmentsRepository(workspaceId);
-  await appointmentsRepo.create(appointment);
-
-  const auditRepo = getServerAuditLogRepository(workspaceId);
-  await auditRepo.create({
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  await getServerAppointmentsRepository(workspaceId).create(appointment);
+  await getServerAuditLogRepository(workspaceId).create({
+    id: newId(),
     timestamp: new Date().toISOString(),
     action: "created",
     entityType: "appointment",
     entityId: appointment.id,
-    summary: `Public booking: ${appointment.client} · ${appointment.service} · ${appointment.date} ${appointment.time}`,
+    summary: buildPublicBookingAuditSummary(appointment),
     source: "public",
   });
 

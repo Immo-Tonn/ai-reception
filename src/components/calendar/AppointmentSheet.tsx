@@ -95,6 +95,7 @@ export function AppointmentSheet({
   const isSeries = Boolean(initialValue?.seriesId);
 
   const [client, setClient] = useState(initialValue?.client ?? prefillClient ?? "");
+  const [selectedClientId, setSelectedClientId] = useState<string | undefined>(initialValue?.clientId);
   const [serviceName, setServiceName] = useState(initialValue?.service ?? services[0]?.name ?? "");
   const [staff, setStaff] = useState(initialValue?.staff ?? staffList[0]?.name ?? "");
   const [date, setDate] = useState(initialValue?.date ?? defaultDate ?? todayIso());
@@ -123,6 +124,7 @@ export function AppointmentSheet({
   const [saving, setSaving] = useState(false);
 
   const selectedService = services.find((s) => s.name === serviceName);
+  const selectedStaffId = staffList.find((s) => s.name === staff)?.id;
 
   // Keep duration/price in sync with the chosen service, but only when
   // creating — editing shouldn't silently overwrite a custom price.
@@ -144,9 +146,19 @@ export function AppointmentSheet({
     [resources, selectedService],
   );
 
-  const availability = checkAvailability(staff, date, time, duration, workingHours);
+  const availability = checkAvailability(selectedStaffId ?? staff, date, time, duration, workingHours, staff);
   const conflict = findConflicts(
-    { id: initialValue?.id ?? "new", staff, resourceId, date, time, durationMinutes: duration, service: serviceName },
+    {
+      id: initialValue?.id ?? "new",
+      staff,
+      staffId: selectedStaffId,
+      resourceId,
+      date,
+      time,
+      durationMinutes: duration,
+      service: serviceName,
+      serviceId: selectedService?.id,
+    },
     allAppointments,
     services,
   );
@@ -182,10 +194,18 @@ export function AppointmentSheet({
   }
 
   function buildBaseFields() {
+    // Prefer the id of the client the user actually picked; fall back to a
+    // name match only to link a typed name to an existing record.
+    const clientId =
+      clients.find((c) => c.id === selectedClientId && c.name === client)?.id ??
+      clients.find((c) => c.name === client)?.id;
     return {
       client,
+      ...(clientId ? { clientId } : {}),
       service: serviceName,
+      ...(selectedService ? { serviceId: selectedService.id } : {}),
       staff,
+      ...(selectedStaffId ? { staffId: selectedStaffId } : {}),
       resourceId,
       price,
       currency: "EUR",
@@ -216,11 +236,13 @@ export function AppointmentSheet({
           {
             id: "new",
             staff,
+            staffId: selectedStaffId,
             resourceId,
             date: occurrenceDate,
             time,
             durationMinutes: duration,
             service: serviceName,
+            serviceId: selectedService?.id,
           },
           [...allAppointments, ...created],
           services,
@@ -355,7 +377,10 @@ export function AppointmentSheet({
         <ClientPicker
           clients={clients}
           value={client}
-          onSelect={(selectedClient) => setClient(selectedClient.name)}
+          onSelect={(selectedClient) => {
+            setClient(selectedClient.name);
+            setSelectedClientId(selectedClient.id);
+          }}
           onCreateClient={onCreateClient}
           messages={messages}
           clientLabelOverride={clientLabelOverride}

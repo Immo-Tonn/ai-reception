@@ -1,0 +1,143 @@
+.section {
+  margin-top: var(--space-8);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-border);
+}
+
+.sectionTitle {
+  font-size: var(--font-size-h2, 1.25rem);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-1);
+  overflow-wrap: anywhere;
+}
+
+.sectionDescription {
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+  margin-bottom: var(--space-5);
+}
+
+.block {
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.blockLabel {
+  display: block;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: 2px;
+}
+
+.blockHint {
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+  margin-bottom: var(--space-3);
+}
+
+/* Stacks on narrow phones (375–440): field full-width, button below. */
+.copyRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+@media (min-width: 560px) {
+  .copyRow {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+}
+
+.field {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+}
+
+.fieldMultiline {
+  resize: none;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.copyButton {
+  flex-shrink: 0;
+  min-height: 44px;
+}
+
+.status {
+  min-height: 1.2em;
+  margin-top: var(--space-1);
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+}
+
+.qrRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* Always white behind the QR, in both themes — scanners need the contrast. */
+.qrTile {
+  width: 192px;
+  height: 192px;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.qrImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.qrActions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.qrActions button {
+  min-height: 44px;
+}
+
+.notice {
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: var(--font-size-small);
+}
+
+.noticeTitle {
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-1);
+}
+
+.noticeInline {
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+  margin-bottom: var(--space-2);
+}
+
+.demoNote {
+  margin-top: var(--space-4);
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+}
