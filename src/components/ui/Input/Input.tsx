@@ -26,6 +26,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           .join(" ")}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${inputId}-error` : undefined}
+        // Chrome for iOS tags inputs with `__gcruniqueid` before hydration (attribute-only, this element only).
+        suppressHydrationWarning
         {...props}
       />
       {error ? (

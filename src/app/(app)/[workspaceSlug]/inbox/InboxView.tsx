@@ -5,6 +5,8 @@ import { Icon } from "@/components/ui";
 import { useConversations } from "@/features/inbox/useConversations";
 import type { Conversation, ConversationChannel, ConversationStatus } from "@/features/inbox/types";
 import type { Locale, Messages } from "@/lib/i18n";
+import { useWorkspaceTimeZone, useWorkspaceToday } from "@/features/workspace/WorkspaceCatalog";
+import { resolveToday } from "@/lib/time/zonedTime";
 import { formatDate, formatTime } from "@/lib/i18n/format";
 import styles from "./page.module.css";
 
@@ -36,6 +38,8 @@ export function InboxView({
   messages: Messages["inbox"];
 }) {
   const { items: conversations } = useConversations(workspaceSlug);
+  const timeZone = useWorkspaceTimeZone(workspaceSlug);
+  const today = useWorkspaceToday(workspaceSlug);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
 
@@ -78,8 +82,7 @@ export function InboxView({
 
   function formatTimestamp(conversation: Conversation) {
     const date = new Date(conversation.lastMessageAt);
-    const today = new Date();
-    const isToday = date.toDateString() === today.toDateString();
+    const isToday = resolveToday(date, timeZone) === today;
     return isToday
       ? formatTime(date, locale)
       : formatDate(date, locale, { month: "short", day: "numeric" });
@@ -95,7 +98,7 @@ export function InboxView({
         <span className={styles.searchIcon}>
           <Icon name="search" size={18} />
         </span>
-        <input
+        <input suppressHydrationWarning
           type="search"
           className={styles.searchInput}
           placeholder={messages.searchPlaceholder}

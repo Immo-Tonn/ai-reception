@@ -5,6 +5,7 @@ import { getRequestLocale } from "@/lib/i18n/next";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
 import { BackLink } from "@/components/ui";
 import { demoWorkspaces } from "@/features/workspace/registry";
+import { loadDiscoverableBusinesses } from "@/server/booking/discovery.service";
 import styles from "../client.module.css";
 
 export const metadata: Metadata = {
@@ -22,7 +23,18 @@ export const metadata: Metadata = {
  * action (`/client`), not from root — the neutral root never shows this
  * picker directly (§ discovery lives one level under the intro).
  */
-export default async function ClientDiscoverPage() {
+export default async function ClientDiscoverPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ demo?: string }>;
+}) {
+  // Demo businesses are developer/demo material: shown only on an explicit
+  // `?demo=1` entry, never mixed into the normal client flow. Real discovery
+  // (businesses that opted in to a public listing) needs a publication flag
+  // that does not exist yet, so the normal view lists nothing.
+  const showDemo = (await searchParams).demo === "1";
+  // Real directory and demo list are exclusive: demo never touches Supabase.
+  const real = showDemo ? [] : await loadDiscoverableBusinesses();
   const locale = await getRequestLocale();
   const { client, common } = getMessages(locale);
 
@@ -34,10 +46,33 @@ export default async function ClientDiscoverPage() {
       </div>
       <div className={styles.body}>
         <h1 className={styles.title}>{client.entryTitle}</h1>
-        <p className={styles.subtitle}>{client.entrySubtitle}</p>
+        <p className={styles.subtitle}>{showDemo ? client.entrySubtitle : real.length > 0 ? client.entrySubtitleReal : client.discoveryNone}</p>
 
-        <div className={styles.businessList}>
-          {demoWorkspaces.map((workspace) => (
+        <div className={styles.businessList} role="list">
+          {real.map((b) => (
+            <Link key={b.slug} href={`/book/${b.slug}`} className={styles.businessCard} role="listitem">
+              <span className={styles.businessInitial} aria-hidden="true">
+                {[...b.name][0]?.toUpperCase()}
+              </span>
+              <span className={styles.businessBody}>
+                <span className={styles.businessName}>{b.name}</span>
+                {b.city || b.country ? (
+                  <>
+                    <br />
+                    <span className={styles.businessTagline}>{[b.city, b.country].filter(Boolean).join(", ")}</span>
+                  </>
+                ) : null}
+                {b.description ? (
+                  <>
+                    <br />
+                    <span className={styles.businessTagline}>{b.description.slice(0, 140)}</span>
+                  </>
+                ) : null}
+              </span>
+              <span className={styles.businessCta}>{client.entryCta}</span>
+            </Link>
+          ))}
+          {(showDemo ? demoWorkspaces : []).map((workspace) => (
             <Link key={workspace.slug} href={`/book/${workspace.slug}`} className={styles.businessCard}>
               <span className={styles.businessEmoji} aria-hidden="true">
                 {workspace.emoji}
@@ -54,7 +89,7 @@ export default async function ClientDiscoverPage() {
           ))}
         </div>
 
-        <p className={styles.demoNote}>{client.demoDataNote}</p>
+        {showDemo ? <p className={styles.demoNote}>{client.demoDataNote}</p> : null}
       </div>
     </main>
   );

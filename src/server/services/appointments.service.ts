@@ -61,6 +61,7 @@ async function checkBusinessRules(
     "id" | "staff" | "resourceId" | "date" | "time" | "durationMinutes" | "service"
   > &
     Partial<Pick<Appointment, "staffId" | "serviceId">>,
+  options: { rejectInactiveService?: boolean } = {},
 ) {
   const [existing, services, staffList, workingHours] = await Promise.all([
     getServerAppointmentsRepository(session.workspaceId).list(),
@@ -72,6 +73,10 @@ async function checkBusinessRules(
   const service =
     services.find((s) => (candidate.serviceId ? s.id === candidate.serviceId : s.name === candidate.service)) ??
     ({ id: candidate.serviceId ?? "", name: candidate.service, durationMinutes: candidate.durationMinutes } as const);
+  // A new booking (or a changed service) must not use an archived service.
+  if (options.rejectInactiveService && "active" in service && service.active === false) {
+    throw new BusinessRuleError("This service is no longer offered.", "service_inactive");
+  }
   const staff =
     staffList.find((s) => (candidate.staffId ? s.id === candidate.staffId : s.name === candidate.staff)) ??
     ({ id: candidate.staffId ?? candidate.staff, name: candidate.staff } as const);
@@ -133,7 +138,7 @@ export async function createAppointment(
     time: data.time,
     durationMinutes: data.durationMinutes,
     service: data.service,
-  });
+  }, { rejectInactiveService: true });
 
   const draft: Appointment = {
     ...data,
@@ -180,6 +185,9 @@ export async function updateAppointment(
     time: merged.time,
     durationMinutes: merged.durationMinutes,
     service: merged.service,
+  }, {
+    // Editing an old appointment keeps its (possibly archived) service; only picking another one is checked.
+    rejectInactiveService: merged.serviceId !== before.serviceId || merged.service !== before.service,
   });
 
   const updated = await writeOrConflict(() => repo.update(id, patch));

@@ -16,7 +16,7 @@ import { useAuditLog } from "@/features/auditLog/useAuditLog";
 import { useWaitingList } from "@/features/waitingList/useWaitingList";
 import { matchWaitingList } from "@/features/waitingList/matching";
 import type { Appointment, AppointmentStatus } from "@/features/appointments/types";
-import { useWorkspaceConfig, useWorkspaceWorkingHours } from "@/features/workspace/WorkspaceCatalog";
+import { useWorkspaceConfig, useWorkspaceTimeZone, useWorkspaceToday, useWorkspaceWorkingHours } from "@/features/workspace/WorkspaceCatalog";
 import { useClients } from "@/features/clients/useClients";
 import { resolveServiceLabel } from "@/features/services/label";
 import { getStaffLabel } from "@/features/staff/label";
@@ -102,7 +102,13 @@ export function CalendarView({
   const { items: waitingListEntries } = useWaitingList(workspaceSlug);
   const { items: clients, create: createClient } = useClients(workspaceSlug);
 
-  const [selectedDate, setSelectedDate] = useState(searchParams.get("date") ?? "2026-09-22");
+  // Real workspace: opens on the workspace-local today (same as Today).
+  // Demo workspaces keep their seeded demo day.
+  const workspaceToday = useWorkspaceToday(workspaceSlug);
+  const isRealWorkspace = useWorkspaceTimeZone(workspaceSlug) !== null;
+  const [selectedDate, setSelectedDate] = useState(
+    searchParams.get("date") ?? (isRealWorkspace ? workspaceToday : "2026-09-22"),
+  );
   const [staffFilter, setStaffFilter] = useState<string>("all");
   const [desktopView, setDesktopView] = useState<DesktopView>("day");
 
@@ -478,6 +484,7 @@ export function CalendarView({
             )}
             weekdaysShort={calendar.weekdaysShort}
             dashboardMessages={dashboard}
+            today={workspaceToday}
             onSelectDay={(date) => {
               setSelectedDate(date);
               setDesktopView("day");
@@ -587,6 +594,7 @@ export function CalendarView({
             )}
             weekdaysShort={calendar.weekdaysShort}
             dashboardMessages={dashboard}
+            today={workspaceToday}
             onSelectDay={(date) => {
               setSelectedDate(date);
               setDesktopView("day");
@@ -621,6 +629,7 @@ export function CalendarView({
         recurrenceMessages={recurrence}
         initialValue={editing}
         defaultDate={selectedDate}
+        today={workspaceToday}
         allAppointments={appointments}
         services={demoServices}
         staffList={demoStaff}

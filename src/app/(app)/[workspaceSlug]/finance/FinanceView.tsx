@@ -8,6 +8,7 @@ import { calculateRevenue, calculateOutstanding } from "@/features/finance/calcu
 import { useAuditLog } from "@/features/auditLog/useAuditLog";
 import { useClients } from "@/features/clients/useClients";
 import { getWorkspaceConfig } from "@/features/workspace/registry";
+import { useWorkspaceToday } from "@/features/workspace/WorkspaceCatalog";
 import type { Invoice } from "@/features/finance/types";
 import type { FinancialBucket } from "@/features/appointments/types";
 import type { Locale, Messages } from "@/lib/i18n";
@@ -39,6 +40,7 @@ export function FinanceView({
   const { items: invoices, create, update } = useInvoices(workspaceSlug);
   const { items: clients } = useClients(workspaceSlug);
   const { log } = useAuditLog(workspaceSlug);
+  const today = useWorkspaceToday(workspaceSlug);
   const [filter, setFilter] = useState<"all" | FinancialBucket>("all");
   const [sheetOpen, setSheetOpen] = useState(searchParams.get("create") === "invoice");
   // Store only the id and derive the live object from `invoices` on every
@@ -249,6 +251,7 @@ export function FinanceView({
         onSave={handleSaveInvoice}
         messages={messages}
         appointmentMessages={appointmentMessages}
+        today={today}
       />
 
       <NewInvoiceSheet
@@ -259,6 +262,7 @@ export function FinanceView({
         messages={messages}
         appointmentMessages={appointmentMessages}
         initialValue={editingInvoice}
+        today={today}
       />
     </main>
   );

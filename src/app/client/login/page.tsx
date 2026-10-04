@@ -1,8 +1,10 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
 import { BackLink } from "@/components/ui";
+import { sanitizeClientRedirect } from "@/features/clientAccount/redirect";
 import { LoginForm } from "./LoginForm";
 import styles from "../client.module.css";
 
@@ -10,9 +12,14 @@ export const metadata: Metadata = {
   title: "Sign in — ServiceOS",
 };
 
-export default async function ClientLoginPage() {
+export default async function ClientLoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirect?: string | string[] }>;
+}) {
+  const redirect = sanitizeClientRedirect((await searchParams).redirect);
   const locale = await getRequestLocale();
-  const { client, common } = getMessages(locale);
+  const { client, common, authErrors } = getMessages(locale);
 
   return (
     <main className={styles.screen}>
@@ -23,12 +30,17 @@ export default async function ClientLoginPage() {
       <div className={styles.body}>
         <h1 className={styles.title}>{client.loginTitle}</h1>
         <p className={styles.subtitle}>{client.loginSubtitle}</p>
-        <LoginForm messages={client} />
+        <LoginForm
+          messages={client}
+          errors={authErrors}
+          passwordLabels={{ show: common.showPassword, hide: common.hidePassword }}
+          redirect={redirect}
+        />
         <p className={styles.promptRow}>
           {client.businessPrompt}{" "}
-          <a href="/business" className={styles.promptLink}>
+          <Link href="/business" className={styles.promptLink}>
             {client.businessLink}
-          </a>
+          </Link>
         </p>
       </div>
     </main>

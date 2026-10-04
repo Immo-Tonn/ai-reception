@@ -27,7 +27,8 @@ export async function loadWorkspaceCatalog(session: Session, slug: string): Prom
     slug,
     name: (workspace.data?.name as string | undefined) ?? slug,
     timezone: (workspace.data?.timezone as string | undefined) ?? "Europe/Berlin",
-    services,
+    // Archived services are not offered for new appointments; old appointments keep their name.
+    services: services.filter((s) => s.active !== false),
     staff,
     resources,
     workingHours,

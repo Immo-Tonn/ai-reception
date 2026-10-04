@@ -110,6 +110,17 @@ describe("migrations — static policy checks", () => {
     }
   });
 
+  it("0016 only tightens: revokes from public/anon/authenticated, never grants; split policies are authenticated-only", () => {
+    const sql = sqlOf("0016_security_hardening.sql").replace(/--.*$/gm, "");
+    expect(sql).not.toMatch(/\bgrant\b/i);
+    expect(sql).not.toMatch(/\b(disable|no force) row level security\b/i);
+    for (const p of sql.match(/create policy[\s\S]*?;/gi) ?? []) {
+      expect(p.match(/\bto\s+([a-z_, ]+?)\s+(?:using|with\s+check)/i)?.[1].trim()).toBe("authenticated");
+      expect(p).not.toMatch(/\bfor all\b/i); // no policy may cover SELECT besides the *_select ones
+    }
+    expect(sql).toMatch(/alter extension btree_gist set schema extensions/i);
+  });
+
   it("0015 grants default privileges to the service role ONLY (never anon/authenticated) and changes no RLS", () => {
     const sql = sqlOf("0015_service_role_default_privileges.sql").replace(/--.*$/gm, "");
     const grants = sql.match(/grant[\s\S]*?;/gi) ?? [];
@@ -137,7 +148,7 @@ describe("service-role and secret hygiene", () => {
     expect(importers).toEqual([
       "src/lib/supabase/admin.ts",
       "src/server/auth/supabaseBusinessAuth.ts", // roll back a half-made sign-up
-      "src/server/booking/deps.ts", // guest booking (3 whitelisted DB functions)
+      "src/server/booking/deps.ts", // guest booking (3 whitelisted DB functions) + client directory listing (0017)
       "src/server/booking/pageData.ts", // public catalog for the booking page (same function)
       "src/server/ratelimit/index.ts", // PostgreSQL rate limiter
       "src/server/services/provisioning.service.ts", // provision_workspace

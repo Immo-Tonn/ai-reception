@@ -24,6 +24,8 @@ import type { ResourceDefinition } from "@/features/resources/types";
 import { getResourceLabel } from "@/features/resources/label";
 import type { WorkingHoursProfile } from "@/features/workingHours/types";
 import type { Locale, Messages } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n/I18nProvider";
+import { describeSaveError } from "@/lib/repository/describeSaveError";
 import styles from "./AppointmentSheet.module.css";
 
 export type AppointmentSaveResult =
@@ -52,13 +54,15 @@ interface AppointmentSheetProps {
   resources: ResourceDefinition[];
   workingHours: WorkingHoursProfile[];
   clients: ClientRecord[];
-  onCreateClient: (client: ClientRecord) => void;
+  onCreateClient: (client: ClientRecord) => Promise<ClientRecord | void> | void;
   prefillClient?: string;
   clientLabelOverride?: string;
   staffLabelOverride?: string;
   resourceLabelOverride?: string;
   noResourceLabelOverride?: string;
   youLabel: string;
+  /** Workspace-local today (YYYY-MM-DD); falls back to the browser date. */
+  today?: string;
 }
 
 function todayIso() {
@@ -90,6 +94,7 @@ export function AppointmentSheet({
   resourceLabelOverride,
   noResourceLabelOverride,
   youLabel,
+  today,
 }: AppointmentSheetProps) {
   const isEditing = Boolean(initialValue);
   const isSeries = Boolean(initialValue?.seriesId);
@@ -98,7 +103,7 @@ export function AppointmentSheet({
   const [selectedClientId, setSelectedClientId] = useState<string | undefined>(initialValue?.clientId);
   const [serviceName, setServiceName] = useState(initialValue?.service ?? services[0]?.name ?? "");
   const [staff, setStaff] = useState(initialValue?.staff ?? staffList[0]?.name ?? "");
-  const [date, setDate] = useState(initialValue?.date ?? defaultDate ?? todayIso());
+  const [date, setDate] = useState(initialValue?.date ?? defaultDate ?? today ?? todayIso());
   const [time, setTime] = useState(initialValue?.time ?? "09:00");
   const [duration, setDuration] = useState(
     initialValue?.durationMinutes ?? services[0]?.durationMinutes ?? 30,
@@ -120,7 +125,8 @@ export function AppointmentSheet({
   const [recurrenceIntervalDays, setRecurrenceIntervalDays] = useState(10);
   const [applyToSeries, setApplyToSeries] = useState(false);
   const [validationError, setValidationError] = useState(false);
-  const [saveError, setSaveError] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const { messages: allMessages } = useI18n();
   const [saving, setSaving] = useState(false);
 
   const selectedService = services.find((s) => s.name === serviceName);
@@ -218,7 +224,7 @@ export function AppointmentSheet({
   }
 
   async function handleSave() {
-    setSaveError(false);
+    setSaveError(null);
     if (!client.trim() || !staff) {
       setValidationError(true);
       return;
@@ -304,7 +310,7 @@ export function AppointmentSheet({
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error("Failed to save appointment", error);
-      setSaveError(true);
+      setSaveError(describeSaveError(error, allMessages.repositoryErrors));
     } finally {
       setSaving(false);
     }
@@ -388,7 +394,7 @@ export function AppointmentSheet({
 
         <div className={styles.field}>
           <label className={styles.label}>{messages.serviceLabel}</label>
-          <select
+          <select suppressHydrationWarning
             className={styles.select}
             value={serviceName}
             onChange={(event) => setServiceName(event.target.value)}
@@ -403,7 +409,7 @@ export function AppointmentSheet({
 
         <div className={styles.field}>
           <label className={styles.label}>{staffLabelOverride ?? messages.staffLabel}</label>
-          <select
+          <select suppressHydrationWarning
             className={styles.select}
             value={staff}
             onChange={(event) => setStaff(event.target.value)}
@@ -419,7 +425,7 @@ export function AppointmentSheet({
         {selectedService?.requiredResourceType && (
           <div className={styles.field}>
             <label className={styles.label}>{resourceLabelOverride ?? messages.resourceLabel}</label>
-            <select
+            <select suppressHydrationWarning
               className={styles.select}
               value={resourceId ?? ""}
               onChange={(event) => setResourceId(event.target.value || null)}
@@ -482,7 +488,7 @@ export function AppointmentSheet({
         <div className={styles.row2}>
           <div className={styles.field}>
             <label className={styles.label}>{messages.durationLabel}</label>
-            <select
+            <select suppressHydrationWarning
               className={styles.select}
               value={duration}
               onChange={(event) => setDuration(Number(event.target.value))}
@@ -530,7 +536,7 @@ export function AppointmentSheet({
         {!isEditing && (
           <div className={styles.section}>
             <span className={styles.sectionLabel}>{messages.recurrenceLabel}</span>
-            <select
+            <select suppressHydrationWarning
               className={styles.select}
               value={recurrenceFreq}
               onChange={(event) =>
@@ -572,7 +578,7 @@ export function AppointmentSheet({
 
         <div className={styles.field}>
           <label className={styles.label}>{messages.notesLabel}</label>
-          <textarea
+          <textarea suppressHydrationWarning
             className={styles.textarea}
             placeholder={messages.notesPlaceholder}
             value={notes}
@@ -646,7 +652,7 @@ export function AppointmentSheet({
           <div className={styles.warningCard}>
             <span className={styles.warningTitle}>
               <Icon name="close" size={14} />
-              {validationError ? messages.validationRequired : messages.saveError}
+              {validationError ? messages.validationRequired : saveError}
             </span>
           </div>
         )}

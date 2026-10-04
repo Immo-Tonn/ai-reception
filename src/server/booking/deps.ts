@@ -7,3 +7,8 @@ import type { PublicBookingDeps } from "./publicBooking.service";
 export function getPublicBookingDeps(): PublicBookingDeps {
   return { admin: createSupabaseAdminClient(), rateLimiter: getRateLimiter() };
 }
+
+/** Production wiring for the client directory (service role; only the 0017 listing function). */
+export function getDiscoveryDeps(): { admin: ReturnType<typeof createSupabaseAdminClient> } {
+  return { admin: createSupabaseAdminClient() };
+}

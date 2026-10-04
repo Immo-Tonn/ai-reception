@@ -52,7 +52,7 @@ export function CopyField({
       <p className={styles.blockHint}>{hint}</p>
       <div className={styles.copyRow}>
         {multiline ? (
-          <textarea
+          <textarea suppressHydrationWarning
             id={id}
             ref={fieldRef as React.RefObject<HTMLTextAreaElement>}
             className={`${styles.field} ${styles.fieldMultiline}`}
@@ -62,7 +62,7 @@ export function CopyField({
             onFocus={(e) => e.currentTarget.select()}
           />
         ) : (
-          <input
+          <input suppressHydrationWarning
             id={id}
             ref={fieldRef as React.RefObject<HTMLInputElement>}
             className={styles.field}

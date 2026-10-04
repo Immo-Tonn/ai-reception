@@ -22,7 +22,7 @@ export default async function EmbeddedBookingPage({
   const locale = await getRequestLocale();
   const { common, booking, client } = getMessages(locale);
   // Unknown slug = 404 inside (never another business's catalog).
-  const { branding, services, staff } = await loadPublicPageData(workspaceSlug);
+  const { branding, services, staff, profile, timezone } = await loadPublicPageData(workspaceSlug);
 
   return (
     <BookingWizard
@@ -31,6 +31,8 @@ export default async function EmbeddedBookingPage({
       booking={booking}
       client={client}
       branding={branding}
+      profile={profile}
+      timezone={timezone ?? null}
       services={services}
       staffList={staff}
       youLabel={common.you}

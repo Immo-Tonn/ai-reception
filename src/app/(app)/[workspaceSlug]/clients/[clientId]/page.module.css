@@ -19,6 +19,8 @@
 .backLink {
   display: inline-flex;
   align-items: center;
+  /* Touch target >= 44px. */
+  min-height: 44px;
   gap: var(--space-1);
   font-size: var(--font-size-small);
   color: var(--color-muted);
@@ -90,7 +92,7 @@
 
 .tab {
   flex-shrink: 0;
-  height: 40px;
+  height: 44px;
   padding: 0 var(--space-4);
   border-radius: var(--radius-pill);
   border: 1px solid var(--color-border);
@@ -209,4 +211,16 @@
 .customFieldValue {
   font-size: var(--font-size-body);
   color: var(--color-ink);
+}
+
+.editButton {
+  margin-inline-start: auto;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
 }

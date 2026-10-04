@@ -44,9 +44,6 @@ export default async function Home() {
           </Link>
         </div>
 
-        <a className={styles.tertiaryLink} href="/demo/today">
-          {home.ctaSecondary}
-        </a>
       </div>
     </main>
   );

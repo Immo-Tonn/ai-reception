@@ -19,6 +19,9 @@ import type { NextConfig } from "next";
  * unpredictably).
  */
 const nextConfig: NextConfig = {
+  // DEV ONLY (ignored by `next build`/production): lets a phone on the same Wi-Fi load the
+  // dev server by LAN address. Update if the Mac's LAN IP changes. Do not commit.
+  allowedDevOrigins: ["192.168.0.179"],
   async headers() {
     return [
       {

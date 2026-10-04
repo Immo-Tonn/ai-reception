@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { Button, Input } from "@/components/ui";
+import { Button, Input, PasswordInput } from "@/components/ui";
 import type { Messages } from "@/lib/i18n";
 import { signUpOwnerAction, type SignupState } from "./actions";
 import styles from "../login/page.module.css";
@@ -11,9 +11,11 @@ const initialState: SignupState = {};
 export function SignupForm({
   messages,
   errors,
+  passwordLabels,
 }: {
   messages: Messages["signup"];
   errors: Messages["authErrors"];
+  passwordLabels: { show: string; hide: string };
 }) {
   const [state, formAction, isPending] = useActionState(signUpOwnerAction, initialState);
 
@@ -27,7 +29,7 @@ export function SignupForm({
   }
 
   return (
-    <form className={styles.form} action={formAction}>
+    <form className={styles.form} action={formAction} suppressHydrationWarning>
       {state.error ? (
         <p className={styles.formError} role="alert">
           {errors[state.error]}
@@ -50,9 +52,10 @@ export function SignupForm({
         autoComplete="email"
         required
       />
-      <Input
+      <PasswordInput
         label={messages.passwordLabel}
-        type="password"
+        showLabel={passwordLabels.show}
+        hideLabel={passwordLabels.hide}
         name="password"
         placeholder="••••••••"
         autoComplete="new-password"

@@ -20,6 +20,17 @@ const items: NavEntry[] = [
   { key: "more", icon: "more", segment: "more" },
 ];
 
+/** Sections reachable only through the "More" page: More stays highlighted for them. */
+export const MORE_CHILD_SEGMENTS = [
+  "clients",
+  "work",
+  "finance",
+  "waiting-list",
+  "analytics",
+  "assistant",
+  "settings",
+];
+
 export function BottomNav({
   workspaceSlug,
   nav,
@@ -33,8 +44,15 @@ export function BottomNav({
   const base = `/${workspaceSlug}`;
   const [createOpen, setCreateOpen] = useState(false);
 
+  function isSegmentActive(segment: string) {
+    return pathname === `${base}/${segment}` || Boolean(pathname?.startsWith(`${base}/${segment}/`));
+  }
+
   function isActive(segment: string) {
-    return pathname === `${base}/${segment}` || pathname?.startsWith(`${base}/${segment}/`);
+    if (segment === "more") {
+      return isSegmentActive("more") || MORE_CHILD_SEGMENTS.some(isSegmentActive);
+    }
+    return isSegmentActive(segment);
   }
 
   const [today, calendar, inbox, more] = items;
@@ -87,7 +105,11 @@ function NavLink({
   label: string;
 }) {
   return (
-    <a href={`${base}/${item.segment}`} className={`${styles.item} ${active ? styles.itemActive : ""}`}>
+    <a
+      href={`${base}/${item.segment}`}
+      className={`${styles.item} ${active ? styles.itemActive : ""}`}
+      aria-current={active ? "page" : undefined}
+    >
       <Icon name={item.icon} size={22} />
       <span className={styles.itemLabel}>{label}</span>
     </a>

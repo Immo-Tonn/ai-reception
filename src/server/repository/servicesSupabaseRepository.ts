@@ -16,8 +16,8 @@ import { serviceFromRow, serviceToRow, type ServiceRow } from "./servicesMapper"
  * filters below are a second line of defense and keep queries index-friendly.
  * No service-role key is involved.
  *
- * `allowedStaffIds` is read from `service_staff` (separate query); writing it is not offered
- * yet (no UI sets it). `replaceAll` is deliberately unsupported: the old
+ * `allowedStaffIds` is read from and written to `service_staff` (separate queries, diffed so
+ * unchanged links are never touched). `replaceAll` is deliberately unsupported: the old
  * delete-then-insert approach is non-atomic and destructive.
  */
 const SELECT = "*";
@@ -29,6 +29,24 @@ async function withStaffLinks(client: SupabaseClient, rows: ServiceRow[]): Promi
   if (error) throw new Error("services.staff failed");
   const links = (data as { service_id: string; staff_id: string }[]) ?? [];
   return rows.map((r) => ({ ...r, service_staff: links.filter((l) => l.service_id === r.id).map((l) => ({ staff_id: l.staff_id })) }));
+}
+
+/** Makes `service_staff` for one service equal to `staffIds` (insert the missing, delete the removed). */
+async function syncStaffLinks(client: SupabaseClient, serviceId: string, staffIds: string[]): Promise<void> {
+  const { data, error } = await client.from("service_staff").select("staff_id").eq("service_id", serviceId);
+  if (error) throw new Error("services.staff failed");
+  const current = new Set(((data as { staff_id: string }[]) ?? []).map((l) => l.staff_id));
+  const wanted = new Set(staffIds);
+  const toAdd = [...wanted].filter((id) => !current.has(id));
+  const toRemove = [...current].filter((id) => !wanted.has(id));
+  if (toAdd.length > 0) {
+    const { error: addError } = await client.from("service_staff").insert(toAdd.map((staff_id) => ({ service_id: serviceId, staff_id })));
+    if (addError) throw new Error("services.staff failed");
+  }
+  if (toRemove.length > 0) {
+    const { error: delError } = await client.from("service_staff").delete().eq("service_id", serviceId).in("staff_id", toRemove);
+    if (delError) throw new Error("services.staff failed");
+  }
 }
 
 export function createSupabaseServicesRepository(
@@ -67,19 +85,20 @@ export function createSupabaseServicesRepository(
         .select(SELECT)
         .single();
       if (error || !data) throw new Error("services.create failed");
+      if (item.allowedStaffIds.length > 0) await syncStaffLinks(client, item.id, item.allowedStaffIds);
       return serviceFromRow((await withStaffLinks(client, [data as ServiceRow]))[0]);
     },
 
     async update(id, patch) {
       const client = await getClient();
-      const { data, error } = await client
-        .from("services")
-        .update(serviceToRow(patch))
-        .eq("workspace_id", workspaceId)
-        .eq("id", id)
-        .select(SELECT)
-        .maybeSingle();
+      const row = serviceToRow(patch);
+      // A staff-only patch has no column changes (an empty UPDATE is not valid): just read the row.
+      const base = Object.keys(row).length === 0
+        ? client.from("services").select(SELECT)
+        : client.from("services").update(row).select(SELECT);
+      const { data, error } = await base.eq("workspace_id", workspaceId).eq("id", id).maybeSingle();
       if (error) throw new Error("services.update failed");
+      if (data && patch.allowedStaffIds !== undefined) await syncStaffLinks(client, id, patch.allowedStaffIds);
       return data ? serviceFromRow((await withStaffLinks(client, [data as ServiceRow]))[0]) : undefined;
     },
 

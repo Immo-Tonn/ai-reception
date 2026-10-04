@@ -52,13 +52,13 @@ describe("proxy (session refresh)", () => {
 
 describe("proxy matcher", () => {
   const re = new RegExp("^" + config.matcher[0] + "$");
-  it("skips public booking, client area, embeds and assets", () => {
-    for (const p of ["/book/demo-salon", "/book/demo-salon/embed", "/client/bookings", "/embed.js", "/embed-demo", "/_next/static/x.js", "/favicon.ico", "/icons/a.png", "/business"]) {
+  it("skips public booking, embeds and assets", () => {
+    for (const p of ["/book/demo-salon", "/book/demo-salon/embed", "/embed.js", "/embed-demo", "/_next/static/x.js", "/favicon.ico", "/icons/a.png", "/business"]) {
       expect(re.test(p), p).toBe(false);
     }
   });
   it("still covers workspace pages — including slugs that merely START with a skipped word", () => {
-    for (const p of ["/my-salon/today", "/bookkeeping-pro/calendar", "/clients-first/today", "/login", "/onboarding/my-salon"]) {
+    for (const p of ["/my-salon/today", "/bookkeeping-pro/calendar", "/clients-first/today", "/login", "/onboarding/my-salon", "/client", "/client/bookings", "/client/sign-in"]) {
       expect(re.test(p), p).toBe(true);
     }
   });

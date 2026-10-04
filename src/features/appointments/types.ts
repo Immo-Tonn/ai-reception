@@ -50,6 +50,12 @@ export interface Appointment {
   resourceId: string | null;
   date: string; // ISO date, e.g. "2026-09-22"
   time: string; // "HH:mm"
+  /**
+   * IANA zone of the business whose wall clock `date`/`time` are, saved when
+   * known (public/client bookings). Optional: legacy and demo records have
+   * none and keep working.
+   */
+  timezone?: string;
   durationMinutes: number;
   price: number;
   currency: string;

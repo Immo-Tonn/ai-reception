@@ -172,6 +172,13 @@
   color: var(--color-muted);
 }
 
+.optionDescription {
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
 .optionPrice {
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-semibold);
@@ -441,10 +448,80 @@
 }
 
 .createAccountLink {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   text-align: center;
   margin-top: var(--space-4);
   font-size: var(--font-size-small);
   color: var(--color-accent-blue);
   font-weight: var(--font-weight-medium);
+}
+
+.about {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-small);
+}
+
+.aboutText,
+.aboutLines {
+  margin: 0;
+}
+
+.aboutLines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  color: var(--color-muted);
+}
+
+.aboutLines a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.claimBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.claimNote {
+  margin: var(--space-4) 0 0;
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.claimBox .claimNote {
+  margin-top: 0;
+}
+
+.claimPrimary,
+.claimSecondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border-radius: var(--radius-pill);
+  font-weight: var(--font-weight-medium);
+  margin-top: var(--space-2);
+}
+
+.claimPrimary {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+.claimSecondary {
+  border: 1px solid var(--color-border);
+  color: var(--color-ink);
 }

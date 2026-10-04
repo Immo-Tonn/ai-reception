@@ -6,6 +6,7 @@ import { Button, Icon } from "@/components/ui";
 import { useLeads, useQuotes, useJobs, useProjects } from "@/features/work/useWork";
 import { useInvoices } from "@/features/finance/useInvoices";
 import { useAuditLog } from "@/features/auditLog/useAuditLog";
+import { useWorkspaceToday } from "@/features/workspace/WorkspaceCatalog";
 import { getWorkspaceConfig } from "@/features/workspace/registry";
 import type { Lead, LeadStage, Quote, QuoteStatus, Job, JobStatus, Project, ProjectStatus } from "@/features/work/types";
 import type { Locale, Messages } from "@/lib/i18n";
@@ -36,6 +37,7 @@ export function WorkView({
   const { items: projects, create: createProject, update: updateProject } = useProjects(workspaceSlug);
   const { create: createInvoice } = useInvoices(workspaceSlug);
   const { log } = useAuditLog(workspaceSlug);
+  const today = useWorkspaceToday(workspaceSlug);
 
   const [tab, setTab] = useState<Tab>("leads");
   const [sheetOpen, setSheetOpen] = useState(searchParams.get("create") === "lead");
@@ -91,7 +93,7 @@ export function WorkView({
       notes: draft.notes,
       visibility: draft.visibility,
       financialBucket: draft.financialBucket,
-      createdAt: new Date().toISOString().slice(0, 10),
+      createdAt: today,
     };
 
     if (tab === "leads") {
@@ -139,7 +141,7 @@ export function WorkView({
       status: "draft",
       visibility: lead.visibility,
       financialBucket: lead.financialBucket,
-      createdAt: new Date().toISOString().slice(0, 10),
+      createdAt: today,
       jobId: null,
     };
     createQuote(quote);
@@ -159,7 +161,7 @@ export function WorkView({
       status: "scheduled",
       visibility: quote.visibility,
       financialBucket: quote.financialBucket,
-      createdAt: new Date().toISOString().slice(0, 10),
+      createdAt: today,
       invoiceId: null,
     };
     createJob(job);
@@ -179,7 +181,7 @@ export function WorkView({
       status: "unpaid",
       bucket: job.financialBucket,
       visibility: job.visibility,
-      date: new Date().toISOString().slice(0, 10),
+      date: today,
     });
     updateJob(job.id, { status: "invoiced", invoiceId });
     log({ action: "updated", entityType: "job", entityId: job.id, summary: `${messages.convertToInvoice}: ${job.clientName}`, source: "user" });

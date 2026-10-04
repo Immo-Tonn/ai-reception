@@ -1,76 +1,76 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Button, Input, Icon } from "@/components/ui";
-import { useClientAuth } from "@/features/clientAuth/useClientAuth";
+import Link from "next/link";
+import { useActionState, useEffect, useRef } from "react";
+import { Button, Input, PasswordInput } from "@/components/ui";
+import { signInClientAction } from "@/server/actions/clientAccount.actions";
 import type { Messages } from "@/lib/i18n";
+import { clientAuthHref } from "@/features/clientAccount/redirect";
 import styles from "../client.module.css";
 
-export function LoginForm({ messages }: { messages: Messages["client"] }) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const { signIn } = useClientAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+type ClientAuthFormState = Awaited<ReturnType<typeof signInClientAction>>;
+const initialState: ClientAuthFormState = {};
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      setError(messages.validationRequired);
-      return;
-    }
-    setError(null);
-    setSubmitting(true);
-    // No real account store yet (§ "не делай fake production auth") — the
-    // password is never checked against anything. Signing in just means
-    // this browser now remembers the email as "you" for My Bookings.
-    signIn({ name: email.split("@")[0], email: email.trim(), phone: "" });
-    const redirectTo = searchParams.get("redirect") ?? "/client/bookings";
-    router.push(redirectTo);
-    setSubmitting(false);
-  }
+export function LoginForm({
+  messages,
+  errors,
+  passwordLabels,
+  redirect,
+}: {
+  messages: Messages["client"];
+  errors: Messages["authErrors"];
+  passwordLabels: { show: string; hide: string };
+  /** Already sanitized on the server page; the server action validates it again. */
+  redirect: string;
+}) {
+  const [state, formAction, isPending] = useActionState(signInClientAction, initialState);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+
+  // A failed sign-in must be SEEN and announced, not look like a silent reload.
+  useEffect(() => {
+    if (!state.error) return;
+    errorRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    errorRef.current?.focus({ preventScroll: true });
+  }, [state]);
 
   return (
     <>
-      <button type="button" className={styles.googleButton} disabled aria-label={messages.googleDemoNote}>
-        <Icon name="globe" size={18} aria-hidden="true" />
-        {messages.googleButton}
-      </button>
-      <p className={styles.googleNote}>{messages.googleDemoNote}</p>
-
-      <div className={styles.divider}>{messages.orDivider}</div>
-
-      <form className={styles.form} onSubmit={handleSubmit}>
+      <form suppressHydrationWarning className={styles.form} action={formAction}>
+        <input type="hidden" name="redirect" value={redirect} suppressHydrationWarning />
         <Input
           label={messages.emailLabel}
           type="email"
+          name="email"
           autoComplete="email"
           required
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          // The e-mail comes back with the result so it need not be retyped; the password never does.
+          defaultValue={state.email ?? ""}
+          key={state.email ?? "email"}
         />
-        <Input
+        <PasswordInput
           label={messages.passwordLabel}
-          type="password"
+          showLabel={passwordLabels.show}
+          hideLabel={passwordLabels.hide}
+          name="password"
+          placeholder="••••••••"
           autoComplete="current-password"
           required
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
         />
-        {error && <p className={styles.errorText}>{error}</p>}
-        <Button type="submit" fullWidth disabled={submitting}>
-          {submitting ? messages.submitting : messages.loginSubmit}
+        {state.error ? (
+          <p ref={errorRef} tabIndex={-1} className={styles.errorText} role="alert">
+            {errors[state.error]}
+          </p>
+        ) : null}
+        <Button type="submit" fullWidth disabled={isPending} aria-busy={isPending}>
+          {isPending ? messages.submitting : messages.loginSubmit}
         </Button>
       </form>
 
       <p className={styles.promptRow}>
         {messages.signupPrompt}{" "}
-        <a href="/client/signup" className={styles.promptLink}>
+        <Link href={clientAuthHref("signup", redirect)} className={styles.promptLink}>
           {messages.signupLink}
-        </a>
+        </Link>
       </p>
     </>
   );

@@ -42,7 +42,7 @@ describe("services mapping", () => {
   it("maps DB rows to the domain model (numeric string -> number, join -> allowedStaffIds)", () => {
     expect(serviceFromRow(row)).toEqual({
       id: "s1", name: "Haircut", durationMinutes: 45, price: 55.5, currency: "EUR",
-      bufferBeforeMinutes: 0, bufferAfterMinutes: 10, allowedStaffIds: ["st1", "st2"], requiredResourceType: null,
+      bufferBeforeMinutes: 0, bufferAfterMinutes: 10, allowedStaffIds: ["st1", "st2"], requiredResourceType: null, active: true, description: "",
     });
   });
 

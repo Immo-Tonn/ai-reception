@@ -7,12 +7,16 @@ import type { ServiceDefinition } from "@/features/services/types";
 import type { StaffMember } from "@/features/staff/types";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { loadPublicCatalog } from "./publicBooking.service";
+import { loadPublicCatalog, type PublicProfile } from "./publicBooking.service";
 
 export interface PublicPageData {
   branding: WorkspaceBranding;
   services: ServiceDefinition[];
   staff: StaffMember[];
+  /** Real businesses only; demo presets have none. */
+  profile?: PublicProfile;
+  /** IANA zone of the business; real workspaces only (demo presets: browser-local). */
+  timezone?: string;
 }
 
 const DEFAULT_COLOR = "#6a4fd6";
@@ -40,5 +44,7 @@ export async function loadPublicPageData(slug: string): Promise<PublicPageData> 
     },
     services: catalog.services,
     staff: catalog.staff,
+    profile: catalog.profile,
+    timezone: catalog.workspace.timezone,
   };
 }

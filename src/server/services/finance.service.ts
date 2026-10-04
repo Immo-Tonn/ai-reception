@@ -10,6 +10,9 @@ import {
 } from "@/server/validation/finance.schema";
 import { calculateRevenue, calculateOutstanding } from "@/features/finance/calculations";
 import { canSeeVisibility } from "./masking";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
+import { isValidTimeZone, resolveToday } from "@/lib/time/zonedTime";
 import type { Invoice } from "@/features/finance/types";
 import type { RevenueSummary } from "@/features/finance/calculations";
 
@@ -40,7 +43,24 @@ export async function getFinanceSummary(
   };
 }
 
-export async function createInvoice(session: Session, input: CreateInvoiceInput): Promise<Invoice> {
+/**
+ * IANA time zone of a real workspace (user-scoped read under RLS), or null for
+ * demo workspaces / unreadable / invalid zones (callers then keep the legacy
+ * browser-local behaviour via resolveToday(now, null)).
+ */
+export async function getWorkspaceTimeZone(session: Session): Promise<string | null> {
+  if (isDemoWorkspaceSlug(session.workspaceId)) return null;
+  const client = await createSupabaseServerClient();
+  const { data } = await client.from("workspaces").select("timezone").eq("id", session.workspaceId).maybeSingle();
+  const tz = (data?.timezone as string | undefined) ?? null;
+  return tz && isValidTimeZone(tz) ? tz : null;
+}
+
+export async function createInvoice(
+  session: Session,
+  input: CreateInvoiceInput,
+  now: Date = new Date(),
+): Promise<Invoice> {
   assertCan(session.role, "finance.edit");
   const data = createInvoiceSchema.parse(input);
   if (data.bucket === "private") assertCan(session.role, "financial_bucket.private.view");
@@ -50,7 +70,8 @@ export async function createInvoice(session: Session, input: CreateInvoiceInput)
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     number: `#${Math.floor(1000 + Math.random() * 9000)}`,
     status: "unpaid",
-    date: new Date().toISOString().slice(0, 10),
+    // Business calendar day in the WORKSPACE time zone (never UTC).
+    date: resolveToday(now, await getWorkspaceTimeZone(session)),
   };
   await getServerInvoicesRepository(session.workspaceId).create(invoice);
   await getServerAuditLogRepository(session.workspaceId).create({

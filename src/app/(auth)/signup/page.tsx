@@ -22,7 +22,7 @@ export default async function SignupPage() {
       </div>
 
       <div className={styles.body}>
-        <section className={styles.brandPanel}>
+        <section className={`${styles.brandPanel} ${styles.brandPanelCompact}`}>
           <span className={styles.logo}>ServiceOS</span>
           <div className={styles.brandContent}>
             <h1 className={styles.brandTitle}>{signup.brandTitle}</h1>
@@ -39,7 +39,11 @@ export default async function SignupPage() {
               <p className={styles.formSubtitle}>{signup.subtitle}</p>
             </div>
 
-            <SignupForm messages={signup} errors={authErrors} />
+            <SignupForm
+              messages={signup}
+              errors={authErrors}
+              passwordLabels={{ show: common.showPassword, hide: common.hidePassword }}
+            />
 
             <p className={styles.signupPrompt}>
               {signup.loginPrompt}{" "}

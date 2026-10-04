@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Button, Input, Sheet } from "@/components/ui";
-import { localIsoDate } from "@/lib/date/localIsoDate";
 import type { FinancialBucket, Visibility } from "@/features/appointments/types";
 import type { Invoice } from "@/features/finance/types";
 import type { Messages } from "@/lib/i18n";
@@ -15,6 +14,7 @@ export function NewInvoiceSheet({
   messages,
   appointmentMessages,
   initialValue,
+  today,
 }: {
   open: boolean;
   onClose: () => void;
@@ -25,6 +25,8 @@ export function NewInvoiceSheet({
    * `key={invoice.id}` at the call site so each invoice gets its own
    * fresh form state (same pattern as AppointmentSheet). */
   initialValue?: Invoice | null;
+  /** Workspace-local calendar day (useWorkspaceToday) used as the new invoice date. */
+  today: string;
 }) {
   const isEditing = Boolean(initialValue);
   const [client, setClient] = useState(initialValue?.client ?? "");
@@ -48,7 +50,7 @@ export function NewInvoiceSheet({
       status: "unpaid",
       bucket,
       visibility,
-      date: localIsoDate(new Date()),
+      date: today,
     });
     setClient("");
     setAmount(0);
@@ -73,7 +75,7 @@ export function NewInvoiceSheet({
         />
         <div className={styles.field}>
           <label className={styles.label}>{appointmentMessages.financialBucketLabel}</label>
-          <select
+          <select suppressHydrationWarning
             className={styles.select}
             value={bucket}
             onChange={(event) => setBucket(event.target.value as FinancialBucket)}
@@ -84,7 +86,7 @@ export function NewInvoiceSheet({
         </div>
         <div className={styles.field}>
           <label className={styles.label}>{appointmentMessages.visibilityLabel}</label>
-          <select
+          <select suppressHydrationWarning
             className={styles.select}
             value={visibility}
             onChange={(event) => setVisibility(event.target.value as Visibility)}

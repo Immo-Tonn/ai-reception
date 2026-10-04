@@ -11,6 +11,8 @@ export interface ServiceRow {
   buffer_before_minutes: number;
   buffer_after_minutes: number;
   required_resource_type: string | null;
+  description?: string | null;
+  active?: boolean;
   service_staff?: { staff_id: string }[] | null;
 }
 
@@ -25,6 +27,8 @@ export function serviceFromRow(row: ServiceRow): ServiceDefinition {
     bufferAfterMinutes: row.buffer_after_minutes,
     allowedStaffIds: (row.service_staff ?? []).map((link) => link.staff_id),
     requiredResourceType: row.required_resource_type,
+    active: row.active ?? true,
+    description: row.description ?? "",
   };
 }
 
@@ -38,5 +42,7 @@ export function serviceToRow(service: Partial<ServiceDefinition>): Record<string
   if (service.bufferBeforeMinutes !== undefined) row.buffer_before_minutes = service.bufferBeforeMinutes;
   if (service.bufferAfterMinutes !== undefined) row.buffer_after_minutes = service.bufferAfterMinutes;
   if (service.requiredResourceType !== undefined) row.required_resource_type = service.requiredResourceType;
+  if (service.active !== undefined) row.active = service.active;
+  if (service.description !== undefined) row.description = service.description;
   return row;
 }

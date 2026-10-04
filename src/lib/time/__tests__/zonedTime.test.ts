@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, instantToWall, isValidTimeZone, nowAsWallClock, wallToInstant, zoneOffsetMinutes } from "../zonedTime";
+import { addDays, instantToWall, isValidTimeZone, nowAsWallClock, resolveToday, todayInTimeZone, wallToInstant, zoneOffsetMinutes } from "../zonedTime";
 
 const BERLIN = "Europe/Berlin";
 
@@ -88,5 +88,50 @@ describe("misc", () => {
     expect(addDays("2028-02-28", 1)).toBe("2028-02-29");
     expect(addDays("2026-12-31", 1)).toBe("2027-01-01");
     expect(addDays("2026-03-01", -1)).toBe("2026-02-28");
+  });
+});
+
+describe("todayInTimeZone / resolveToday (workspace-local today)", () => {
+  const at = (iso: string) => new Date(iso);
+
+  it("UTC date behind Berlin: 2026-10-03T22:30Z is already 10-04 in CEST", () => {
+    expect(at("2026-10-03T22:30:00Z").toISOString().slice(0, 10)).toBe("2026-10-03");
+    expect(todayInTimeZone(at("2026-10-03T22:30:00Z"), BERLIN)).toBe("2026-10-04");
+  });
+
+  it("UTC date ahead of a western zone: 23:30 Berlin 10-03 is 21:30Z, still 10-03", () => {
+    const now = wallToInstant("2026-10-03", "23:30", BERLIN);
+    expect(now.toISOString()).toBe("2026-10-03T21:30:00.000Z");
+    expect(todayInTimeZone(now, BERLIN)).toBe("2026-10-03");
+    // west of UTC: UTC already tomorrow, local still today
+    expect(todayInTimeZone(at("2026-10-04T02:00:00Z"), "America/New_York")).toBe("2026-10-03");
+  });
+
+  it("flips exactly at local midnight (summer and winter)", () => {
+    expect(todayInTimeZone(at("2026-10-03T21:59:59Z"), BERLIN)).toBe("2026-10-03");
+    expect(todayInTimeZone(at("2026-10-03T22:00:00Z"), BERLIN)).toBe("2026-10-04");
+    expect(todayInTimeZone(at("2026-01-15T22:59:59Z"), BERLIN)).toBe("2026-01-15");
+    expect(todayInTimeZone(at("2026-01-15T23:00:00Z"), BERLIN)).toBe("2026-01-16");
+  });
+
+  it("DST end 2026-10-25 (CEST->CET at 01:00Z)", () => {
+    expect(todayInTimeZone(at("2026-10-24T21:59:59Z"), BERLIN)).toBe("2026-10-24");
+    expect(todayInTimeZone(at("2026-10-24T22:00:00Z"), BERLIN)).toBe("2026-10-25");
+    // after the change, midnight is at 23:00Z
+    expect(todayInTimeZone(at("2026-10-25T22:59:59Z"), BERLIN)).toBe("2026-10-25");
+    expect(todayInTimeZone(at("2026-10-25T23:00:00Z"), BERLIN)).toBe("2026-10-26");
+  });
+
+  it("DST start 2026-03-29 (CET->CEST at 01:00Z)", () => {
+    expect(todayInTimeZone(at("2026-03-28T22:59:59Z"), BERLIN)).toBe("2026-03-28");
+    expect(todayInTimeZone(at("2026-03-28T23:00:00Z"), BERLIN)).toBe("2026-03-29");
+    expect(todayInTimeZone(at("2026-03-29T21:59:59Z"), BERLIN)).toBe("2026-03-29");
+    expect(todayInTimeZone(at("2026-03-29T22:00:00Z"), BERLIN)).toBe("2026-03-30");
+  });
+
+  it("resolveToday uses the zone when given, browser-local date otherwise", () => {
+    expect(resolveToday(at("2026-10-03T22:30:00Z"), BERLIN)).toBe("2026-10-04");
+    const local = new Date(2026, 9, 3, 23, 30);
+    expect(resolveToday(local, null)).toBe("2026-10-03");
   });
 });

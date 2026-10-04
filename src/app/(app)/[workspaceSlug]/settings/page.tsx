@@ -37,6 +37,16 @@ export default async function SettingsPage({
       <h1 className={styles.title}>{nav.settings}</h1>
 
       {!isDemoWorkspaceSlug(workspaceSlug) && (
+        <Link href={`/${workspaceSlug}/settings/business`} className={styles.row}>
+          <div className={styles.rowBody}>
+            <p className={styles.rowLabel}>{settings.businessProfile.label}</p>
+            <p className={styles.rowDescription}>{settings.businessProfile.description}</p>
+          </div>
+          <Icon name="chevronRight" size={18} />
+        </Link>
+      )}
+
+      {!isDemoWorkspaceSlug(workspaceSlug) && (
         <Link href={`/${workspaceSlug}/settings/services`} className={styles.row}>
           <div className={styles.rowBody}>
             <p className={styles.rowLabel}>{settings.services.label}</p>
@@ -62,7 +72,7 @@ export default async function SettingsPage({
       </div>
 
       {!isDemoWorkspaceSlug(workspaceSlug) && (
-        <form action={signOutAction} className={styles.row}>
+        <form suppressHydrationWarning action={signOutAction} className={styles.row}>
           <div className={styles.rowBody}>
             <p className={styles.rowLabel}>{settings.account.label}</p>
           </div>

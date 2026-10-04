@@ -11,6 +11,7 @@ import {
   type PublicBookingErrorCode,
   type PublicBookingRequestInput,
 } from "@/server/booking/publicBooking.service";
+import { attachClaimAfterBooking } from "@/server/clientAccount/bookingClaim";
 import type { AvailableSlot } from "@/features/appointments/availability";
 import type { PublicBookingResult } from "@/features/publicBooking/bookingRules";
 
@@ -50,5 +51,10 @@ export async function createPublicBookingAction(
   slug: string,
   request: Omit<PublicBookingRequestInput, "slug">,
 ): Promise<PublicActionResult<PublicBookingResult>> {
-  return run((deps, ip) => createPublicBooking(deps, { ip }, { ...request, slug }));
+  return run(async (deps, ip) => {
+    const booking = await createPublicBooking(deps, { ip }, { ...request, slug });
+    // Best effort: the claim token stays on the server (cookie / account); a failure never fails the booking.
+    const claim = await attachClaimAfterBooking(deps, booking.appointmentId);
+    return { ...booking, claim };
+  });
 }

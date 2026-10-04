@@ -62,6 +62,18 @@ export const supabaseBusinessAuth: BusinessAuthProvider = {
   },
 };
 
+/** Verified signed-in user (id + e-mail) or null. Never throws (anonymous, unconfigured, cookies unavailable). */
+export async function getCurrentUserSafe(): Promise<{ id: string; email: string | null } | null> {
+  try {
+    if (!isSupabaseConfigured()) return null;
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.auth.getUser();
+    return error || !data.user ? null : { id: data.user.id, email: data.user.email ?? null };
+  } catch {
+    return null;
+  }
+}
+
 export function getBusinessAuth(): BusinessAuthProvider {
   return supabaseBusinessAuth;
 }

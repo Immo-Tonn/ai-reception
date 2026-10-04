@@ -7,7 +7,7 @@ import { useLeads } from "@/features/work/useWork";
 import { computeAnalytics, type AnalyticsPeriod } from "@/features/analytics/calculations";
 import type { FinancialBucket } from "@/features/appointments/types";
 import { getWorkspaceConfig } from "@/features/workspace/registry";
-import { localIsoDate } from "@/lib/date/localIsoDate";
+import { useWorkspaceToday } from "@/features/workspace/WorkspaceCatalog";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency } from "@/lib/i18n/format";
 import styles from "./page.module.css";
@@ -23,6 +23,7 @@ export function AnalyticsView({
 }) {
   const { items: appointments } = useAppointments(workspaceSlug);
   const { items: invoices } = useInvoices(workspaceSlug);
+  const today = useWorkspaceToday(workspaceSlug);
   const { items: leads } = useLeads(workspaceSlug);
   const workspace = useMemo(() => getWorkspaceConfig(workspaceSlug), [workspaceSlug]);
   const demoServices = workspace.services;
@@ -41,13 +42,13 @@ export function AnalyticsView({
   const result = useMemo(
     () =>
       computeAnalytics({
-        today: localIsoDate(new Date()),
+        today,
         appointments,
         invoices,
         leads,
         filters: { periodDays, service, staff, bucket },
       }),
-    [appointments, invoices, leads, periodDays, service, staff, bucket],
+    [today, appointments, invoices, leads, periodDays, service, staff, bucket],
   );
 
   const bucketLabel: Record<FinancialBucket, string> = {
@@ -68,7 +69,7 @@ export function AnalyticsView({
       {pageIntro && <p className={styles.pageIntro}>{pageIntro}</p>}
 
       <div className={styles.filters}>
-        <select
+        <select suppressHydrationWarning
           className={styles.select}
           value={periodDays}
           onChange={(event) => setPeriodDays(Number(event.target.value) as AnalyticsPeriod)}
@@ -78,13 +79,13 @@ export function AnalyticsView({
           <option value={90}>{messages.period90}</option>
         </select>
 
-        <select className={styles.select} value={bucket} onChange={(event) => setBucket(event.target.value as FinancialBucket | "all")}>
+        <select suppressHydrationWarning className={styles.select} value={bucket} onChange={(event) => setBucket(event.target.value as FinancialBucket | "all")}>
           <option value="all">{messages.bucketAll}</option>
           <option value="main">{messages.bucketMain}</option>
           <option value="private">{messages.bucketPrivate}</option>
         </select>
 
-        <select className={styles.select} value={service} onChange={(event) => setService(event.target.value)}>
+        <select suppressHydrationWarning className={styles.select} value={service} onChange={(event) => setService(event.target.value)}>
           <option value="all">{messages.filterAllOption}</option>
           {demoServices.map((item) => (
             <option key={item.id} value={item.name}>
@@ -93,7 +94,7 @@ export function AnalyticsView({
           ))}
         </select>
 
-        <select className={styles.select} value={staff} onChange={(event) => setStaff(event.target.value)}>
+        <select suppressHydrationWarning className={styles.select} value={staff} onChange={(event) => setStaff(event.target.value)}>
           <option value="all">{messages.filterAllOption}</option>
           {staffOptions.map((name) => (
             <option key={name} value={name}>

@@ -13,6 +13,7 @@ export interface AuditLogEntry {
     | "appointment"
     | "invoice"
     | "client"
+    | "workspace"
     | "waitingListEntry"
     | "lead"
     | "quote"

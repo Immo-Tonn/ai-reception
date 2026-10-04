@@ -8,15 +8,18 @@ import type { AuthErrorCode } from "@/server/auth/businessAuth";
 
 export interface LoginState {
   error?: AuthErrorCode | "no_workspace";
+  /** The e-mail that was typed, handed back after a failure so the field is not wiped. Never the password. */
+  email?: string;
 }
 
 export async function signInOwnerAction(_prev: LoginState, formData: FormData): Promise<LoginState> {
+  const typedEmail = String(formData.get("email") ?? "").trim().slice(0, 254);
   const parsed = signInSchema.safeParse({ email: formData.get("email"), password: formData.get("password") });
-  if (!parsed.success) return { error: "invalid_credentials" }; // do not hint which field was wrong
+  if (!parsed.success) return { error: "invalid_credentials", email: typedEmail }; // do not hint which field was wrong
 
   const auth = getBusinessAuth();
   const result = await auth.signInWithPassword(parsed.data.email, parsed.data.password);
-  if (!result.ok) return { error: result.code };
+  if (!result.ok) return { error: result.code, email: typedEmail };
 
   // The user's own memberships, read under RLS. Owner-owned workspaces first, then oldest.
   const supabase = await createSupabaseServerClient();
@@ -31,7 +34,7 @@ export async function signInOwnerAction(_prev: LoginState, formData: FormData): 
   const workspace = Array.isArray(pick?.workspaces) ? pick.workspaces[0] : pick?.workspaces;
   if (!workspace?.slug) {
     await auth.signOut();
-    return { error: "no_workspace" };
+    return { error: "no_workspace", email: typedEmail };
   }
   redirect(`/${workspace.slug}/today`);
 }

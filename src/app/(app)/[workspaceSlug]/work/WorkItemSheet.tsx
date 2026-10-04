@@ -100,7 +100,7 @@ export function WorkItemSheet({
 
         <div className={styles.field}>
           <label className={styles.label}>{messages.notesLabel}</label>
-          <textarea
+          <textarea suppressHydrationWarning
             className={styles.textarea}
             value={notes}
             onChange={(event) => setNotes(event.target.value)}

@@ -258,3 +258,19 @@
   color: var(--color-ink);
   font-size: var(--font-size-small);
 }
+
+/* Signup, mobile only: the form is the point, so the intro shrinks to a
+   title line and the form starts on the first screen. Desktop unchanged. */
+@media (max-width: 899px) {
+  .brandPanelCompact {
+    padding: var(--space-3) var(--space-4);
+  }
+  .brandPanelCompact .brandTitle {
+    font-size: 1.25rem;
+    margin-bottom: 0;
+  }
+  .brandPanelCompact .brandSubtitle,
+  .brandPanelCompact .brandFoot {
+    display: none;
+  }
+}

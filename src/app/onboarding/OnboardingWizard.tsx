@@ -108,7 +108,8 @@ export function OnboardingWizard({
 
   function finish() {
     if (!workspaceSlug || !industry || !mode) {
-      router.push("/demo-salon/today");
+      // No real workspace to finish for: back to sign-up, never into a demo workspace.
+      router.push("/signup");
       return;
     }
     setSaveError(false);

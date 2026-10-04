@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import Link from "next/link";
-import { Button, Icon, Input } from "@/components/ui";
+import { Button, Icon, Input, SaveStatus } from "@/components/ui";
 import type { Messages } from "@/lib/i18n";
 import type { ActionErrorCode } from "@/server/actions/result";
+import { describeSaveError } from "@/lib/repository/describeSaveError";
+import { RemoteRepositoryError } from "@/lib/repository/createRemoteRepository";
 import type { ServiceDefinition } from "@/features/services/types";
 import {
   createServiceAction,
@@ -20,6 +22,9 @@ interface FormState {
   currency: string;
   bufferBeforeMinutes: string;
   bufferAfterMinutes: string;
+  active: boolean;
+  allowedStaffIds: string[];
+  description: string;
 }
 
 const emptyForm: FormState = {
@@ -29,6 +34,9 @@ const emptyForm: FormState = {
   currency: "EUR",
   bufferBeforeMinutes: "0",
   bufferAfterMinutes: "0",
+  active: true,
+  allowedStaffIds: [],
+  description: "",
 };
 
 function toFormState(service: ServiceDefinition): FormState {
@@ -39,27 +47,37 @@ function toFormState(service: ServiceDefinition): FormState {
     currency: service.currency,
     bufferBeforeMinutes: String(service.bufferBeforeMinutes),
     bufferAfterMinutes: String(service.bufferAfterMinutes),
+    active: service.active !== false,
+    allowedStaffIds: service.allowedStaffIds,
+    description: service.description ?? "",
   };
 }
 
 export function ServicesView({
   workspaceSlug,
   initialServices,
+  staff,
   messages,
+  extra,
+  errors,
   backLabel,
+  statusLabels,
 }: {
   workspaceSlug: string;
   initialServices: ServiceDefinition[];
+  staff: { id: string; name: string }[];
   messages: Messages["settingsServices"];
+  extra: Messages["servicesSettings"];
+  errors: Messages["repositoryErrors"];
   backLabel: string;
+  statusLabels: { unsaved: string; saving: string; saved: string };
 }) {
   const [services, setServices] = useState(initialServices);
+  // Stable action code -> localized text (never raw error text, never an unhandled rejection).
   const errorText = (code: ActionErrorCode) =>
-    code === "forbidden" || code === "unauthenticated"
-      ? messages.errorForbidden
-      : code === "invalid_input"
-        ? messages.errorInvalid
-        : messages.errorGeneric;
+    code === "invalid_input" ? messages.errorInvalid : describeSaveError(new RemoteRepositoryError(code), errors);
+  const [notice, setNotice] = useState<string | null>(null);
+  const expireNotice = useCallback(() => setNotice(null), []);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -70,6 +88,7 @@ export function ServicesView({
     setEditingId(null);
     setForm(emptyForm);
     setError(null);
+    setNotice(null);
     setFormOpen(true);
   }
 
@@ -77,6 +96,7 @@ export function ServicesView({
     setEditingId(service.id);
     setForm(toFormState(service));
     setError(null);
+    setNotice(null);
     setFormOpen(true);
   }
 
@@ -94,11 +114,13 @@ export function ServicesView({
       currency: form.currency,
       bufferBeforeMinutes: Number(form.bufferBeforeMinutes) || 0,
       bufferAfterMinutes: Number(form.bufferAfterMinutes) || 0,
+      allowedStaffIds: form.allowedStaffIds,
+      description: form.description,
     };
 
     startTransition(async () => {
       if (editingId) {
-        const result = await updateServiceAction(workspaceSlug, editingId, input);
+        const result = await updateServiceAction(workspaceSlug, editingId, { ...input, active: form.active });
         if (!result.ok) return setError(errorText(result.code));
         const updated = result.data;
         if (updated) setServices((current) => current.map((s) => (s.id === editingId ? updated : s)));
@@ -107,18 +129,70 @@ export function ServicesView({
         if (!result.ok) return setError(errorText(result.code));
         setServices((current) => [...current, result.data]);
       }
+      setNotice(editingId ? extra.saved : extra.created);
       setFormOpen(false);
     });
   }
 
-  function handleRemove(id: string) {
-    if (!window.confirm(messages.removeConfirm)) return;
+  function handleArchive(service: ServiceDefinition) {
+    if (!window.confirm(extra.archiveConfirm)) return;
+    setError(null);
     startTransition(async () => {
-      const result = await removeServiceAction(workspaceSlug, id);
+      const result = await removeServiceAction(workspaceSlug, service.id);
       if (!result.ok) return setError(errorText(result.code));
-      setServices((current) => current.filter((s) => s.id !== id));
+      setServices((current) => current.map((s) => (s.id === service.id ? { ...s, active: false } : s)));
+      setNotice(extra.archived);
     });
   }
+
+  function handleRestore(service: ServiceDefinition) {
+    setError(null);
+    startTransition(async () => {
+      const result = await updateServiceAction(workspaceSlug, service.id, { active: true });
+      if (!result.ok) return setError(errorText(result.code));
+      const updated = result.data;
+      if (updated) setServices((current) => current.map((s) => (s.id === service.id ? updated : s)));
+      setNotice(extra.restored);
+    });
+  }
+
+  function toggleStaff(id: string) {
+    setForm((f) => ({
+      ...f,
+      allowedStaffIds: f.allowedStaffIds.includes(id) ? f.allowedStaffIds.filter((x) => x !== id) : [...f.allowedStaffIds, id],
+    }));
+  }
+
+  const activeServices = services.filter((s) => s.active !== false);
+  const archivedServices = services.filter((s) => s.active === false);
+
+  const renderRow = (service: ServiceDefinition, archived: boolean) => (
+    <li key={service.id} className={styles.row}>
+      <div className={styles.rowBody}>
+        <p className={styles.rowLabel}>
+          {service.name}
+          {archived && <span className={styles.badge}>{extra.archivedBadge}</span>}
+        </p>
+        <p className={styles.rowMeta}>
+          {service.durationMinutes} {messages.minutesSuffix} · {service.price} {service.currency}
+        </p>
+      </div>
+      <div className={styles.rowActions}>
+        <button type="button" className={styles.iconButton} onClick={() => openEditForm(service)} disabled={isPending}>
+          {messages.edit}
+        </button>
+        {archived ? (
+          <button type="button" className={styles.iconButton} onClick={() => handleRestore(service)} disabled={isPending}>
+            {extra.restore}
+          </button>
+        ) : (
+          <button type="button" className={styles.iconButtonDanger} onClick={() => handleArchive(service)} disabled={isPending}>
+            {extra.archive}
+          </button>
+        )}
+      </div>
+    </li>
+  );
 
   return (
     <main className={styles.page}>
@@ -132,47 +206,42 @@ export function ServicesView({
         </div>
       </header>
 
-      {error && !formOpen && <p className={styles.error}>{error}</p>}
-
-      {services.length === 0 && !formOpen && <p className={styles.empty}>{messages.emptyState}</p>}
-
-      {services.length > 0 && (
-        <ul className={styles.list}>
-          {services.map((service) => (
-            <li key={service.id} className={styles.row}>
-              <div className={styles.rowBody}>
-                <p className={styles.rowLabel}>{service.name}</p>
-                <p className={styles.rowMeta}>
-                  {service.durationMinutes} {messages.minutesSuffix} · {service.price} {service.currency}
-                </p>
-              </div>
-              <div className={styles.rowActions}>
-                <button type="button" className={styles.iconButton} onClick={() => openEditForm(service)}>
-                  {messages.edit}
-                </button>
-                <button
-                  type="button"
-                  className={styles.iconButtonDanger}
-                  onClick={() => handleRemove(service.id)}
-                  disabled={isPending}
-                >
-                  {messages.remove}
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+      {error && !formOpen && <p className={styles.error} role="alert">{error}</p>}
+      {!formOpen && (
+        <SaveStatus
+          state={isPending ? "saving" : notice ? "saved" : "idle"}
+          labels={{ unsaved: "", saving: statusLabels.saving, saved: notice ?? statusLabels.saved }}
+          onSavedExpire={expireNotice}
+        />
       )}
+
+      {activeServices.length === 0 && !formOpen && <p className={styles.empty}>{messages.emptyState}</p>}
+
+      {activeServices.length > 0 && <ul className={styles.list}>{activeServices.map((s) => renderRow(s, false))}</ul>}
 
       {formOpen ? (
         <div className={styles.form}>
-          {error && <p className={styles.error}>{error}</p>}
+          <h2 className={styles.formTitle}>{editingId ? extra.editTitle : extra.newTitle}</h2>
+          <SaveStatus state={isPending ? "saving" : error ? "error" : "idle"} labels={statusLabels} error={error} />
           <Input
             label={messages.nameLabel}
             placeholder={messages.namePlaceholder}
             value={form.name}
             onChange={(event) => setForm((f) => ({ ...f, name: event.target.value }))}
           />
+          <label className={styles.field}>
+            <span className={styles.legend}>{extra.descriptionLabel}</span>
+            <textarea
+              suppressHydrationWarning
+              className={styles.textarea}
+              rows={3}
+              maxLength={1000}
+              placeholder={extra.descriptionPlaceholder}
+              value={form.description}
+              onChange={(event) => setForm((f) => ({ ...f, description: event.target.value }))}
+            />
+            <span className={styles.hint}>{extra.descriptionHint}</span>
+          </label>
           <div className={styles.formRow}>
             <Input
               label={messages.durationLabel}
@@ -206,12 +275,47 @@ export function ServicesView({
               onChange={(event) => setForm((f) => ({ ...f, bufferAfterMinutes: event.target.value }))}
             />
           </div>
+          <fieldset className={styles.fieldset}>
+            <legend className={styles.legend}>{extra.staffLabel}</legend>
+            {staff.length === 0 ? (
+              <p className={styles.hint}>{extra.noStaff}</p>
+            ) : (
+              <>
+                {staff.map((member) => (
+                  <label key={member.id} className={styles.check}>
+                    <input
+                      suppressHydrationWarning
+                      type="checkbox"
+                      checked={form.allowedStaffIds.includes(member.id)}
+                      onChange={() => toggleStaff(member.id)}
+                    />
+                    <span>{member.name}</span>
+                  </label>
+                ))}
+                <p className={styles.hint}>{form.allowedStaffIds.length === 0 ? extra.staffAll : extra.staffHint}</p>
+              </>
+            )}
+          </fieldset>
+          {editingId && (
+            <label className={styles.check}>
+              <input
+                      suppressHydrationWarning
+                type="checkbox"
+                checked={form.active}
+                onChange={(event) => setForm((f) => ({ ...f, active: event.target.checked }))}
+              />
+              <span>
+                {extra.activeLabel}
+                <span className={styles.hint}>{extra.activeHint}</span>
+              </span>
+            </label>
+          )}
           <div className={styles.formActions}>
             <Button variant="secondary" type="button" onClick={closeForm} disabled={isPending}>
               {messages.cancel}
             </Button>
             <Button type="button" onClick={handleSubmit} disabled={isPending}>
-              {messages.save}
+              {isPending ? statusLabels.saving : messages.save}
             </Button>
           </div>
         </div>
@@ -220,6 +324,14 @@ export function ServicesView({
           {messages.addButton}
         </Button>
       )}
+
+      {archivedServices.length > 0 && (
+        <section className={styles.archived}>
+          <h2 className={styles.formTitle}>{extra.archivedSection}</h2>
+          <ul className={styles.list}>{archivedServices.map((s) => renderRow(s, true))}</ul>
+        </section>
+      )}
+      <p className={styles.hint}>{extra.removeHistoryNote}</p>
     </main>
   );
 }

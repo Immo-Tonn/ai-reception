@@ -53,6 +53,13 @@ export interface PublicBookingResult {
   date: string;
   time: string;
   status: Appointment["status"];
+  /**
+   * What happened to the "keep this booking in My bookings" link (server-side; the claim token
+   * itself never reaches the browser): "linked" = attached to the signed-in client account,
+   * "pending" = remembered in an httpOnly cookie until the visitor signs in / signs up,
+   * "none" = nothing was stored.
+   */
+  claim?: "linked" | "pending" | "none";
 }
 
 export function normalizeEmail(email: string): string {

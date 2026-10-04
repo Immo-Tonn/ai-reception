@@ -14,6 +14,7 @@ export function MonthGrid({
   appointments,
   weekdaysShort,
   dashboardMessages,
+  today: todayProp,
   onSelectDay,
 }: {
   monthAnchor: string; // any ISO date within the month to display
@@ -24,6 +25,8 @@ export function MonthGrid({
    * the same locale differently, which causes hydration mismatches. */
   weekdaysShort: readonly string[];
   dashboardMessages: Messages["dashboard"];
+  /** Workspace-local today (YYYY-MM-DD); falls back to the browser date. */
+  today?: string;
   onSelectDay: (date: string) => void;
 }) {
   const anchor = new Date(monthAnchor + "T00:00:00");
@@ -35,7 +38,7 @@ export function MonthGrid({
   const gridStart = new Date(firstOfMonth);
   gridStart.setDate(gridStart.getDate() - startOffset);
 
-  const today = isoDate(new Date());
+  const today = todayProp ?? isoDate(new Date());
   const days = Array.from({ length: 42 }, (_, i) => {
     const d = new Date(gridStart);
     d.setDate(gridStart.getDate() + i);

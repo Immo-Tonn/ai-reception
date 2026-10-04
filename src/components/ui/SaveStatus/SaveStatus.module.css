@@ -1,0 +1,83 @@
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.saved {
+  border-color: var(--color-status-confirmed);
+  animation: pop 160ms ease-out;
+}
+
+.saved svg {
+  color: var(--color-status-confirmed);
+  flex-shrink: 0;
+}
+
+.dirty .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-status-pending);
+  flex-shrink: 0;
+}
+
+.error {
+  border-color: var(--color-status-cancelled);
+  font-weight: var(--font-weight-regular, 400);
+  border-radius: var(--radius-md);
+  align-items: flex-start;
+}
+
+.error svg {
+  color: var(--color-status-cancelled);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-ink);
+  animation: spin 700ms linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .saved {
+    animation: none;
+  }
+  .spinner {
+    animation-duration: 1800ms;
+  }
+}

@@ -38,7 +38,11 @@ export default async function LoginPage() {
               <p className={styles.formSubtitle}>{login.subtitle}</p>
             </div>
 
-            <LoginForm messages={login} errors={authErrors} />
+            <LoginForm
+              messages={login}
+              errors={authErrors}
+              passwordLabels={{ show: common.showPassword, hide: common.hidePassword }}
+            />
 
             <div className={styles.formFoot}>
               <span className={styles.divider}>{login.orDivider}</span>

@@ -5,9 +5,8 @@ import { Icon } from "@/components/ui";
 import { useAppointments } from "@/features/appointments/useAppointments";
 import { useInvoices } from "@/features/finance/useInvoices";
 import { calculateOutstanding } from "@/features/finance/calculations";
-import { useWorkspaceConfig } from "@/features/workspace/WorkspaceCatalog";
+import { useWorkspaceConfig, useWorkspaceToday } from "@/features/workspace/WorkspaceCatalog";
 import { resolveServiceLabel } from "@/features/services/label";
-import { localIsoDate } from "@/lib/date/localIsoDate";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency, formatDate } from "@/lib/i18n/format";
 import styles from "./page.module.css";
@@ -54,8 +53,7 @@ export function TodayView({
   const { items: invoices } = useInvoices(workspaceSlug);
   const workspaceServices = useWorkspaceConfig(workspaceSlug).services;
 
-  const today = new Date();
-  const todayIso = localIsoDate(today);
+  const todayIso = useWorkspaceToday(workspaceSlug);
 
   const todayAppointments = appointments
     .filter((a) => a.date === todayIso && a.status !== "cancelled")
@@ -101,7 +99,7 @@ export function TodayView({
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <p className={styles.eyebrow}>{formatDate(today, locale, { dateStyle: "full" })}</p>
+        <p className={styles.eyebrow}>{formatDate(new Date(`${todayIso}T12:00:00`), locale, { dateStyle: "full" })}</p>
         <h1 className={styles.greeting}>{dashboard.greeting}</h1>
         <p className={styles.subtitle}>{dashboard.subtitle}</p>
       </header>

@@ -51,8 +51,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   // there is no client-side theme flip and therefore no flash.
   const dataTheme = theme === "system" ? undefined : theme;
 
+  // suppressHydrationWarning on <html>: Google Chrome for iOS adds `__gcrremoteframetoken` to it
+  // (and `__gcruniqueid` to forms/inputs) BEFORE React hydrates. It silences attribute differences
+  // on this one element only — children and text mismatches (real bugs) still warn.
   return (
-    <html lang={locale} dir={dir} data-theme={dataTheme} className={inter.variable}>
+    <html lang={locale} dir={dir} data-theme={dataTheme} className={inter.variable} suppressHydrationWarning>
       <body>
         <I18nProvider locale={locale}>{children}</I18nProvider>
         <ServiceWorkerRegistration />

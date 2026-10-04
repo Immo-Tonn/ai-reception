@@ -112,13 +112,21 @@ Vercel: Project → Settings → Environment Variables — те же 4 пере�
 
 ## 8. Окружения и известные ограничения
 
-- **`ai-reception` — только reference/временное окружение**, не незаменимая инфраструктура. По последнему аудиту на нём применены `0001`–`0007` (+ grants и FK, сделанные вручную). **Миграции `0008`–`0015` на него НЕ применять.**
-- Основной E2E планируется на отдельном контролируемом проекте **ServiceOS Dev Supabase**: чистый проект → `0001 → 0015` → новый signup/provisioning (старые workspace `ai-reception` не используются, backfill для них не делается).
+- **`ai-reception` — только reference/временное окружение**, не незаменимая инфраструктура. По последнему аудиту на нём применены `0001`–`0007` (+ grants и FK, сделанные вручную). **Миграции `0008`–`0016` на него НЕ применять.**
+- Основной E2E планируется на отдельном контролируемом проекте **ServiceOS Dev Supabase**: чистый проект → `0001 → 0016` → новый signup/provisioning (старые workspace `ai-reception` не используются, backfill для них не делается).
 
 **Roadmap / known limitations (не реализовано намеренно):**
 N2 `/auth/callback` и «забыл пароль» (нужны при включённом Confirm email); N3 пагинация/окно дат для списков (лимит PostgREST 1000 строк); N4 авто-обновление Calendar (сейчас — после reload); N5 уведомления о новой брони (гостю и владельцу, после merge Notifications); N6 UI для staff, ресурсов, рабочих часов и `auto_confirm_bookings`; N7 GDPR: экспорт/удаление клиента; N8 browser-E2E (Playwright). Finance, Waiting List, Work, Inbox для реального workspace пока пустые (shared backend — Phase 3–4); demo-данные показываются только demo-workspaces.
 
-## 9. Если что-то пошло не так
+## 9. Security hardening (`0016`)
+
+`0016_security_hardening.sql` закрывает замечания Supabase Advisor (отзыв EXECUTE у trigger-функций, перенос `btree_gist` из `public` в `extensions`, разделение `FOR ALL` write-политик; последнее также закрывает чтение PRIVATE financial bucket ролью `admin`). **Применять к ServiceOS Dev после первого E2E и до production** (`supabase db push`), затем повторить `supabase db advisors --linked`. Оставшиеся WARN по SECURITY DEFINER-хелперам для `authenticated` сознательные (их вызывают RLS-политики и приложение); возможное будущее улучшение — вынести хелперы в неэкспонируемую схему.
+
+## 10. ⛔ Production blocker: Confirm email
+
+Состояние ServiceOS Dev: **Confirm email = OFF** (временно, только на время первого ручного E2E). **До production обязательно включить обратно (ON).** Перед включением должны быть готовы и проверены: `/auth/callback`, Site URL и Redirect URLs, flow подтверждения email, Forgot/Reset Password, production SMTP (встроенная отправка Supabase годится только для тестов), E2E регистрации с подтверждением. **Условие релиза: Confirm email = ON и E2E подтверждения email = PASS.**
+
+## 11. Если что-то пошло не так
 
 | Симптом | Причина |
 |---|---|

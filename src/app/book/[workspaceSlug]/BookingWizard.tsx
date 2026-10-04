@@ -19,10 +19,13 @@ import { getClientDetailsFieldErrors } from "@/features/publicBooking/detailsVal
 import { getServiceLabel } from "@/features/services/label";
 import { getStaffLabel } from "@/features/staff/label";
 import { useClientAuth } from "@/features/clientAuth/useClientAuth";
+import { clientAuthHref } from "@/features/clientAccount/redirect";
 import type { ServiceDefinition } from "@/features/services/types";
 import type { StaffMember } from "@/features/staff/types";
 import type { WorkspaceBranding } from "@/features/branding/types";
-import { localIsoDate } from "@/lib/date/localIsoDate";
+import type { PublicProfile } from "@/server/booking/publicBooking.service";
+import { browserTimeZone, buildDateStrip, zoneCityLabel } from "@/lib/time/dateStrip";
+import { resolveToday } from "@/lib/time/zonedTime";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency, formatDate } from "@/lib/i18n/format";
 import styles from "./page.module.css";
@@ -30,21 +33,14 @@ import styles from "./page.module.css";
 type Step = "service" | "staff" | "date" | "time" | "details" | "confirmation";
 const steps: Step[] = ["service", "staff", "date", "time", "details", "confirmation"];
 
-function buildDateStrip() {
-  const today = new Date();
-  return Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    return localIsoDate(d);
-  });
-}
-
 export function BookingWizard({
   workspaceSlug,
   locale,
   booking,
   client,
   branding,
+  profile,
+  timezone = null,
   youLabel,
   services,
   staffList,
@@ -56,6 +52,9 @@ export function BookingWizard({
   booking: Messages["booking"];
   client: Messages["client"];
   branding: WorkspaceBranding;
+  profile?: PublicProfile;
+  /** Business IANA zone; null (demo presets) keeps browser-local "today". */
+  timezone?: string | null;
   youLabel: string;
   /** Catalog of THIS workspace, loaded by the server page (demo preset or the database). */
   services: ServiceDefinition[];
@@ -67,7 +66,7 @@ export function BookingWizard({
   const [step, setStep] = useState<Step>("service");
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null | "any">("any");
-  const [selectedDate, setSelectedDate] = useState(localIsoDate(new Date()));
+  const [selectedDate, setSelectedDate] = useState(() => resolveToday(new Date(), timezone));
   const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
   const [result, setResult] = useState<PublicBookingResult | null>(null);
@@ -90,7 +89,15 @@ export function BookingWizard({
   const emailFieldRef = useRef<HTMLInputElement>(null);
   const phoneFieldRef = useRef<HTMLInputElement>(null);
 
-  const dateStrip = buildDateStrip();
+  const dateStrip = useMemo(() => buildDateStrip(new Date(), timezone), [timezone]);
+  // Slots and booked times are the business's wall clock. Say so when the
+  // visitor's own zone differs (detected after mount to keep SSR stable).
+  const [visitorZone, setVisitorZone] = useState<string | null>(null);
+  useEffect(() => setVisitorZone(browserTimeZone()), []);
+  const zoneNote =
+    timezone && visitorZone && visitorZone !== timezone
+      ? booking.timesInBusinessZone.replace("{city}", zoneCityLabel(timezone)).replace("{zone}", timezone)
+      : null;
   const selectedService = services.find((s) => s.id === selectedServiceId) ?? null;
   const fieldErrors = useMemo(
     () => getClientDetailsFieldErrors({ name, email, phone }),
@@ -233,6 +240,7 @@ export function BookingWizard({
       <div className={`${styles.content} ${step === "details" ? styles.contentDetails : ""}`}>
         {step === "service" && (
           <>
+            {profile ? <BusinessAbout profile={profile} /> : null}
             <h1 className={styles.stepTitle}>{booking.stepService}</h1>
             <div className={styles.optionList}>
               {services.map((service) => (
@@ -250,6 +258,7 @@ export function BookingWizard({
                     <span className={styles.optionHint}>
                       {booking.durationLabel.replace("{minutes}", String(service.durationMinutes))}
                     </span>
+                    {service.description ? <span className={styles.optionDescription}>{service.description}</span> : null}
                   </span>
                   <span className={styles.optionPrice}>
                     {formatCurrency(service.price, service.currency, locale)}
@@ -344,6 +353,7 @@ export function BookingWizard({
               {booking.stepDate}
             </button>
             <h1 className={styles.stepTitle}>{booking.stepTime}</h1>
+            {zoneNote && <p className={styles.fieldHint}>{zoneNote}</p>}
             {error && <p className={styles.errorText}>{error}</p>}
             {slotsLoading ? null : slots.length === 0 ? (
               <div className={styles.empty}>
@@ -378,6 +388,7 @@ export function BookingWizard({
             </button>
             <h1 className={styles.stepTitle}>{booking.stepDetails}</h1>
             <p className={styles.detailsHelper}>{booking.detailsHelper}</p>
+            {zoneNote && <p className={styles.fieldHint}>{zoneNote}</p>}
 
             <div className={styles.summaryCard} style={{ borderLeftColor: branding.primaryColor }}>
               <span className={styles.summaryLine}>{getServiceLabel(selectedService, locale)}</span>
@@ -431,7 +442,7 @@ export function BookingWizard({
                 <label className={styles.fieldLabel} htmlFor="booking-notes">
                   {booking.notesLabel}
                 </label>
-                <textarea
+                <textarea suppressHydrationWarning
                   id="booking-notes"
                   className={styles.notesTextarea}
                   value={notes}
@@ -495,15 +506,31 @@ export function BookingWizard({
             >
               {booking.bookAnother}
             </Button>
-            {identity ? (
-              <Link href="/client/bookings" className={styles.createAccountLink}>
+            {result.claim === "linked" ? (
+              <>
+                <p className={styles.claimNote} role="status">
+                  {booking.claimLinkedNote}
+                </p>
+                <Link href="/client/bookings" className={styles.claimPrimary}>
+                  {booking.myBookingsLink}
+                </Link>
+              </>
+            ) : result.claim === "pending" ? (
+              <div className={styles.claimBox}>
+                <p className={styles.claimNote}>{booking.claimPendingBody}</p>
+                <Link href={clientAuthHref("signup")} className={styles.claimPrimary}>
+                  {client.createAccountCta}
+                </Link>
+                <Link href={clientAuthHref("login")} className={styles.claimSecondary}>
+                  {client.loginLink}
+                </Link>
+              </div>
+            ) : identity ? (
+              // Demo / no account linkage: no promise that the booking shows up in a real account.
+              <Link href="/client/bookings?demo=1" className={styles.createAccountLink}>
                 {booking.myBookingsLink}
               </Link>
-            ) : (
-              <a href={`/client/signup?redirect=/client/bookings`} className={styles.createAccountLink}>
-                {client.createAccountPrompt}
-              </a>
-            )}
+            ) : null}
           </>
         )}
       </div>
@@ -527,6 +554,30 @@ export function BookingWizard({
       {!chromeless && step !== "confirmation" && (
         <p className={styles.poweredBy}>{booking.poweredBy}</p>
       )}
+    </div>
+  );
+}
+
+/** Customer-facing facts the owner chose to publish; empty fields are simply not shown. */
+function BusinessAbout({ profile }: { profile: PublicProfile }) {
+  const address = [profile.addressLine1, [profile.postalCode, profile.city].filter(Boolean).join(" "), profile.country]
+    .filter(Boolean)
+    .join(", ");
+  const lines = [
+    profile.phone ? <a key="p" href={`tel:${profile.phone.replace(/[^0-9+]/g, "")}`}>{profile.phone}</a> : null,
+    profile.email ? <a key="e" href={`mailto:${profile.email}`}>{profile.email}</a> : null,
+    profile.website ? (
+      <a key="w" href={profile.website} target="_blank" rel="noopener noreferrer">
+        {profile.website.replace(/^https?:\/\//i, "")}
+      </a>
+    ) : null,
+    address ? <span key="a">{address}</span> : null,
+  ].filter(Boolean);
+  if (!profile.description && lines.length === 0) return null;
+  return (
+    <div className={styles.about}>
+      {profile.description ? <p className={styles.aboutText}>{profile.description}</p> : null}
+      {lines.length > 0 ? <p className={styles.aboutLines}>{lines}</p> : null}
     </div>
   );
 }

@@ -54,7 +54,7 @@ export function ClientsView({
         <span className={styles.searchIcon}>
           <Icon name="search" size={18} />
         </span>
-        <input
+        <input suppressHydrationWarning
           type="search"
           className={styles.searchInput}
           placeholder={messages.searchPlaceholder}

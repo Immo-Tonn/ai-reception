@@ -30,8 +30,10 @@ export async function createService(session: Session, input: CreateServiceInput)
     currency: data.currency,
     bufferBeforeMinutes: data.bufferBeforeMinutes,
     bufferAfterMinutes: data.bufferAfterMinutes,
-    allowedStaffIds: [],
+    allowedStaffIds: data.allowedStaffIds,
     requiredResourceType: null,
+    active: true,
+    description: data.description,
   });
 }
 
@@ -45,7 +47,13 @@ export async function updateService(
   return getServerServicesRepository(session.workspaceId).update(id, patch);
 }
 
+/**
+ * "Removing" a service ARCHIVES it (`active = false`) and never deletes the row: appointments
+ * reference it by `service_id` (`on delete set null`), so a hard delete would blank the service
+ * on every past booking. Archived services are hidden from public booking and from the pickers
+ * for new appointments, but their name stays on existing appointments.
+ */
 export async function removeService(session: Session, id: string): Promise<void> {
   assertCan(session.role, "settings.manage");
-  await getServerServicesRepository(session.workspaceId).remove(id);
+  await getServerServicesRepository(session.workspaceId).update(id, { active: false });
 }

@@ -63,7 +63,7 @@ export function AddWaitingListSheet({
 
         <div className={styles.field}>
           <label className={styles.label}>{messages.serviceLabel}</label>
-          <select
+          <select suppressHydrationWarning
             className={styles.select}
             value={service}
             onChange={(event) => setService(event.target.value)}
@@ -78,7 +78,7 @@ export function AddWaitingListSheet({
 
         <div className={styles.field}>
           <label className={styles.label}>{messages.preferredStaffLabel}</label>
-          <select
+          <select suppressHydrationWarning
             className={styles.select}
             value={preferredStaff}
             onChange={(event) => setPreferredStaff(event.target.value)}

@@ -11,7 +11,7 @@ import { getSupabaseConfig } from "@/lib/supabase/config";
  *  - It does NOTHING for requests without a Supabase auth cookie — i.e. every
  *    anonymous visitor, guest booking, embed and demo page costs zero
  *    network calls and cannot be broken by Supabase being down.
- *  - The matcher skips public booking, the client area, embeds and assets.
+ *  - The matcher skips public booking, embeds and assets (the client area is covered so client sessions refresh).
  *  - Any failure falls through to a plain `next()`.
  *
  * It never authorizes anything; access control lives in `getSession()` and
@@ -43,6 +43,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icons/|manifest.webmanifest|embed.js|book/|book$|client/|client$|embed-demo|business/|business$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icons/|manifest.webmanifest|embed.js|book/|book$|embed-demo|business/|business$).*)",
   ],
 };

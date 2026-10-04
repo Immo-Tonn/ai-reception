@@ -9,7 +9,7 @@ numbered file.
 
 ## Order
 
-Run in filename order (`0001` → `0015`); each depends on tables created
+Run in filename order (`0001` → `0018`); each depends on tables created
 by the ones before it.
 
 | File | Tables |
@@ -27,6 +27,9 @@ by the ones before it.
 | `0011_booking_integrity.sql` | `btree_gist`; `busy_from`/`busy_until` (trigger, includes service buffers); **EXCLUDE constraints** against staff and resource double booking; `appointments.resource_id`; cross-workspace reference guard triggers; `workspaces.auto_confirm_bookings`; normalized client phone |
 | `0012_booking_rls_and_helpers.sql` | RLS for clients, appointments (Visibility enforced in the DB), resources, series, audit log; `can_see_appointment`, `list_masked_appointments`, `resolve_financial_bucket`, `workspace_financial_bucket_kinds` |
 | `0013_public_booking.sql` | Guest booking API (service role only): `get_public_booking_catalog`, `get_public_busy`, `create_public_booking` (one transaction: validate, find-or-create client, insert appointment, audit) |
+| `0016_security_hardening.sql` | Advisor fixes: no EXECUTE on trigger functions for PUBLIC/anon/authenticated; `btree_gist` moved to `extensions`; split `FOR ALL` write policies (closes an `admin` read of the PRIVATE financial bucket). **Apply after the first E2E, before production** |
+| `0017_business_profile_and_discovery.sql` | Business profile columns, `public_booking_enabled` / `discoverable` (independent switches), service description, public profile in the booking catalog, `list_discoverable_businesses`. **Applied to Dev** |
+| `0018_client_accounts_and_my_bookings.sql` | Client accounts (own-row RLS), per-appointment booking claims (hashed token, no client access), service-role RPCs for claim / list / cancel / reschedule. **Applied to Dev** |
 | `0015_service_role_default_privileges.sql` | Default privileges for the service role on future tables/sequences (service role only; no change to anon/authenticated or RLS) |
 | `0014_rate_limits.sql` | `rate_limits` table + `rate_limit_hit()` (PostgreSQL rate limiting, hashed subjects, service role only) |
 
@@ -47,9 +50,9 @@ by the ones before it.
 
 ## Applying
 
-Empty project: run `0001` → `0015` in order (SQL Editor, or `supabase db push`).
+Empty project: run `0001` → `0018` in order (SQL Editor, or `supabase db push`).
 `0001`–`0006` use `create type` without `if not exists`, so they run once, on
-an empty database. `0007`–`0015` are idempotent. A project that already has
+an empty database. `0007`–`0016` are idempotent. A project that already has
 `0001`–`0006` needs only `0007`+.
 
 Tests (`npm test`) replay every migration from scratch in an in-process

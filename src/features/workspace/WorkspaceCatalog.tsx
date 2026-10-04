@@ -3,6 +3,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { demoWorkingHours } from "@/features/workingHours/demoData";
 import type { WorkingHoursProfile } from "@/features/workingHours/types";
+import { isValidTimeZone, resolveToday } from "@/lib/time/zonedTime";
 import { getWorkspaceConfig, isDemoWorkspaceSlug } from "./registry";
 import type { WorkspaceConfig } from "./types";
 
@@ -48,6 +49,21 @@ export function useWorkspaceConfig(workspaceSlug: string): WorkspaceConfig {
       resources: catalog.resources,
     };
   }, [catalog, workspaceSlug]);
+}
+
+/** IANA zone of a REAL workspace; `null` for demo workspaces (no real zone). */
+export function useWorkspaceTimeZone(workspaceSlug: string): string | null {
+  const catalog = useContext(Context);
+  if (isDemoWorkspaceSlug(workspaceSlug) || !catalog || catalog.slug !== workspaceSlug) return null;
+  return isValidTimeZone(catalog.timezone) ? catalog.timezone : null;
+}
+
+/**
+ * Today's calendar date for the workspace: its own time zone for a real
+ * workspace, the browser-local date for demo workspaces (unchanged).
+ */
+export function useWorkspaceToday(workspaceSlug: string, now: Date = new Date()): string {
+  return resolveToday(now, useWorkspaceTimeZone(workspaceSlug));
 }
 
 export function useWorkspaceWorkingHours(workspaceSlug: string): WorkingHoursProfile[] {

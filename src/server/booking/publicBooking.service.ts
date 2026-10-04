@@ -44,8 +44,21 @@ export interface PublicBookingDeps {
   now?: () => Date;
 }
 
+/** The customer-facing business profile: exactly what the owner entered for customers, nothing internal. */
+export interface PublicProfile {
+  description: string;
+  phone: string;
+  email: string;
+  website: string;
+  addressLine1: string;
+  postalCode: string;
+  city: string;
+  country: string;
+}
+
 export interface PublicCatalog {
   workspace: { id: string; slug: string; name: string; timezone: string; autoConfirm: boolean };
+  profile: PublicProfile;
   services: ServiceDefinition[];
   staff: StaffMember[];
   resources: ResourceDefinition[];
@@ -84,6 +97,7 @@ export type PublicBookingRequestInput = z.input<typeof publicBookingRequestSchem
 
 interface RawCatalog {
   workspace: PublicCatalog["workspace"];
+  profile?: Partial<PublicProfile> | null;
   services: (Omit<ServiceDefinition, "requiredResourceType"> & { requiredResourceType: string | null; price: number | string })[];
   staff: { id: string; name: string }[];
   resources: { id: string; name: string; type: string }[];
@@ -99,6 +113,17 @@ export async function loadPublicCatalog(deps: Pick<PublicBookingDeps, "admin">, 
   const timezone = isValidTimeZone(raw.workspace.timezone) ? raw.workspace.timezone : "Europe/Berlin";
   return {
     workspace: { ...raw.workspace, timezone },
+    // Allow-list copy: whatever else the database might return never reaches the page.
+    profile: {
+      description: raw.profile?.description ?? "",
+      phone: raw.profile?.phone ?? "",
+      email: raw.profile?.email ?? "",
+      website: raw.profile?.website ?? "",
+      addressLine1: raw.profile?.addressLine1 ?? "",
+      postalCode: raw.profile?.postalCode ?? "",
+      city: raw.profile?.city ?? "",
+      country: raw.profile?.country ?? "",
+    },
     services: raw.services.map((s) => ({
       ...s,
       price: Number(s.price),
@@ -117,12 +142,25 @@ export async function loadPublicCatalog(deps: Pick<PublicBookingDeps, "admin">, 
   };
 }
 
-async function computeSlots(
-  deps: PublicBookingDeps,
+/**
+ * An occupied window (buffers included, exactly as the database stores
+ * `busy_from` / `busy_until`) that availability must NOT count: the booking
+ * being moved must not block its own new time.
+ */
+export interface IgnoredBusyWindow {
+  staffId: string | null;
+  resourceId: string | null;
+  busyFrom: Date;
+  busyUntil: Date;
+}
+
+export async function computeSlots(
+  deps: Pick<PublicBookingDeps, "admin" | "now">,
   catalog: PublicCatalog,
   serviceId: string,
   staffId: string | null,
   date: string,
+  ignore?: IgnoredBusyWindow,
 ): Promise<AvailableSlot[]> {
   const now = (deps.now ?? (() => new Date()))();
   const tz = catalog.workspace.timezone;
@@ -139,20 +177,33 @@ async function computeSlots(
   const { data, error } = await deps.admin.rpc("get_public_busy", { p_workspace_id: catalog.workspace.id, p_from: from, p_to: to });
   if (error) throw new PublicBookingError("unknown");
 
+  let busy = (data as BusyRange[]) ?? [];
+  if (ignore) {
+    // get_public_busy returns no ids: drop exactly ONE row equal to the booking's own window.
+    const i = busy.findIndex(
+      (r) =>
+        r.staff_id === ignore.staffId &&
+        (r.resource_id ?? null) === ignore.resourceId &&
+        new Date(r.busy_from).getTime() === ignore.busyFrom.getTime() &&
+        new Date(r.busy_until).getTime() === ignore.busyUntil.getTime(),
+    );
+    if (i >= 0) busy = busy.filter((_, j) => j !== i);
+  }
+
   return computeSlotsFor({
     serviceId,
     staffId,
     services: catalog.services,
     staff: catalog.staff,
     resources: catalog.resources,
-    existingAppointments: busyRangesToAppointments((data as BusyRange[]) ?? [], tz, catalog.staff),
+    existingAppointments: busyRangesToAppointments(busy, tz, catalog.staff),
     workingHours: workingHoursFromRows(catalog.workingHours),
     date,
     notBefore: nowAsWallClock(now, tz),
   });
 }
 
-async function enforce(deps: PublicBookingDeps, rules: { scope: string; limit: number; windowSeconds: number; subject: string }[]) {
+export async function enforce(deps: Pick<PublicBookingDeps, "rateLimiter">, rules: { scope: string; limit: number; windowSeconds: number; subject: string }[]) {
   for (const { subject, ...rule } of rules) {
     const decision = await deps.rateLimiter.hit(rule, subject);
     if (!decision.allowed) throw new PublicBookingError("rate_limited", decision.retryAfterSeconds);

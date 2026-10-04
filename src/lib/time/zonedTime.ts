@@ -90,6 +90,20 @@ export function instantToWall(instant: Date | string, timeZone: string): WallClo
   return { date: `${p.year}-${pad(p.month)}-${pad(p.day)}`, time: `${pad(p.hour)}:${pad(p.minute)}` };
 }
 
+/**
+ * The calendar date ("today") in a zone at `now` — the workspace-local day,
+ * independent of UTC and of the server/browser time zone.
+ */
+export function todayInTimeZone(now: Date, timeZone: string): string {
+  return instantToWall(now, timeZone).date;
+}
+
+/** Workspace-local today when a zone is known, else the browser-local date. */
+export function resolveToday(now: Date, timeZone: string | null): string {
+  if (timeZone) return todayInTimeZone(now, timeZone);
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
 /** The instant at which a zone's wall clock reads `date` `time`. */
 export function wallToInstant(date: string, time: string, timeZone: string): Date {
   const [y, mo, d] = date.split("-").map(Number);

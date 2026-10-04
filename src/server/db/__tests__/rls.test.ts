@@ -128,6 +128,56 @@ describe("provision_workspace — atomic and idempotent", () => {
   });
 });
 
+describe("0016 security hardening", () => {
+  it("trigger functions are not executable by anon / authenticated / PUBLIC (they still fire)", async () => {
+    for (const fn of ["guard_workspace_references()", "set_appointment_busy_range()", "guard_profile_update()", "guard_workspace_update()"]) {
+      const [r] = await q<{ anon: boolean; auth: boolean }>(
+        `select has_function_privilege('anon','public.${fn}','execute') anon, has_function_privilege('authenticated','public.${fn}','execute') auth`);
+      expect(r, fn).toEqual({ anon: false, auth: false });
+    }
+    // ...and the triggers still do their job for a signed-in user (workspace edit goes through guard_workspace_update)
+    await expect(
+      as(db, { kind: "user", id: A }, () => db.query("update workspaces set slug = 'changed-slug-xyz' where id = $1", [wsA])),
+    ).rejects.toThrow(/workspace_identity_immutable/);
+  });
+
+  it("btree_gist no longer lives in the exposed `public` schema, and the exclusion constraints still work", async () => {
+    const [e] = await q<{ nspname: string }>("select n.nspname from pg_extension x join pg_namespace n on n.oid = x.extnamespace where x.extname = 'btree_gist'");
+    expect(e.nspname).toBe("extensions");
+    const [f] = await q<{ n: string }>("select count(*)::text n from pg_proc where pronamespace = 'public'::regnamespace and proname like 'gbt_%'");
+    expect(f.n).toBe("0");
+    const [c] = await q<{ n: string }>("select count(*)::text n from pg_constraint where conname in ('appointments_no_staff_overlap','appointments_no_resource_overlap')");
+    expect(c.n).toBe("2");
+  });
+
+  it("an ADMIN (settings.manage, no private-bucket permission) can manage buckets but can no longer READ the PRIVATE one", async () => {
+    const ADMIN = "ffffffff-0000-4000-8000-0000000000f9";
+    await db.exec(`insert into auth.users (id,email) values ('${ADMIN}','adm@test.invalid');
+      insert into profiles (id,email) values ('${ADMIN}','adm@test.invalid');
+      insert into workspace_members (workspace_id, profile_id, role) values ('${wsA}','${ADMIN}','admin')`);
+    const kinds = (await as(db, { kind: "user", id: ADMIN }, () => q<{ kind: string }>("select kind from financial_buckets order by kind"))).map((r) => r.kind);
+    expect(kinds).toEqual(["main"]); // before the split policies this was ["main", "private"]
+    const created = await as(db, { kind: "user", id: ADMIN }, () =>
+      db.query("insert into financial_buckets (workspace_id,name,slug,kind) values ($1,'Extra','extra','custom')", [wsA]));
+    expect(created.affectedRows).toBe(1);
+    await db.exec("delete from financial_buckets where slug = 'extra'"); // keep later tests' bucket counts unchanged
+    await expect(
+      as(db, { kind: "user", id: STAFF }, () => db.query("insert into financial_buckets (workspace_id,name,slug,kind) values ($1,'X','x','custom')", [wsA])),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("write policies keep working after the split (resources, working hours, service_staff) and stay tenant-scoped", async () => {
+    const r = await as(db, { kind: "user", id: A }, () => db.query("insert into resources (workspace_id,name,type) values ($1,'Room','room')", [wsA]));
+    expect(r.affectedRows).toBe(1);
+    await expect(as(db, { kind: "user", id: A }, () => db.query("insert into resources (workspace_id,name,type) values ($1,'Evil','room')", [wsB]))).rejects.toThrow(/row-level security/);
+    await expect(as(db, { kind: "user", id: STAFF }, () => db.query("insert into resources (workspace_id,name,type) values ($1,'S','room')", [wsA]))).rejects.toThrow(/row-level security/);
+    const upd = await as(db, { kind: "user", id: A }, () => db.query("update working_hours set start_time = '08:30' where workspace_id = $1 and weekday = 1 and staff_id is null", [wsA]));
+    expect(upd.affectedRows).toBe(1);
+    const other = await as(db, { kind: "user", id: A }, () => db.query("update working_hours set start_time = '01:00' where workspace_id = $1", [wsB]));
+    expect(other.affectedRows).toBe(0);
+  });
+});
+
 describe("0015 default privileges (future tables)", () => {
   it("a table created later is reachable by the service role but NOT granted to anon or authenticated", async () => {
     await db.exec("create table public.future_table_probe (id int)");
