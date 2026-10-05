@@ -1,5 +1,21 @@
 import type { NextConfig } from "next";
+import { networkInterfaces } from "node:os";
 import { isStagingEnv, parseAllowedDevOrigins } from "./src/lib/config/appEnv";
+
+// DEV ONLY: say it loudly in the dev-server console if a phone on the LAN would get a page that
+// never hydrates (Next 16 blocks /_next dev resources from origins not in allowedDevOrigins).
+if (process.env.NODE_ENV === "development" && parseAllowedDevOrigins(process.env.ALLOWED_DEV_ORIGINS).length === 0) {
+  const lan = Object.values(networkInterfaces())
+    .flat()
+    .filter((i) => i && i.family === "IPv4" && !i.internal)
+    .map((i) => i!.address);
+  if (lan.length > 0) {
+    console.warn(
+      `[serviceos] ALLOWED_DEV_ORIGINS is empty. Opening this dev server from a phone via ${lan.join(" / ")} will render a page that scrolls but NEVER responds to taps. ` +
+        `Set ALLOWED_DEV_ORIGINS=${lan[0]} in .env.local and restart. Team demos: use the Vercel staging URL (docs/STAGING.md).`,
+    );
+  }
+}
 
 /**
  * Framing policy.

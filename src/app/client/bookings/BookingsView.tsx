@@ -11,7 +11,6 @@ import {
   claimPendingBookingsAction,
   getMyRescheduleSlotsAction,
   rescheduleMyBookingAction,
-  signOutClientAction,
 } from "@/server/actions/clientAccount.actions";
 import type { AvailableSlot } from "@/features/appointments/availability";
 import { uniqueSlotTimes } from "@/features/appointments/availability";
@@ -23,7 +22,8 @@ import {
   toAppointmentStatus,
 } from "@/features/clientAccount/presentation";
 import { clientAuthHref } from "@/features/clientAccount/redirect";
-import { getStaffLabel } from "@/features/staff/label";
+import { customerStaffLabel } from "@/features/staff/customerLabel";
+import { ClientNav } from "@/components/layout/ClientNav/ClientNav";
 import { browserTimeZone, buildDateStrip, zoneCityLabel } from "@/lib/time/dateStrip";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency, formatDate } from "@/lib/i18n/format";
@@ -45,7 +45,6 @@ export function BookingsView({
   bookings,
   hasPendingClaims,
   email,
-  youLabel,
 }: {
   locale: Locale;
   client: Messages["client"];
@@ -54,8 +53,6 @@ export function BookingsView({
   bookings: MyBooking[];
   hasPendingClaims: boolean;
   email: string | null;
-  /** Localized label for the default owner staff stored as "You". */
-  youLabel: string;
 }) {
   const [expired, setExpired] = useState(false);
   const handleExpired = useCallback(() => setExpired(true), []);
@@ -71,7 +68,6 @@ export function BookingsView({
       bookings={bookings}
       hasPendingClaims={hasPendingClaims}
       email={email}
-      youLabel={youLabel}
       onExpired={handleExpired}
     />
   );
@@ -114,7 +110,6 @@ function ReadyView({
   bookings,
   hasPendingClaims,
   email,
-  youLabel,
   onExpired,
 }: {
   locale: Locale;
@@ -123,7 +118,6 @@ function ReadyView({
   bookings: MyBooking[];
   hasPendingClaims: boolean;
   email: string | null;
-  youLabel: string;
   onExpired: () => void;
 }) {
   const router = useRouter();
@@ -206,16 +200,7 @@ function ReadyView({
 
   return (
     <main className={styles.screen}>
-      <div className={styles.topBar}>
-        <Link href="/client" className={styles.backLink}>
-          {client.backToHome}
-        </Link>
-        <form action={signOutClientAction} suppressHydrationWarning>
-          <button type="submit" className={styles.signOutButton}>
-            {client.signOut}
-          </button>
-        </form>
-      </div>
+      <ClientNav client={client} active="bookings" />
       <div className={styles.body}>
         <h1 className={styles.title}>{client.myBookingsTitle}</h1>
         {email ? <p className={styles.signedInAs}>{client.signedInAs.replace("{name}", email)}</p> : null}
@@ -233,6 +218,12 @@ function ReadyView({
             onSavedExpire={() => setFeedback(IDLE)}
           />
         </div>
+
+        {bookings.length > 0 ? (
+          <Link href="/client/book" className={styles.bookCta}>
+            {client.bookAppointmentCta}
+          </Link>
+        ) : null}
 
         <div className={styles.tabs} role="tablist">
           <button
@@ -256,7 +247,14 @@ function ReadyView({
         </div>
 
         {visible.length === 0 ? (
-          <div className={styles.emptyState}>{tab === "upcoming" ? client.noUpcoming : client.noPast}</div>
+          <div className={styles.emptyState}>
+            <p>{tab === "upcoming" ? client.noUpcoming : client.noPast}</p>
+            {bookings.length === 0 ? (
+              <Link href="/client/book" className={styles.bookCta}>
+                {client.firstBookingCta}
+              </Link>
+            ) : null}
+          </div>
         ) : (
           <div className={styles.list}>
             {visible.map((booking) => (
@@ -267,7 +265,6 @@ function ReadyView({
                 client={client}
                 appointmentStatus={appointmentStatus}
                 browserZone={browserZone}
-                youLabel={youLabel}
                 busy={busy}
                 cancelling={cancelTargetId === booking.id}
                 rescheduling={rescheduleTargetId === booking.id}
@@ -301,7 +298,6 @@ function BookingCard({
   client,
   appointmentStatus,
   browserZone,
-  youLabel,
   busy,
   cancelling,
   rescheduling,
@@ -318,7 +314,6 @@ function BookingCard({
   client: Messages["client"];
   appointmentStatus: Messages["appointmentStatus"];
   browserZone: string | null;
-  youLabel: string;
   busy: boolean;
   cancelling: boolean;
   rescheduling: boolean;
@@ -350,7 +345,9 @@ function BookingCard({
         <span className={styles.metaLine}>
           {formatDate(new Date(booking.date + "T00:00:00"), locale, { dateStyle: "medium" })} · {booking.time}
           {zoneLabel ? ` (${zoneLabel})` : ""}
-          {booking.staffName ? ` · ${getStaffLabel(booking.staffName, youLabel)}` : ""}
+          {booking.staffName
+            ? ` · ${customerStaffLabel(booking.staffName, { businessName: booking.businessName, neutralLabel: client.specialistNeutral })}`
+            : ""}
         </span>
         {booking.price > 0 ? (
           <span className={styles.metaLine}>{formatCurrency(booking.price, booking.currency, locale)}</span>

@@ -46,6 +46,8 @@ Full guide: [docs/STAGING.md](STAGING.md). Staging uses the existing ServiceOS D
 - Owner manual: Vercel project + env vars + deployment protection + fixed domain; Supabase Auth Site URL / Redirect URLs / Confirm email / rate limits (see docs/STAGING.md).
 - Native app readiness analysis: [docs/NATIVE_APP_READINESS.md](NATIVE_APP_READINESS.md).
 
+Real-device touch check is MANDATORY on the Vercel staging URL (never on a LAN dev server; see docs/STAGING.md). Status: not yet performed on a real staging deployment.
+
 ## PRODUCTION BLOCKERS (must be closed before production; none blocks staging)
 - Production Auth flows (stage 1) and leaked-password protection
 - Impressum operator data NOT confirmed; Datenschutzerklaerung NOT production ready; `npm run check:legal` must pass (docs/LEGAL_TODO.md)

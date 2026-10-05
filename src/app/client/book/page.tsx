@@ -5,6 +5,9 @@ import { getRequestLocale } from "@/lib/i18n/next";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
 import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
 import { BackLink } from "@/components/ui";
+import { ClientNav } from "@/components/layout/ClientNav/ClientNav";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { getCurrentUserSafe } from "@/server/auth/supabaseBusinessAuth";
 import { demoWorkspaces } from "@/features/workspace/registry";
 import { loadDiscoverableBusinesses } from "@/server/booking/discovery.service";
 import styles from "../client.module.css";
@@ -38,16 +41,30 @@ export default async function ClientDiscoverPage({
   const real = showDemo ? [] : await loadDiscoverableBusinesses();
   const locale = await getRequestLocale();
   const { client, common } = getMessages(locale);
+  // Signed-in clients get the shared client navigation (Book / My bookings / Sign out);
+  // visitors keep the plain back link. Never throws for anonymous visitors.
+  const signedIn = !showDemo && isSupabaseConfigured() && (await getCurrentUserSafe()) !== null;
 
   return (
     <main className={styles.screen}>
-      <div className={styles.topBar}>
-        <BackLink href="/client" label={common.back} />
-        <Preferences />
-      </div>
+      {signedIn ? (
+        <ClientNav client={client} active="book" />
+      ) : (
+        <div className={styles.topBar}>
+          <BackLink href="/client" label={common.back} />
+          <Preferences />
+        </div>
+      )}
       <div className={styles.body}>
         <h1 className={styles.title}>{client.entryTitle}</h1>
-        <p className={styles.subtitle}>{showDemo ? client.entrySubtitle : real.length > 0 ? client.entrySubtitleReal : client.discoveryNone}</p>
+        <p className={styles.subtitle}>{showDemo ? client.entrySubtitle : client.entrySubtitleReal}</p>
+
+        {!showDemo && real.length === 0 ? (
+          <div className={styles.emptyDirectory} role="status">
+            <p className={styles.noticeTitle}>{client.discoveryEmptyTitle}</p>
+            <p className={styles.noticeText}>{client.discoveryEmptyBody}</p>
+          </div>
+        ) : null}
 
         <div className={styles.businessList} role="list">
           {real.map((b) => (
@@ -58,19 +75,13 @@ export default async function ClientDiscoverPage({
               <span className={styles.businessBody}>
                 <span className={styles.businessName}>{b.name}</span>
                 {b.city || b.country ? (
-                  <>
-                    <br />
-                    <span className={styles.businessTagline}>{[b.city, b.country].filter(Boolean).join(", ")}</span>
-                  </>
+                  <span className={styles.businessMeta}>{[b.city, b.country].filter(Boolean).join(", ")}</span>
                 ) : null}
-                {b.description ? (
-                  <>
-                    <br />
-                    <span className={styles.businessTagline}>{b.description.slice(0, 140)}</span>
-                  </>
-                ) : null}
+                {b.description ? <span className={styles.businessDescription}>{b.description}</span> : null}
               </span>
-              <span className={styles.businessCta}>{client.entryCta}</span>
+              <span className={styles.businessCta}>
+                {client.entryCta} <span aria-hidden="true">→</span>
+              </span>
             </Link>
           ))}
           {(showDemo ? demoWorkspaces : []).map((workspace) => (
@@ -90,6 +101,7 @@ export default async function ClientDiscoverPage({
           ))}
         </div>
 
+        {!showDemo && real.length > 0 ? <p className={styles.directoryHint}>{client.discoveryDirectHint}</p> : null}
         {showDemo ? <p className={styles.demoNote}>{client.demoDataNote}</p> : null}
       </div>
       <PublicFooter />

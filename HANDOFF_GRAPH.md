@@ -38,6 +38,11 @@
 6. Forgot/reset/change password + callback + SMTP.
 7. Danger Zone design.
 
+### Final team-staging polish (branch chore/team-staging-readiness)
+- Touch-loss on iPhone (LAN `next dev`): reproduced root cause = the LAN IP missing from `ALLOWED_DEV_ORIGINS` (Next 16 blocks cross-origin /_next dev assets with 403, the page renders and scrolls but NEVER hydrates, so taps do nothing). The hard-coded IP was removed from next.config.ts earlier in this branch. Fix: dev-only red warning banner (DevHostWarning), console warning with detected LAN IPs, docs/STAGING.md "Mandatory real-device touch check"; team demos must use the Vercel staging URL, never a LAN dev server. Not proven on the real phone. All other candidates (Sheet, scroll locks, fixed overlays, service worker, proxy) audited with file evidence, no defect.
+- Client area: shared ClientNav (Book / My bookings / Sign out), primary "Book an appointment" on /client/bookings, directory empty state and direct-link hint, customer-facing staff label helper (`customerStaffLabel`: placeholder "You/Du/Sie/Ви/Вы" never shown to clients; shows the business name or a neutral "Specialist").
+- docs/STAGING.md: TEAM TESTING SCENARIO (A/B/C businesses, clients, one account across businesses).
+
 ### Team staging preparation (branch chore/team-staging-readiness from e5cb5af; see docs/STAGING.md, docs/NATIVE_APP_READINESS.md, ROADMAP "STAGING / TEAM TESTING")
 Done: env-driven `ALLOWED_DEV_ORIGINS` (LAN IP removed from next.config), `NEXT_PUBLIC_APP_ENV` staging badge + noindex, `metadataBase`, preview-safe public base URL, engines Node 20 + .nvmrc, server-only secret scan of the client bundle (0 hits), stale "only in this browser" banner removed (4 locales), public booking mobile overflow fixed (dvh flex column), UK "You" -> "Ви" in My Bookings, business WorkspaceSwitcher lists ONLY the user's own memberships (`listMyWorkspaces`), 92 multi-workspace tests (onboarding clean start, 3-workspace isolation across all modules/RPCs/FKs, discovery combinations, one client account across 3 businesses/time zones, switcher), 8 mutation checks.
 Staging = temporary team-test use of ServiceOS Dev Supabase (test data only; production must get its own Supabase project). Confirm email must stay OFF on staging (no /auth/callback yet). Owner must set up Vercel + Supabase Auth URLs manually (docs/STAGING.md).

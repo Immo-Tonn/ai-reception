@@ -85,6 +85,26 @@ ServiceOS Dev project, Authentication:
 - [ ] Leaked-password protection is a production item (needs a paid plan feature); note state only.
 - [ ] Do not enable additional providers, do not change RLS, do not run migrations from staging.
 
+## Mandatory real-device touch check
+
+Why: on 2026-10-05 a phone loaded the LAN dev URL (`http://192.168.x.x:3000`), the page rendered and scrolled, but NOTHING reacted to taps. Cause (reproduced, A/B tested): `next dev` (Next 16) blocks `/_next/*` dev requests (HMR websocket etc.) from any host that is not `localhost` or listed in `allowedDevOrigins`; the server-rendered HTML then never hydrates. `ALLOWED_DEV_ORIGINS` is empty by default (the LAN IP was deliberately removed from `next.config.ts`), so a LAN dev server is inert on a phone unless `ALLOWED_DEV_ORIGINS=<your LAN IP>` is set in `.env.local` and the dev server restarted. This can never happen on Vercel (production build, no dev resources).
+
+Rules:
+- Team demos and any "does it work on a phone" check use the **Vercel staging URL, NOT the LAN dev server**.
+- LAN dev is for developers only: set `ALLOWED_DEV_ORIGINS=192.168.x.y` in `.env.local`, restart `next dev`, hard reload the phone. If it is missing the dev console prints a warning at start and a red banner "DEV: ... will NOT respond to taps" is shown at the bottom of every page (server-rendered, dev only).
+- A phone that was used on an older deploy/dev session: Safari > Settings > Advanced > Website Data (or a private tab) before testing.
+
+Checklist (iPhone Safari, then Add to Home Screen once; staging URL; clean tab). Each step must visibly react to the FIRST tap:
+1. `/book/<slug>`: pick a service, a date, a time, fill the form, submit. Expected: each step advances; confirmation shows.
+2. Header: open language menu, change language; open theme switcher, change theme. Expected: instant change, menu closes.
+3. `/client/bookings` (signed in): open Reschedule panel, close it, open Cancel panel, close it (do NOT confirm on real data). Expected: panels open/close.
+4. Business app (`/<workspace>/calendar`): tap `+` (quick create), close the sheet; open an appointment sheet, close it; tap bottom navigation items and "More". Expected: sheets close and the page below is immediately tappable again.
+5. Navigate back/forward and rapidly between 3 pages, then repeat one tap from steps 1-4. Expected: still reacts.
+6. Rotate to landscape and back, then tap once more.
+
+Evidence to capture (attach to the test report): screenshot of the failing screen; Safari Web Inspector (Mac > Safari > Develop > <iPhone> > the page) Console errors and Network tab (any `/_next/*` 403/404, any failed JS chunk); `document.querySelector('button')` keys starting with `__react` (empty = not hydrated); then a hard reload (long-press reload > Reload Without Content Blockers, or clear Website Data) and whether it recovers. Also note URL host, build/commit, time.
+Failing = any tap that needs more than one try or does nothing. A not-hydrated page (no `__react` keys, 403s on `/_next/`) means wrong environment, not a feature bug: first re-test on the staging URL.
+
 ## 5. How a tester works
 Create a separate test business:
 1. Open the staging URL (enter the protection password if asked). Check the orange "TEST ENVIRONMENT" badge is visible.
@@ -113,6 +133,31 @@ Actual:
 Screenshot / screen recording:
 Logged in as (business / client / guest):
 ```
+
+## 5a. TEAM TESTING SCENARIO (who does what, who sees what)
+Use three testers (A, B, C) and two or three people playing clients. Test data only.
+
+**Businesses (each in their own browser / private window)**
+1. Developer A signs up at `/signup`, creates **Business A** (e.g. "TEST A Salon"), adds a service and hours.
+2. Developer B creates **Business B**, Developer C creates **Business C** the same way.
+3. In Settings > Business profile > "Online booking and visibility": A and B switch **"List in the ServiceOS directory"** ON. C leaves it **OFF** on purpose (to test the direct link only). All three keep "Accept online bookings" ON.
+
+**Clients**
+4. **Client 1** (new window): `/client` > **Book** > `/client/book`. Expected: the list shows Business A and Business B, NOT Business C, and no demo businesses. Pick B > `/book/<slug of B>` > choose service, time, details > book. The confirmation shows B's name; the specialist line shows a real staff name, or the business name (never "You").
+5. **Client 2** (another window, not signed in) opens Business A's **direct link** `/book/<slug of A>` and books. Business C's direct link works too although C is not listed.
+6. **One Client Account, two businesses**: Client 1 signs up/in at `/client/signup`, books at A and at B (same browser, or sign in after booking). **My bookings** (`/client/bookings`) shows both, each with business name, the business's local time and (if the phone's zone differs) the time zone note. Cancel and reschedule one. The **Book an appointment** button on My bookings leads back to `/client/book`.
+7. Empty directory: while nobody is listed, `/client/book` explains that businesses appear after their owner turns on "List in the ServiceOS directory" and mentions the direct link.
+
+**What each person must see**
+| Who | Sees | Must NOT see |
+|---|---|---|
+| Business A owner | only Business A (calendar, clients, services, bookings made at A) | any data of B or C; B/C in the workspace switcher |
+| Business B / C owner | likewise only their own business | A's bookings or clients |
+| Client 1 (account) | own bookings at A and B in My bookings, business name + time | other people's bookings; internal fields (ids, notes, private appointments) |
+| Client 2 (guest) | the booking confirmation; no list of other bookings | Client 1's bookings |
+| Any client | business name, service, specialist name (or business name), time | the placeholder "You/Sie/Ви/Вы" as a specialist; owner, finance or CRM screens |
+
+Check each in DE, EN, UK and RU, light and dark theme, on an iPhone (Safari) if possible.
 
 ## 6. Rollback and known limitations
 - Rollback: Vercel dashboard > Deployments > promote a previous deployment (instant); env change = redeploy. Staging DB rollback: not available (shared Dev DB; migrations are additive, no down-migrations).

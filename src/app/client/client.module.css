@@ -424,3 +424,45 @@
   font-size: var(--font-size-body);
   color: var(--color-muted);
 }
+
+/* Directory cards: name, optional place, description clamped to two lines. */
+.businessMeta,
+.businessDescription {
+  display: block;
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+}
+
+.businessDescription {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.businessName {
+  overflow-wrap: anywhere;
+}
+
+.businessCard {
+  min-height: 64px;
+}
+
+.emptyDirectory {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.directoryHint {
+  margin: var(--space-4) 0 0;
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+  text-align: center;
+}

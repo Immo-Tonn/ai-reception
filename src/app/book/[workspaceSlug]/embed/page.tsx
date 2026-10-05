@@ -20,7 +20,7 @@ export default async function EmbeddedBookingPage({
 }) {
   const { workspaceSlug } = await params;
   const locale = await getRequestLocale();
-  const { common, booking, client } = getMessages(locale);
+  const { booking, client } = getMessages(locale);
   // Unknown slug = 404 inside (never another business's catalog).
   const { branding, services, staff, profile, timezone } = await loadPublicPageData(workspaceSlug);
 
@@ -35,7 +35,6 @@ export default async function EmbeddedBookingPage({
       timezone={timezone ?? null}
       services={services}
       staffList={staff}
-      youLabel={common.you}
       chromeless
     />
   );

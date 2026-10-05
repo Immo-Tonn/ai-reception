@@ -318,3 +318,28 @@
   flex-direction: column;
   gap: var(--space-3);
 }
+
+/* Primary "book" action: always one tap away from My bookings. */
+.bookCta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--space-5);
+  margin: 0 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+}
+
+.emptyState .bookCta {
+  margin: var(--space-4) 0 0;
+}
+
+.bookCta:focus-visible {
+  outline: 2px solid var(--color-accent-blue);
+  outline-offset: 2px;
+}

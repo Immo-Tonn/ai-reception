@@ -17,7 +17,7 @@ import {
 } from "@/features/embed/messages";
 import { getClientDetailsFieldErrors } from "@/features/publicBooking/detailsValidation";
 import { getServiceLabel } from "@/features/services/label";
-import { getStaffLabel } from "@/features/staff/label";
+import { customerStaffLabel } from "@/features/staff/customerLabel";
 import { useClientAuth } from "@/features/clientAuth/useClientAuth";
 import { clientAuthHref } from "@/features/clientAccount/redirect";
 import type { ServiceDefinition } from "@/features/services/types";
@@ -43,7 +43,6 @@ export function BookingWizard({
   branding,
   profile,
   timezone = null,
-  youLabel,
   services,
   staffList,
   chromeless = false,
@@ -57,7 +56,6 @@ export function BookingWizard({
   profile?: PublicProfile;
   /** Business IANA zone; null (demo presets) keeps browser-local "today". */
   timezone?: string | null;
-  youLabel: string;
   /** Catalog of THIS workspace, loaded by the server page (demo preset or the database). */
   services: ServiceDefinition[];
   staffList: StaffMember[];
@@ -104,6 +102,9 @@ export function BookingWizard({
     timezone && visitorZone && visitorZone !== timezone
       ? booking.timesInBusinessZone.replace("{city}", zoneCityLabel(timezone)).replace("{zone}", timezone)
       : null;
+  // Customer-facing specialist name: the internal "You" placeholder never reaches a client.
+  const staffLabel = (name: string) =>
+    customerStaffLabel(name, { businessName: branding.businessName, neutralLabel: client.specialistNeutral });
   const selectedService = services.find((s) => s.id === selectedServiceId) ?? null;
   const fieldErrors = useMemo(
     () => getClientDetailsFieldErrors({ name, email, phone }),
@@ -338,7 +339,7 @@ export function BookingWizard({
                     }}
                   >
                     <span className={styles.optionBody}>
-                      <span className={styles.optionTitle}>{getStaffLabel(staff.name, youLabel)}</span>
+                      <span className={styles.optionTitle}>{staffLabel(staff.name)}</span>
                     </span>
                   </button>
                 ))}
@@ -439,7 +440,7 @@ export function BookingWizard({
                 {selectedSlot.time} ·{" "}
                 {selectedStaffId === "any"
                   ? booking.anyStaff
-                  : getStaffLabel(selectedSlot.staffName, youLabel)}
+                  : staffLabel(selectedSlot.staffName)}
               </span>
             </div>
 
@@ -514,7 +515,7 @@ export function BookingWizard({
               </div>
               <div className={styles.summaryRow}>
                 <dt>{booking.specialistLabel}</dt>
-                <dd>{getStaffLabel(result.staffName, youLabel)}</dd>
+                <dd>{staffLabel(result.staffName)}</dd>
               </div>
               <div className={styles.summaryRow}>
                 <dt>{booking.dateTimeLabel}</dt>

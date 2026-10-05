@@ -13,7 +13,8 @@ import { findServiceFor } from "@/features/appointments/identity";
 import { getAppointmentsRepository } from "@/features/appointments/repository";
 import { getWorkspaceConfig } from "@/features/workspace/registry";
 import { resolveServiceLabel } from "@/features/services/label";
-import { getStaffLabel } from "@/features/staff/label";
+import { customerStaffLabel } from "@/features/staff/customerLabel";
+import { ClientNav } from "@/components/layout/ClientNav/ClientNav";
 import { buildDateStrip } from "@/lib/time/dateStrip";
 import { isInactiveStatus, splitBookings } from "@/features/publicBooking/bookingTime";
 import type { Locale, Messages } from "@/lib/i18n";
@@ -29,12 +30,10 @@ export function DemoBookingsView({
   locale,
   client,
   appointmentStatus,
-  youLabel,
 }: {
   locale: Locale;
   client: Messages["client"];
   appointmentStatus: Messages["appointmentStatus"];
-  youLabel: string;
 }) {
   const router = useRouter();
   const { identity, loaded: authLoaded, signIn, signOut } = useClientAuth();
@@ -126,19 +125,16 @@ export function DemoBookingsView({
 
   return (
     <main className={styles.screen}>
-      <div className={styles.topBar}>
-        <span />
-        <button
-          type="button"
-          className={styles.signOutButton}
-          onClick={() => {
-            signOut();
-            router.push("/client/bookings?demo=1");
-          }}
-        >
-          {client.signOut}
-        </button>
-      </div>
+      <ClientNav
+        client={client}
+        active="bookings"
+        bookHref="/client/book?demo=1"
+        bookingsHref="/client/bookings?demo=1"
+        signOut={() => {
+          signOut();
+          router.push("/client/bookings?demo=1");
+        }}
+      />
       <div className={styles.body}>
         <h1 className={styles.title}>{client.demoBookingsTitle}</h1>
         <p className={styles.demoBanner}>{client.demoBookingsNote}</p>
@@ -172,7 +168,6 @@ export function DemoBookingsView({
                 locale={locale}
                 client={client}
                 appointmentStatus={appointmentStatus}
-                youLabel={youLabel}
                 cancelling={cancelTargetId === row.appointment.id}
                 rescheduling={rescheduleTargetId === row.appointment.id}
                 onStartCancel={() => setCancelTargetId(row.appointment.id)}
@@ -205,7 +200,6 @@ function BookingCard({
   locale,
   client,
   appointmentStatus,
-  youLabel,
   cancelling,
   rescheduling,
   onStartCancel,
@@ -219,7 +213,6 @@ function BookingCard({
   locale: Locale;
   client: Messages["client"];
   appointmentStatus: Messages["appointmentStatus"];
-  youLabel: string;
   cancelling: boolean;
   rescheduling: boolean;
   onStartCancel: () => void;
@@ -246,7 +239,7 @@ function BookingCard({
         </span>
         <span className={styles.metaLine}>
           {formatDate(new Date(appointment.date + "T00:00:00"), locale, { dateStyle: "medium" })} ·{" "}
-          {appointment.time} · {getStaffLabel(appointment.staff, youLabel)}
+          {appointment.time} · {customerStaffLabel(appointment.staff, { businessName: row.workspaceName, neutralLabel: client.specialistNeutral })}
         </span>
       </div>
 

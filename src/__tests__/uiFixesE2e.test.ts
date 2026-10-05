@@ -130,13 +130,13 @@ describe("client / booking screens: no hard-coded English UI text", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("staff label \"You\" stored in data is localised in My Bookings, wizard and demo view", () => {
+  it("staff label \"You\" stored in data never reaches a client: shared customerStaffLabel in My Bookings, wizard and demo view", () => {
     for (const f of [
       "src/app/client/bookings/BookingsView.tsx",
       "src/app/client/bookings/DemoBookingsView.tsx",
       "src/app/book/[workspaceSlug]/BookingWizard.tsx",
     ]) {
-      expect(read(f), f).toMatch(/getStaffLabel\(/);
+      expect(read(f), f).toMatch(/customerStaffLabel\(/);
     }
     expect(read("src/app/client/bookings/BookingsView.tsx")).not.toMatch(/\$\{booking\.staffName\}/);
   });

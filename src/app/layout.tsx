@@ -6,6 +6,7 @@ import { I18nProvider } from "@/lib/i18n/I18nProvider";
 import { getRequestTheme } from "@/lib/theme/next";
 import { ServiceWorkerRegistration } from "@/components/layout/ServiceWorkerRegistration";
 import { EnvironmentBadge } from "@/components/layout/EnvironmentBadge/EnvironmentBadge";
+import { DevHostWarning } from "@/components/layout/DevHostWarning/DevHostWarning";
 import { getPublicBaseUrl } from "@/lib/config/publicBaseUrl";
 import { isStagingEnv } from "@/lib/config/appEnv";
 import { headers } from "next/headers";
@@ -73,6 +74,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <I18nProvider locale={locale}>{children}</I18nProvider>
         <ServiceWorkerRegistration />
         <EnvironmentBadge />
+        <DevHostWarning />
       </body>
     </html>
   );

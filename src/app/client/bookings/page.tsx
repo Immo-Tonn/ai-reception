@@ -17,12 +17,12 @@ export default async function ClientBookingsPage({
   searchParams: Promise<{ demo?: string }>;
 }) {
   const locale = await getRequestLocale();
-  const { common, client, appointmentStatus } = getMessages(locale);
+  const { client, appointmentStatus } = getMessages(locale);
 
   // Browser-local demo bookings: only behind the explicit ?demo=1 entry, never mixed with real ones.
   if ((await searchParams).demo === "1") {
     return (
-      <DemoBookingsView locale={locale} client={client} appointmentStatus={appointmentStatus} youLabel={common.you} />
+      <DemoBookingsView locale={locale} client={client} appointmentStatus={appointmentStatus} />
     );
   }
 
@@ -56,7 +56,6 @@ export default async function ClientBookingsPage({
       bookings={data.bookings}
       hasPendingClaims={data.hasPendingClaims}
       email={data.email}
-      youLabel={common.you}
     />
   );
 }
