@@ -22,3 +22,6 @@ All of this Needs legal review (not a substitute for a lawyer).
 - [ ] Cookie / consent review (language + theme + claim cookies, localStorage demo data, service worker; third-party requests e.g. Google Fonts via next/font is self-hosted but confirm).
 - [ ] German law check of the whole public surface (Impressum reachable in two clicks, footer on all public pages) - Needs legal review.
 - [ ] Footer credit "Entwickelt von Labrity Web Studio" confirmed by the operator.
+
+## Operator identity (decision pending, do not assume)
+A client-style Impressum exists on this machine (Desktop/Labrity: "Labrity, Inhaber: Andreas Tonn, Muenster"). It is NOT confirmed as the operator of ServiceOS and its data must not be copied into the ServiceOS Impressum until the owner confirms who the operator is. Do not invent legal data. `npm run check:legal` must pass before production.

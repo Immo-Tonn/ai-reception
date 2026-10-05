@@ -1,5 +1,9 @@
 # ServiceOS — Handoff Graph
 
+> **Source of truth for the ORDER of the big stages: [docs/ROADMAP.md](docs/ROADMAP.md)** (DONE / NEXT / LATER / PRODUCTION BLOCKERS / POST-V1, rollback commits, continuation rules).
+> This file is the running log of what each stage changed. Older sections below (e.g. "Audit status (2026-10-04)") are HISTORICAL and may be outdated: trust ROADMAP.md and the newest stage sections.
+> Latest stage commit: `ddaa140` (Business Operations foundation, branch `feature/business-operations-foundation`).
+
 ## TARGET: real vs demo separation, editable settings (decided after manual E2E)
 
 ### Target behaviour
@@ -34,7 +38,7 @@
 6. Forgot/reset/change password + callback + SMTP.
 7. Danger Zone design.
 
-### Business operations stage (branch feature/business-operations-foundation from 25b6ffc; NOT committed)
+### Business operations stage (branch feature/business-operations-foundation from 25b6ffc; committed as ddaa140)
 Design + as-built: docs/BUSINESS_OPERATIONS.md. Migrations 0021 (work), 0022 (finance), 0023 (waiting list + inbox events), 0024 (analytics RPC) APPLIED to ServiceOS Dev. Real Supabase modules now: Finance, Work, Waiting list, Inbox (events), Analytics, plus client "Related" panel. Legal: /impressum (ALL operator facts are TODO markers: docs/LEGAL_TODO.md), /datenschutz (placeholder, NOT production ready; `npm run check:legal` fails while blockers exist = production blocker), PublicFooter on public/auth/client surfaces only. Checks: tsc clean, vitest 75 files / 855 passed + 2 skipped, build OK, lint: no errors in new files (12 old-file errors remain).
 Open: Work/Finance do not emit inbox events yet; unread badge; login/signup brand panel shows a second copyright; nothing verified on devices yet.
 
