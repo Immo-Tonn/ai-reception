@@ -14,9 +14,13 @@ import styles from "./WorkspaceSwitcher.module.css";
  * show ServiceOS isn't a beauty-only product. Not gated behind an env
  * check on purpose (there's no separate prod build in this project yet);
  * it only ever lists the four demo slugs, never a real workspace. A real
- * workspace shows its own business name (from the DB) and no demo list.
+ * workspace shows its own business name (from the DB) and no demo list. When
+ * the signed-in user is a member of several real workspaces (`workspaces`,
+ * resolved on the server from their own memberships), the menu lists exactly
+ * those; a workspace they are not a member of is never offered (and the
+ * layout answers 404 if its URL is typed anyway).
  */
-export function WorkspaceSwitcher({ currentSlug }: { currentSlug: string }) {
+export function WorkspaceSwitcher({ currentSlug, workspaces = [] }: { currentSlug: string; workspaces?: { slug: string; name: string }[] }) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
@@ -36,6 +40,8 @@ export function WorkspaceSwitcher({ currentSlug }: { currentSlug: string }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
+  // Real workspaces only: the other businesses this user is a member of (never demo slugs).
+  const others = isDemo ? [] : workspaces.filter((workspace) => workspace.slug !== currentSlug && !isDemoWorkspaceSlug(workspace.slug));
   const current = demoWorkspaces.find((w) => w.slug === currentSlug);
   const displayName = isDemo ? (current?.name ?? currentSlug) : config.name || currentSlug;
   const avatar = isDemo ? (current?.emoji ?? "🏢") : displayName.trim().charAt(0).toUpperCase() || "🏢";
@@ -68,7 +74,7 @@ export function WorkspaceSwitcher({ currentSlug }: { currentSlug: string }) {
 
       {open && !isDemo ? (
         <div className={styles.menu} role="listbox">
-          <div className={styles.menuLabel}>{messages.workspaceSwitcher.current}</div>
+          <div className={styles.menuLabel}>{others.length > 0 ? messages.workspaceSwitcher.yours : messages.workspaceSwitcher.current}</div>
           <div className={styles.option} role="option" aria-selected="true">
             <span className={styles.optionBody}>
               <span className={styles.optionName}>{displayName}</span>
@@ -77,6 +83,20 @@ export function WorkspaceSwitcher({ currentSlug }: { currentSlug: string }) {
               <Icon name="check" size={16} />
             </span>
           </div>
+          {others.map((workspace) => (
+            <button
+              key={workspace.slug}
+              type="button"
+              role="option"
+              aria-selected="false"
+              className={styles.option}
+              onClick={() => selectWorkspace(workspace.slug)}
+            >
+              <span className={styles.optionBody}>
+                <span className={styles.optionName}>{workspace.name}</span>
+              </span>
+            </button>
+          ))}
         </div>
       ) : null}
 

@@ -40,6 +40,12 @@ Last updated: 2026-10-05, after the Business Operations foundation (commit `ddaa
 ## STAGING / TEST DEPLOY (milestone, not production)
 After the completed Business Operations foundation and successful tsc, tests, build and critical smoke/manual E2E, ServiceOS may be prepared for a CONTROLLED Vercel staging deployment for our own testing (separate staging Supabase project or clearly separated data, no real customers, no production domain, monitoring optional). Staging != production. NOT deployed yet; needs explicit owner permission.
 
+### STAGING / TEAM TESTING (prepared, NOT deployed)
+Full guide: [docs/STAGING.md](STAGING.md). Staging uses the existing ServiceOS Dev Supabase as a TEMPORARY team test environment (test data only; production later gets its OWN Supabase project; old ai-reception forbidden).
+- Done in code: `NEXT_PUBLIC_APP_ENV=staging` shows a top "TEST ENVIRONMENT" badge (DE/EN/UK/RU) and sends noindex (meta + X-Robots-Tag); committed LAN IP removed (`ALLOWED_DEV_ORIGINS`, dev only); `metadataBase` derived from the public base URL; previews prefer `VERCEL_URL` over the production domain; `engines` (Node 20.x) + `.nvmrc`; clean-copy build without env values passes; client bundle scan clean; static test blocks server-only env reads in client components.
+- Owner manual: Vercel project + env vars + deployment protection + fixed domain; Supabase Auth Site URL / Redirect URLs / Confirm email / rate limits (see docs/STAGING.md).
+- Native app readiness analysis: [docs/NATIVE_APP_READINESS.md](NATIVE_APP_READINESS.md).
+
 ## PRODUCTION BLOCKERS (must be closed before production; none blocks staging)
 - Production Auth flows (stage 1) and leaked-password protection
 - Impressum operator data NOT confirmed; Datenschutzerklaerung NOT production ready; `npm run check:legal` must pass (docs/LEGAL_TODO.md)
@@ -65,10 +71,13 @@ Business Operations:
 - Work Lead/Quote currency fixed to EUR
 - Invoice update uses two calls (not atomic)
 - Finance concurrency needs real Postgres verification
-- Duplicate copyright / footer on /login and /signup
+- Real server audit (database) vs the browser-local `useAuditLog` copy that Calendar/Finance/Work still write to for real workspaces (harmless but redundant; remove or route to the server audit)
+- Assistant page (More) is still a demo placeholder
+- Footer: duplicate copyright on /login and /signup was fixed in e5cb5af
 Legal:
 - Impressum operator data not confirmed. Do NOT assume the "Andreas Tonn / Labrity" client-site Impressum is the ServiceOS operator; do not invent legal data
 - Datenschutz is NOT production ready
+Small decisions pending: German `common.you` is informal ("Du") and is shown to clients as the owner staff label; Node 20 -> 22 move (engines + .nvmrc together); `Secure` flag on Supabase cookies before production.
 Housekeeping: old ESLint errors in pre-existing files (react-hooks/*, next/no-html-link-for-pages); dev-only password helper script on the owner's Desktop (delete); `.env.local` still holds the old Supabase secret key (rotation postponed).
 
 ## POST-V1 (future, non-blocking unless architecture requires)

@@ -38,6 +38,10 @@
 6. Forgot/reset/change password + callback + SMTP.
 7. Danger Zone design.
 
+### Team staging preparation (branch chore/team-staging-readiness from e5cb5af; see docs/STAGING.md, docs/NATIVE_APP_READINESS.md, ROADMAP "STAGING / TEAM TESTING")
+Done: env-driven `ALLOWED_DEV_ORIGINS` (LAN IP removed from next.config), `NEXT_PUBLIC_APP_ENV` staging badge + noindex, `metadataBase`, preview-safe public base URL, engines Node 20 + .nvmrc, server-only secret scan of the client bundle (0 hits), stale "only in this browser" banner removed (4 locales), public booking mobile overflow fixed (dvh flex column), UK "You" -> "Ви" in My Bookings, business WorkspaceSwitcher lists ONLY the user's own memberships (`listMyWorkspaces`), 92 multi-workspace tests (onboarding clean start, 3-workspace isolation across all modules/RPCs/FKs, discovery combinations, one client account across 3 businesses/time zones, switcher), 8 mutation checks.
+Staging = temporary team-test use of ServiceOS Dev Supabase (test data only; production must get its own Supabase project). Confirm email must stay OFF on staging (no /auth/callback yet). Owner must set up Vercel + Supabase Auth URLs manually (docs/STAGING.md).
+
 ### Business operations stage (branch feature/business-operations-foundation from 25b6ffc; committed as ddaa140)
 Design + as-built: docs/BUSINESS_OPERATIONS.md. Migrations 0021 (work), 0022 (finance), 0023 (waiting list + inbox events), 0024 (analytics RPC) APPLIED to ServiceOS Dev. Real Supabase modules now: Finance, Work, Waiting list, Inbox (events), Analytics, plus client "Related" panel. Legal: /impressum (ALL operator facts are TODO markers: docs/LEGAL_TODO.md), /datenschutz (placeholder, NOT production ready; `npm run check:legal` fails while blockers exist = production blocker), PublicFooter on public/auth/client surfaces only. Checks: tsc clean, vitest 75 files / 855 passed + 2 skipped, build OK, lint: no errors in new files (12 old-file errors remain).
 Open: Work/Finance do not emit inbox events yet; unread badge; login/signup brand panel shows a second copyright; nothing verified on devices yet.

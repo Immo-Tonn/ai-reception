@@ -56,6 +56,7 @@ export default async function ClientBookingsPage({
       bookings={data.bookings}
       hasPendingClaims={data.hasPendingClaims}
       email={data.email}
+      youLabel={common.you}
     />
   );
 }

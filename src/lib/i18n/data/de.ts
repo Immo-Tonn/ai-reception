@@ -209,6 +209,7 @@ export const de: Messages = {
   },
   workspaceSwitcher: {
     current: "Aktueller Betrieb",
+    yours: "Ihre Betriebe",
     demo: "Demo-Arbeitsbereiche",
   },
   authErrors: {
@@ -265,9 +266,6 @@ export const de: Messages = {
     descriptionLabel: "Beschreibung (optional)",
     descriptionHint: "Wird Kunden bei der Online-Buchung unter dem Leistungsnamen angezeigt.",
     descriptionPlaceholder: "z. B. Was enthalten ist, für wen es passt",
-  },
-  workspaceNotice: {
-    localOnly: "Kalender, Kunden und Online-Buchung werden in der Cloud gespeichert. Rechnungen, Warteliste, Aufträge und Posteingang liegen noch nur in diesem Browser.",
   },
   hoursSettings: {
     title: "Öffnungszeiten",
@@ -1230,5 +1228,8 @@ export const de: Messages = {
     datenschutzLabel: "Datenschutz",
     impressumTitle: "Impressum",
     datenschutzTitle: "Datenschutzerklärung",
+  },
+  environment: {
+    stagingBadge: "TESTUMGEBUNG - nur Testdaten",
   },
 };

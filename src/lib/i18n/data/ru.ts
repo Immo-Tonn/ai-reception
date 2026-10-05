@@ -209,6 +209,7 @@ export const ru: Messages = {
   },
   workspaceSwitcher: {
     current: "Текущий бизнес",
+    yours: "Ваши бизнесы",
     demo: "Демо-пространства",
   },
   authErrors: {
@@ -265,9 +266,6 @@ export const ru: Messages = {
     descriptionLabel: "Описание (необязательно)",
     descriptionHint: "Показывается клиентам под названием услуги при онлайн-записи.",
     descriptionPlaceholder: "напр. что входит, кому подходит",
-  },
-  workspaceNotice: {
-    localOnly: "Календарь, клиенты и онлайн-запись сохраняются в облаке. Счета, лист ожидания, работа и входящие пока хранятся только в этом браузере.",
   },
   hoursSettings: {
     title: "Часы работы",
@@ -1229,5 +1227,8 @@ export const ru: Messages = {
     datenschutzLabel: "Datenschutz",
     impressumTitle: "Impressum",
     datenschutzTitle: "Datenschutzerklärung",
+  },
+  environment: {
+    stagingBadge: "ТЕСТОВАЯ СРЕДА - только тестовые данные",
   },
 };

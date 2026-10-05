@@ -209,6 +209,7 @@ export const uk: Messages = {
   },
   workspaceSwitcher: {
     current: "Поточний бізнес",
+    yours: "Ваші бізнеси",
     demo: "Демо-простори",
   },
   authErrors: {
@@ -265,9 +266,6 @@ export const uk: Messages = {
     descriptionLabel: "Опис (необов’язково)",
     descriptionHint: "Показується клієнтам під назвою послуги під час онлайн-запису.",
     descriptionPlaceholder: "напр. що входить, кому підходить",
-  },
-  workspaceNotice: {
-    localOnly: "Календар, клієнти й онлайн-запис зберігаються в хмарі. Рахунки, список очікування, робота та вхідні поки що зберігаються лише в цьому браузері.",
   },
   hoursSettings: {
     title: "Години роботи",
@@ -1229,5 +1227,8 @@ export const uk: Messages = {
     datenschutzLabel: "Datenschutz",
     impressumTitle: "Impressum",
     datenschutzTitle: "Datenschutzerklärung",
+  },
+  environment: {
+    stagingBadge: "ТЕСТОВЕ СЕРЕДОВИЩЕ - лише тестові дані",
   },
 };

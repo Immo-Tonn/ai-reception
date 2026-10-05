@@ -8,6 +8,9 @@
  *   1. NEXT_PUBLIC_APP_URL — explicit, wins everywhere. Set it in Vercel
  *      (Project → Settings → Environment Variables) to your real domain.
  *      Origin only; a path/trailing slash is stripped. No default value.
+ *      EXCEPTION: on a Vercel PREVIEW deployment (VERCEL_ENV=preview) the
+ *      deployment's own VERCEL_URL is tried before the production domain, so
+ *      a preview never hands out production links.
  *   2. VERCEL_PROJECT_PRODUCTION_URL — set automatically by Vercel: the
  *      project's production domain.
  *   3. VERCEL_URL — set automatically by Vercel: this deployment's URL.
@@ -36,6 +39,7 @@ export interface PublicBaseUrlEnv {
   NEXT_PUBLIC_APP_URL?: string;
   VERCEL_PROJECT_PRODUCTION_URL?: string;
   VERCEL_URL?: string;
+  VERCEL_ENV?: string;
   NODE_ENV?: string;
 }
 
@@ -62,10 +66,12 @@ export function resolvePublicBaseUrl(env: PublicBaseUrlEnv, devHost?: string | n
   const configured = normalizeBaseUrl(env.NEXT_PUBLIC_APP_URL);
   if (configured) return { baseUrl: configured, source: "env" };
 
+  const deployment = normalizeBaseUrl(env.VERCEL_URL);
+  if (env.VERCEL_ENV === "preview" && deployment) return { baseUrl: deployment, source: "vercel-deployment" };
+
   const vercel = normalizeBaseUrl(env.VERCEL_PROJECT_PRODUCTION_URL);
   if (vercel) return { baseUrl: vercel, source: "vercel-production" };
 
-  const deployment = normalizeBaseUrl(env.VERCEL_URL);
   if (deployment) return { baseUrl: deployment, source: "vercel-deployment" };
 
   if (env.NODE_ENV === "development" || isLocalHost(devHost)) {
@@ -83,6 +89,7 @@ export function getPublicBaseUrl(devHost?: string | null): PublicBaseUrl {
       NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
       VERCEL_PROJECT_PRODUCTION_URL: process.env.VERCEL_PROJECT_PRODUCTION_URL,
       VERCEL_URL: process.env.VERCEL_URL,
+      VERCEL_ENV: process.env.VERCEL_ENV,
       NODE_ENV: process.env.NODE_ENV,
     },
     devHost,

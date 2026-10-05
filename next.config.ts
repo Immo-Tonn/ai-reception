@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { isStagingEnv, parseAllowedDevOrigins } from "./src/lib/config/appEnv";
 
 /**
  * Framing policy.
@@ -20,10 +21,15 @@ import type { NextConfig } from "next";
  */
 const nextConfig: NextConfig = {
   // DEV ONLY (ignored by `next build`/production): lets a phone on the same Wi-Fi load the
-  // dev server by LAN address. Update if the Mac's LAN IP changes. Do not commit.
-  allowedDevOrigins: ["192.168.0.179"],
+  // dev server by LAN address. Set ALLOWED_DEV_ORIGINS="192.168.x.y,other-host" in .env.local
+  // (comma list, empty by default). Never hard-code a LAN IP here.
+  allowedDevOrigins: parseAllowedDevOrigins(process.env.ALLOWED_DEV_ORIGINS),
   async headers() {
     return [
+      // STAGING only (NEXT_PUBLIC_APP_ENV=staging): never index the test site.
+      ...(isStagingEnv()
+        ? [{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }]
+        : []),
       {
         source: "/:path((?!book/[^/]+/embed$).*)",
         headers: [

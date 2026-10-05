@@ -35,6 +35,13 @@ describe("public base URL", () => {
     expect(resolvePublicBaseUrl({ ...env, NEXT_PUBLIC_APP_URL: undefined, VERCEL_PROJECT_PRODUCTION_URL: undefined }).baseUrl).toBe("https://deploy.invalid");
   });
 
+  it("on a Vercel PREVIEW the deployment URL beats the production domain (no production links from previews)", () => {
+    const env = { VERCEL_PROJECT_PRODUCTION_URL: "prod.invalid", VERCEL_URL: "deploy-abc.vercel.invalid", NODE_ENV: "production" };
+    expect(resolvePublicBaseUrl({ ...env, VERCEL_ENV: "preview" }).baseUrl).toBe("https://deploy-abc.vercel.invalid");
+    expect(resolvePublicBaseUrl({ ...env, VERCEL_ENV: "production" }).baseUrl).toBe("https://prod.invalid");
+    expect(resolvePublicBaseUrl({ ...env, VERCEL_ENV: "preview", NEXT_PUBLIC_APP_URL: "https://custom.invalid" }).baseUrl).toBe("https://custom.invalid");
+  });
+
   it("uses the dev host only in development", () => {
     expect(resolvePublicBaseUrl({ NODE_ENV: "development" }, "localhost:3001")).toEqual({
       baseUrl: "http://localhost:3001",

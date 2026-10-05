@@ -9,6 +9,7 @@ import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getSession, UnauthenticatedError, WorkspaceAccessError } from "@/server/auth/session";
 import { loadWorkspaceCatalog } from "@/server/services/workspaceCatalog.service";
+import { listMyWorkspaces, type MyWorkspace } from "@/server/services/myWorkspaces.service";
 import { WorkspaceCatalogProvider, type WorkspaceCatalogData } from "@/features/workspace/WorkspaceCatalog";
 import styles from "./layout.module.css";
 
@@ -26,12 +27,14 @@ export default async function WorkspaceLayout({
   // members: not signed in -> /login; signed in but not a member, unknown
   // slug, or Supabase not configured -> 404 (never confirm it exists).
   let catalog: WorkspaceCatalogData | null = null;
+  let myWorkspaces: MyWorkspace[] = [];
   if (!isDemo) {
     if (!isSupabaseConfigured()) notFound();
     let failure: "signin" | "missing" | null = null;
     try {
       const session = await getSession(workspaceSlug);
       catalog = await loadWorkspaceCatalog(session, workspaceSlug);
+      myWorkspaces = await listMyWorkspaces(); // the switcher: only workspaces this user is a member of
     } catch (error) {
       if (error instanceof UnauthenticatedError) failure = "signin";
       else if (error instanceof WorkspaceAccessError) failure = "missing";
@@ -42,21 +45,16 @@ export default async function WorkspaceLayout({
   }
 
   const locale = await getRequestLocale();
-  const { nav, common, quickCreate, workspaceNotice } = getMessages(locale);
+  const { nav, common, quickCreate } = getMessages(locale);
 
   const shell = (
     <div className={styles.shell}>
       <Sidebar workspaceSlug={workspaceSlug} locale={locale} messages={nav} appName={common.appName} />
       <div className={styles.content}>
         <div className={styles.topBar}>
-          <WorkspaceSwitcher currentSlug={workspaceSlug} />
+          <WorkspaceSwitcher currentSlug={workspaceSlug} workspaces={myWorkspaces} />
           <Preferences />
         </div>
-        {!isDemo && (
-          <p className={styles.localOnlyNotice} role="note">
-            {workspaceNotice.localOnly}
-          </p>
-        )}
         {children}
       </div>
       <BottomNav workspaceSlug={workspaceSlug} nav={nav} quickCreate={quickCreate} />

@@ -223,6 +223,7 @@ export const en = {
   },
   workspaceSwitcher: {
     current: "Current business",
+    yours: "Your businesses",
     demo: "Demo workspaces",
   },
   authErrors: {
@@ -279,9 +280,6 @@ export const en = {
     descriptionLabel: "Description (optional)",
     descriptionHint: "Shown to clients under the service name when booking online.",
     descriptionPlaceholder: "e.g. What is included, who it suits",
-  },
-  workspaceNotice: {
-    localOnly: "Calendar, clients and online booking are saved in the cloud. Invoices, waiting list, work and inbox are still stored only in this browser.",
   },
   hoursSettings: {
     title: "Opening hours",
@@ -1254,5 +1252,8 @@ export const en = {
     datenschutzLabel: "Datenschutz",
     impressumTitle: "Impressum",
     datenschutzTitle: "Datenschutzerklärung",
+  },
+  environment: {
+    stagingBadge: "TEST ENVIRONMENT - test data only",
   },
 };

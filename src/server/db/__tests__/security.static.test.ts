@@ -201,6 +201,16 @@ describe("service-role and secret hygiene", () => {
     for (const name of ["admin.ts", "server.ts"]) expect(read(path.join(root, "src/lib/supabase", name))).toMatch(/import "server-only"/);
   });
 
+  it("client components never read server-only env vars (only NEXT_PUBLIC_* and NODE_ENV)", () => {
+    for (const f of sources) {
+      const text = read(f);
+      if (!/^\s*["']use client["']/m.test(text.split("\n").slice(0, 3).join("\n"))) continue;
+      for (const m of text.matchAll(/process\.env\.([A-Za-z0-9_]+)/g)) {
+        expect(m[1], rel(f)).toMatch(/^(NEXT_PUBLIC_[A-Z0-9_]+|NODE_ENV)$/);
+      }
+    }
+  });
+
   it("no UI component queries Supabase directly (UI -> action -> service -> repository -> adapter)", () => {
     const ui = sources.filter((f) => rel(f).startsWith("src/app/") || rel(f).startsWith("src/components/"));
     const offenders = ui.filter((f) => /\.from\(["'`]\w+["'`]\)/.test(read(f)) && /supabase/i.test(read(f))).map(rel);
