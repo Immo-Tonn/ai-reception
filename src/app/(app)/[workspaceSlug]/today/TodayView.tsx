@@ -5,6 +5,7 @@ import { Icon } from "@/components/ui";
 import { useAppointments } from "@/features/appointments/useAppointments";
 import { useInvoices } from "@/features/finance/useInvoices";
 import { calculateOutstanding } from "@/features/finance/calculations";
+import { isOpenInvoice } from "@/features/finance/status";
 import { useWorkspaceConfig, useWorkspaceToday } from "@/features/workspace/WorkspaceCatalog";
 import { resolveServiceLabel } from "@/features/services/label";
 import type { Locale, Messages } from "@/lib/i18n";
@@ -64,7 +65,7 @@ export function TodayView({
     .reduce((sum, a) => sum + a.price, 0);
   const pendingToday = todayAppointments.filter((a) => a.status === "pending");
   const outstanding = calculateOutstanding(invoices);
-  const firstUnpaidInvoice = invoices.find((i) => i.status !== "paid");
+  const firstUnpaidInvoice = invoices.find((i) => isOpenInvoice(i.status));
 
   const attentionItems: AttentionItem[] = [];
   if (pendingToday.length > 0) {

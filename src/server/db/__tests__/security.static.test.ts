@@ -31,7 +31,11 @@ describe("migrations — static policy checks", () => {
       // The one legitimate delete: pruning expired rows of the rate-limit table itself.
       const sql = sqlOf(f).replace(/--.*$/gm, "").replace(/delete\s+from\s+public\.rate_limits\s+where\s+window_start/gi, "")
         // 0020: replace_working_hours deletes ONE owner's own week inside the same transaction that re-inserts it (SECURITY INVOKER, RLS applies).
-        .replace(/delete\s+from\s+public\.working_hours\s+where\s+workspace_id\s*=\s*p_workspace_id/gi, "");
+        .replace(/delete\s+from\s+public\.working_hours\s+where\s+workspace_id\s*=\s*p_workspace_id/gi, "")
+        // 0021: replace_quote_items swaps the line items of ONE (not yet accepted) quote inside one transaction (SECURITY INVOKER, RLS applies).
+        .replace(/delete\s+from\s+public\.quote_items\s+where\s+quote_id\s*=\s*v_quote\.id/gi, "")
+        // 0022: replace_invoice_items swaps the line items of ONE invoice (never a paid/cancelled one: the guard trigger refuses) inside one transaction (SECURITY INVOKER, RLS applies).
+        .replace(/delete\s+from\s+public\.invoice_items\s+where\s+id\s*=\s*any\s*\(v_old\)/gi, "");
       expect(sql, f).not.toMatch(/\bdrop\s+(table|schema|column|type|extension)\b/i);
       expect(sql, f).not.toMatch(/\btruncate\b/i);
       expect(sql, f).not.toMatch(/\bdelete\s+from\b/i);

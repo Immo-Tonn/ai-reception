@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
+import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
 import { Icon } from "@/components/ui";
 import styles from "./page.module.css";
 
@@ -45,6 +46,7 @@ export default async function Home() {
         </div>
 
       </div>
+      <PublicFooter />
     </main>
   );
 }

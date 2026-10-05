@@ -8,7 +8,9 @@ import { useAppointments } from "@/features/appointments/useAppointments";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency, formatDate } from "@/lib/i18n/format";
 import { useWorkspaceToday } from "@/features/workspace/WorkspaceCatalog";
+import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { EditClientSheet } from "./EditClientSheet";
+import { RelatedPanel } from "./RelatedPanel";
 import styles from "./page.module.css";
 
 type Tab = "upcoming" | "history" | "notes" | "contact";
@@ -27,11 +29,13 @@ export function ClientDetailView({
   clientId,
   locale,
   messages,
+  crossModule,
 }: {
   workspaceSlug: string;
   clientId: string;
   locale: Locale;
   messages: Messages["clients"];
+  crossModule: Messages["crossModule"];
 }) {
   const [tab, setTab] = useState<Tab>("upcoming");
   const [editing, setEditing] = useState(false);
@@ -211,6 +215,10 @@ export function ClientDetailView({
             </>
           )}
         </div>
+      )}
+
+      {!isDemoWorkspaceSlug(workspaceSlug) && (
+        <RelatedPanel workspaceSlug={workspaceSlug} clientId={client.id} locale={locale} messages={crossModule} />
       )}
     </main>
   );

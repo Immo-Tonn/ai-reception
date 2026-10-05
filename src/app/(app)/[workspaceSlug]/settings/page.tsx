@@ -30,7 +30,7 @@ export default async function SettingsPage({
   // the layout has already ensured the viewer may open this workspace.
   const isDemo = isDemoWorkspaceSlug(workspaceSlug);
   const distribution = baseUrl ? buildBookingDistribution(baseUrl, workspaceSlug) : null;
-  const { nav, settings } = getMessages(locale);
+  const { nav, settings, legal } = getMessages(locale);
 
   return (
     <main className={styles.page}>
@@ -98,6 +98,21 @@ export default async function SettingsPage({
           </Button>
         </form>
       )}
+
+      {(
+        [
+          ["/impressum", legal.impressumLabel, legal.settingsImpressumDescription],
+          ["/datenschutz", legal.datenschutzLabel, legal.settingsDatenschutzDescription],
+        ] as const
+      ).map(([href, label, description]) => (
+        <Link key={href} href={href} className={styles.row}>
+          <div className={styles.rowBody}>
+            <p className={styles.rowLabel}>{label}</p>
+            <p className={styles.rowDescription}>{description}</p>
+          </div>
+          <Icon name="chevronRight" size={18} />
+        </Link>
+      ))}
 
       <OnlineBookingSection
         workspaceSlug={workspaceSlug}

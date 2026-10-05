@@ -223,3 +223,62 @@
   color: var(--color-muted);
   font-size: var(--font-size-body);
 }
+
+.markAll {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.inlineError {
+  margin: 0 0 var(--space-3);
+  color: var(--color-status-cancelled);
+  font-size: var(--font-size-small);
+}
+
+.eventRow {
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.eventRow:first-child {
+  border-top: none;
+}
+
+.eventMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 68px;
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.eventToggle {
+  flex-shrink: 0;
+  min-height: 44px;
+  margin-inline-end: var(--space-3);
+  padding: 0 var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  cursor: pointer;
+}
+
+.nameUnread {
+  font-weight: var(--font-weight-semibold);
+}

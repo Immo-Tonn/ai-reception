@@ -9,7 +9,7 @@ numbered file.
 
 ## Order
 
-Run in filename order (`0001` → `0020`); each depends on tables created
+Run in filename order (`0001` → `0024`); each depends on tables created
 by the ones before it.
 
 | File | Tables |
@@ -32,6 +32,10 @@ by the ones before it.
 | `0018_client_accounts_and_my_bookings.sql` | Client accounts (own-row RLS), per-appointment booking claims (hashed token, no client access), service-role RPCs for claim / list / cancel / reschedule. **Applied to Dev** |
 | `0019_staff_scheduling.sql` | Staff title / sort order / schedule mode; several non-overlapping `working_hours` intervals per weekday (CHECK + trigger); `time_off` (business closures and staff time off, same-workspace guard, RLS); resource description / sort order; `service_resources`; booking rules on `workspaces` (min notice, horizon, slot interval, cancel / reschedule deadlines); restrict-delete triggers for staff, resources, services used by appointments; public catalog + `create_public_booking` / `cancel_my_booking` / `reschedule_my_booking` enforce the rules. **Applied to Dev** |
 | `0020_replace_working_hours.sql` | `replace_working_hours(workspace, staff, rows)`: atomic replace of one owner's weekly hours (SECURITY INVOKER, RLS applies). **Applied to Dev** |
+| `0021_work_pipeline.sql` | Work pipeline: `leads`, `quotes` (+`quote_items`), `jobs`, `projects` (visibility and financial bucket as independent columns, archive instead of delete), invoice relation columns, idempotent SECURITY INVOKER conversion functions, `can_see_work_row`. **Applied to Dev** |
+| `0022_finance_invoices.sql` | Finance: atomic per-workspace invoice numbering (`invoice_counters`, `next_invoice_number`), line items, payments with void, derived overdue, total always = sum of items, bucket + visibility RLS, `create_invoice` / `record_payment` / `cancel_invoice` etc. **Applied to Dev** |
+| `0023_waiting_list_and_inbox.sql` | Waiting list columns + guards; `inbox_events` (trigger-produced booking events with dedupe key, generic text for private appointments), `record_inbox_event`. **Applied to Dev** |
+| `0024_analytics.sql` | `analytics_overview` (SECURITY INVOKER: RLS applies to every row it reads; revenue only with finance.view; workspace-local days). **Applied to Dev** |
 | `0015_service_role_default_privileges.sql` | Default privileges for the service role on future tables/sequences (service role only; no change to anon/authenticated or RLS) |
 | `0014_rate_limits.sql` | `rate_limits` table + `rate_limit_hit()` (PostgreSQL rate limiting, hashed subjects, service role only) |
 
@@ -52,7 +56,7 @@ by the ones before it.
 
 ## Applying
 
-Empty project: run `0001` → `0020` in order (SQL Editor, or `supabase db push`).
+Empty project: run `0001` → `0024` in order (SQL Editor, or `supabase db push`).
 `0001`–`0006` use `create type` without `if not exists`, so they run once, on
 an empty database. `0007`–`0016` are idempotent. A project that already has
 `0001`–`0006` needs only `0007`+.

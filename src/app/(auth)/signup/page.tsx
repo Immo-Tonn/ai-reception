@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
+import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
 import { BackLink } from "@/components/ui";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
@@ -61,6 +62,7 @@ export default async function SignupPage() {
           </div>
         </section>
       </div>
+      <PublicFooter />
     </main>
   );
 }

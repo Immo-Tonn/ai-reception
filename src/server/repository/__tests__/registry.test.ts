@@ -8,6 +8,7 @@ import {
   getServerServicesRepository,
   getServerStaffRepository,
   getServerWaitingListRepository,
+  getServerInboxEventsRepository,
 } from "../registry";
 
 describe("server repository registry", () => {
@@ -26,10 +27,19 @@ describe("server repository registry", () => {
     }
   });
 
-  it("entities not migrated yet still fail loudly for a real workspace (no silent in-memory writes)", () => {
-    for (const make of [getServerInvoicesRepository, getServerWaitingListRepository]) {
-      expect(() => make("11111111-2222-4333-8444-555555555555")).toThrow(/not available for real workspaces/);
-    }
+  it("a real workspace's invoices use the Supabase adapter with payment ops; demo keeps the in-memory mock", async () => {
+    const real = getServerInvoicesRepository("11111111-2222-4333-8444-555555555555");
+    for (const fn of ["list", "get", "create", "update", "recordPayment", "voidPayments", "cancel"] as const) expect(typeof real[fn]).toBe("function");
+    await expect(real.remove("x")).rejects.toThrow(/cancel/);
+    expect((await getServerInvoicesRepository("demo-salon").list()).length).toBeGreaterThan(0);
+  });
+
+  it("a real workspace's waiting list uses the Supabase adapter (never the in-memory mock); inbox events are real-only", () => {
+    const real = "11111111-2222-4333-8444-555555555555";
+    expect(typeof getServerWaitingListRepository(real).list).toBe("function");
+    expect(getServerWaitingListRepository(real)).not.toBe(getServerWaitingListRepository("demo-salon"));
+    expect(() => getServerInboxEventsRepository("demo-salon")).toThrow(/not available for demo/);
+    expect(typeof getServerInboxEventsRepository(real).list).toBe("function");
   });
 
   it("a real workspace's services use the Supabase adapter, created lazily without touching the network", () => {

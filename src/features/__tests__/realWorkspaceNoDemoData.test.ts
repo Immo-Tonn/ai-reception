@@ -23,7 +23,7 @@ const filters = { periodDays: 30, service: "all", staff: "all", bucket: "all" } 
 describe("a REAL workspace never receives demo Finance / Waiting List / Work / Inbox data", () => {
   it.each([
     ["invoices", () => getInvoicesRepository(REAL)],
-    ["waiting list", () => getWaitingListRepository(REAL)],
+    // waiting list: a real workspace uses the shared database (Server Actions), covered by waitingListInbox.test.ts
     ["inbox", () => getInboxRepository(REAL)],
     ["leads", () => getLeadsRepository(REAL)],
     ["quotes", () => getQuotesRepository(REAL)],

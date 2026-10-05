@@ -11,7 +11,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 vi.mock("@/server/repository/registry", () => ({
-  getServerInvoicesRepository: () => ({ create: async (i: unknown) => void created.push(i), list: async () => [] }),
+  getServerInvoicesRepository: () => ({ create: async (i: unknown) => (created.push(i), i), list: async () => [] }),
   getServerAuditLogRepository: () => ({ create: async () => undefined }),
 }));
 

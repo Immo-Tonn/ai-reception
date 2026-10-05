@@ -15,17 +15,33 @@ import { getWorkspaceConfig, isDemoWorkspaceSlug } from "@/features/workspace/re
 import { createSupabaseServicesRepository } from "./servicesSupabaseRepository";
 import { createSupabaseAppointmentsRepository } from "./appointmentsSupabaseRepository";
 import { createSupabaseClientsRepository } from "./clientsSupabaseRepository";
+import { createSupabaseInvoicesRepository } from "./invoicesSupabaseRepository";
+import { withDemoInvoiceOps } from "@/features/finance/demoOps";
+import type { InvoicesRepository } from "@/features/finance/types";
+import { createSupabaseWaitingListRepository } from "./waitingListSupabaseRepository";
+import { createSupabaseInboxEventsRepository, type InboxEventsRepository } from "./inboxEventsSupabaseRepository";
 import {
   createSupabaseAuditLogRepository,
   createSupabaseResourcesRepository,
   createSupabaseStaffRepository,
 } from "./catalogSupabaseRepositories";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { Job, Lead, Project, Quote } from "@/features/work/types";
+import { demoJobs, demoLeads, demoProjects, demoQuotes } from "@/features/work/demoData";
+import {
+  createSupabaseJobsRepository,
+  createSupabaseLeadsRepository,
+  createSupabaseProjectsRepository,
+  createSupabaseQuotesRepository,
+  createSupabaseWorkOps,
+  type WorkOps,
+} from "./workSupabaseRepositories";
+import { createDemoWorkOps } from "./workDemoOps";
 import { demoWorkingHours } from "@/features/workingHours/demoData";
 import type { WorkingHoursProfile } from "@/features/workingHours/types";
 import type { ScheduleMode, TimeOffEntry } from "@/features/scheduling/types";
 import { workingHoursFromRows, type WorkingHoursRow } from "@/server/booking/workingHoursMapper";
-import { toRepositoryError } from "./errors";
+import { RepositoryConflictError, toRepositoryError } from "./errors";
 
 /**
  * One mock repository instance per (workspace, entity), created lazily
@@ -69,10 +85,28 @@ const mockClientsRepository = registryFactory<ClientRecord>(
 export function getServerClientsRepository(workspaceId: string): Repository<ClientRecord> {
   return isDemoWorkspaceSlug(workspaceId) ? mockClientsRepository(workspaceId) : createSupabaseClientsRepository(workspaceId);
 }
-export const getServerInvoicesRepository = registryFactory<Invoice>(() => demoInvoices);
-export const getServerWaitingListRepository = registryFactory<WaitingListEntry>(
-  () => demoWaitingList,
-);
+const mockInvoicesRepository = registryFactory<Invoice>(() => demoInvoices);
+
+/** Demo workspaces: in-memory mock (+ payment ops). Real workspaces: Supabase as the signed-in user (RLS). */
+export function getServerInvoicesRepository(workspaceId: string): InvoicesRepository {
+  return isDemoWorkspaceSlug(workspaceId)
+    ? withDemoInvoiceOps(mockInvoicesRepository(workspaceId), () => new RepositoryConflictError("invoices"))
+    : createSupabaseInvoicesRepository(workspaceId);
+}
+const mockWaitingListRepository = registryFactory<WaitingListEntry>(() => demoWaitingList);
+
+/** Demo workspaces: in-memory mock. Real workspaces: Supabase, as the signed-in user (RLS). */
+export function getServerWaitingListRepository(workspaceId: string): Repository<WaitingListEntry> {
+  return isDemoWorkspaceSlug(workspaceId)
+    ? mockWaitingListRepository(workspaceId)
+    : createSupabaseWaitingListRepository(workspaceId);
+}
+
+/** Inbox events exist for REAL workspaces only (demo keeps its Conversation fixtures). */
+export function getServerInboxEventsRepository(workspaceId: string): InboxEventsRepository {
+  if (isDemoWorkspaceSlug(workspaceId)) throw new Error("Inbox events are not available for demo workspaces.");
+  return createSupabaseInboxEventsRepository(workspaceId);
+}
 const mockServicesRepository = registryFactory<ServiceDefinition>(
   (workspaceId) => getWorkspaceConfig(workspaceId).services,
 );
@@ -97,6 +131,35 @@ const mockResourcesRepository = registryFactory<ResourceDefinition>(
 export function getServerResourcesRepository(workspaceId: string): Repository<ResourceDefinition> {
   return isDemoWorkspaceSlug(workspaceId) ? mockResourcesRepository(workspaceId) : createSupabaseResourcesRepository(workspaceId);
 }
+// Work pipeline (migration 0021): demo = in-memory mock (demo-* slugs only), real = Supabase under RLS.
+const mockLeadsRepository = registryFactory<Lead>(() => demoLeads);
+const mockQuotesRepository = registryFactory<Quote>(() => demoQuotes);
+const mockJobsRepository = registryFactory<Job>(() => demoJobs);
+const mockProjectsRepository = registryFactory<Project>(() => demoProjects);
+
+export function getServerLeadsRepository(workspaceId: string): Repository<Lead> {
+  return isDemoWorkspaceSlug(workspaceId) ? mockLeadsRepository(workspaceId) : createSupabaseLeadsRepository(workspaceId);
+}
+export function getServerQuotesRepository(workspaceId: string): Repository<Quote> {
+  return isDemoWorkspaceSlug(workspaceId) ? mockQuotesRepository(workspaceId) : createSupabaseQuotesRepository(workspaceId);
+}
+export function getServerJobsRepository(workspaceId: string): Repository<Job> {
+  return isDemoWorkspaceSlug(workspaceId) ? mockJobsRepository(workspaceId) : createSupabaseJobsRepository(workspaceId);
+}
+export function getServerProjectsRepository(workspaceId: string): Repository<Project> {
+  return isDemoWorkspaceSlug(workspaceId) ? mockProjectsRepository(workspaceId) : createSupabaseProjectsRepository(workspaceId);
+}
+/** Atomic, idempotent conversions (lead -> quote -> job / project). */
+export function getServerWorkOps(workspaceId: string): WorkOps {
+  if (!isDemoWorkspaceSlug(workspaceId)) return createSupabaseWorkOps();
+  return createDemoWorkOps({
+    leads: mockLeadsRepository(workspaceId),
+    quotes: mockQuotesRepository(workspaceId),
+    jobs: mockJobsRepository(workspaceId),
+    projects: mockProjectsRepository(workspaceId),
+  });
+}
+
 const mockAuditLogRepository = registryFactory<AuditLogEntry>(() => []);
 
 export function getServerAuditLogRepository(workspaceId: string): Repository<AuditLogEntry> {

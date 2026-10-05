@@ -3,6 +3,7 @@ import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { loadPublicPageData } from "@/server/booking/pageData";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
+import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
 import { BookingWizard } from "./BookingWizard";
 
 export const metadata: Metadata = {
@@ -21,18 +22,21 @@ export default async function PublicBookingPage({
   const { branding, services, staff, profile, timezone } = await loadPublicPageData(workspaceSlug);
 
   return (
-    <BookingWizard
-      workspaceSlug={workspaceSlug}
-      locale={locale}
-      booking={booking}
-      client={client}
-      branding={branding}
-      profile={profile}
-      timezone={timezone ?? null}
-      services={services}
-      staffList={staff}
-      youLabel={common.you}
-      headerActions={<Preferences />}
-    />
+    <>
+      <BookingWizard
+        workspaceSlug={workspaceSlug}
+        locale={locale}
+        booking={booking}
+        client={client}
+        branding={branding}
+        profile={profile}
+        timezone={timezone ?? null}
+        services={services}
+        staffList={staff}
+        youLabel={common.you}
+        headerActions={<Preferences />}
+      />
+      <PublicFooter />
+    </>
   );
 }

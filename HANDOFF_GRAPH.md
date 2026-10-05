@@ -34,6 +34,10 @@
 6. Forgot/reset/change password + callback + SMTP.
 7. Danger Zone design.
 
+### Business operations stage (branch feature/business-operations-foundation from 25b6ffc; NOT committed)
+Design + as-built: docs/BUSINESS_OPERATIONS.md. Migrations 0021 (work), 0022 (finance), 0023 (waiting list + inbox events), 0024 (analytics RPC) APPLIED to ServiceOS Dev. Real Supabase modules now: Finance, Work, Waiting list, Inbox (events), Analytics, plus client "Related" panel. Legal: /impressum (ALL operator facts are TODO markers: docs/LEGAL_TODO.md), /datenschutz (placeholder, NOT production ready; `npm run check:legal` fails while blockers exist = production blocker), PublicFooter on public/auth/client surfaces only. Checks: tsc clean, vitest 75 files / 855 passed + 2 skipped, build OK, lint: no errors in new files (12 old-file errors remain).
+Open: Work/Finance do not emit inbox events yet; unread badge; login/signup brand panel shows a second copyright; nothing verified on devices yet.
+
 ### Staff / scheduling stage (branch feature/staff-scheduling-foundation; baseline commit 833fde7; NOT committed since)
 Design + as-built: docs/STAFF_SCHEDULING.md. Migrations 0019 (schema/RLS/triggers/public RPC rules) and 0020 (atomic replace_working_hours) APPLIED to ServiceOS Dev (dry-run, ref matched .env.local, data intact, anon 401, advisors unchanged).
 Built: staff (title/order/schedule mode/services), resources (+service links), business + staff hours (multi-interval, inherit/custom), time off + closures, booking rules (auto-confirm, min notice, horizon, slot grid, cancel/reschedule deadlines), ONE engine (availability.ts + workingHours/logic.ts + scheduling/*), public booking available-dates strip, settings pages staff/resources/hours/booking (demo read-only).

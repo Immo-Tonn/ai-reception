@@ -264,10 +264,12 @@ describe("tenant isolation (RLS)", () => {
     ).rejects.toThrow();
   });
 
-  it("tables of not-yet-migrated features are deny-all for signed-in users", async () => {
+  it("invoices (policies since 0022): the owning workspace's owner sees them, another tenant sees nothing", async () => {
     await db.exec(`insert into invoices (workspace_id, number) values ('${wsA}', 'INV-1')`);
-    for (const t of ["invoices", "invoice_items", "payments", "waiting_list"]) {
-      const rows = await as(db, { kind: "user", id: A }, () => q(`select * from ${t}`));
+    const own = await as(db, { kind: "user", id: A }, () => q(`select * from invoices`));
+    expect(own).toHaveLength(1);
+    for (const t of ["invoices", "invoice_items", "payments"]) {
+      const rows = await as(db, { kind: "user", id: B }, () => q(`select * from ${t}`));
       expect(rows, t).toHaveLength(0);
     }
   });

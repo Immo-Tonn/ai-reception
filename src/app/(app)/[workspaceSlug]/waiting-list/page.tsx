@@ -17,6 +17,7 @@ export default async function WaitingListPage({
       locale={locale}
       messages={waitingList}
       youLabel={common.you}
+      saveLabels={common.saveStatus}
     />
   );
 }

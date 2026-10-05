@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:legal": "LEGAL_RELEASE_CHECK=1 vitest run src/content/legal"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

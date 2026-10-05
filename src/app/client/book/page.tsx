@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
+import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
 import { BackLink } from "@/components/ui";
 import { demoWorkspaces } from "@/features/workspace/registry";
 import { loadDiscoverableBusinesses } from "@/server/booking/discovery.service";
@@ -91,6 +92,7 @@ export default async function ClientDiscoverPage({
 
         {showDemo ? <p className={styles.demoNote}>{client.demoDataNote}</p> : null}
       </div>
+      <PublicFooter />
     </main>
   );
 }

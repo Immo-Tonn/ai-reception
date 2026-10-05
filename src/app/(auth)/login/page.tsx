@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Button, BackLink } from "@/components/ui";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
+import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { LoginForm } from "./LoginForm";
@@ -67,6 +68,7 @@ export default async function LoginPage() {
           </div>
         </section>
       </div>
+      <PublicFooter />
     </main>
   );
 }

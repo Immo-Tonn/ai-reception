@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
+import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
 import { BackLink } from "@/components/ui";
 import styles from "../client/client.module.css";
 
@@ -48,6 +49,7 @@ export default async function BusinessIntroPage() {
           </Link>
         </p>
       </div>
+      <PublicFooter />
     </main>
   );
 }
