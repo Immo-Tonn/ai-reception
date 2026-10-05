@@ -29,7 +29,6 @@ export default async function SignupPage() {
             <h1 className={styles.brandTitle}>{signup.brandTitle}</h1>
             <p className={styles.brandSubtitle}>{signup.brandSubtitle}</p>
           </div>
-          <span className={styles.brandFoot}>© {new Date().getFullYear()} ServiceOS</span>
         </section>
 
         <section className={styles.formPanel}>

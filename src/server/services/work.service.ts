@@ -1,6 +1,8 @@
 import "server-only";
 import type { Session } from "@/server/auth/session";
 import { assertCan } from "@/server/permissions/roles";
+import { resolveToday } from "@/lib/time/zonedTime";
+import { getWorkspaceTimeZone } from "@/server/services/finance.service";
 import {
   getServerAuditLogRepository,
   getServerJobsRepository,
@@ -54,7 +56,8 @@ async function audit(session: Session, action: AuditLogEntry["action"], entityTy
   });
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+/** The business day in the WORKSPACE timezone (never the UTC date); demo workspaces fall back to the local date. */
+const today = async (s: Session) => resolveToday(new Date(), await getWorkspaceTimeZone(s));
 const view = (s: Session) => assertCan(s.role, "clients.view");
 const edit = (s: Session) => assertCan(s.role, "clients.edit");
 
@@ -69,7 +72,7 @@ export async function createLead(session: Session, input: CreateLeadInput): Prom
   const created = await getServerLeadsRepository(session.workspaceId).create({
     ...d,
     id: crypto.randomUUID(),
-    createdAt: today(),
+    createdAt: await today(session),
     stage: "new",
     quoteId: null,
   });
@@ -96,7 +99,7 @@ export async function createQuote(session: Session, input: CreateQuoteInput): Pr
   const created = await getServerQuotesRepository(session.workspaceId).create({
     ...d,
     id: crypto.randomUUID(),
-    createdAt: today(),
+    createdAt: await today(session),
     leadId: null,
     status: "draft",
     jobId: null,
@@ -124,7 +127,7 @@ export async function createJob(session: Session, input: CreateJobInput): Promis
   const created = await getServerJobsRepository(session.workspaceId).create({
     ...d,
     id: crypto.randomUUID(),
-    createdAt: today(),
+    createdAt: await today(session),
     quoteId: null,
     status: "scheduled",
     invoiceId: null,
@@ -152,7 +155,7 @@ export async function createProject(session: Session, input: CreateProjectInput)
   const created = await getServerProjectsRepository(session.workspaceId).create({
     ...d,
     id: crypto.randomUUID(),
-    createdAt: today(),
+    createdAt: await today(session),
     status: "active",
   });
   await audit(session, "created", "project", created.id, "Project created");

@@ -29,7 +29,6 @@ export default async function LoginPage() {
             <h1 className={styles.brandTitle}>{login.brandTitle}</h1>
             <p className={styles.brandSubtitle}>{login.brandSubtitle}</p>
           </div>
-          <span className={styles.brandFoot}>© {new Date().getFullYear()} ServiceOS</span>
         </section>
 
         <section className={styles.formPanel}>

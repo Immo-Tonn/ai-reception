@@ -13,6 +13,7 @@ import type {
   Visibility,
 } from "@/features/appointments/types";
 import { statusOrder } from "@/features/appointments/statusMeta";
+import { financialBucketChoices, visibilityChoices } from "@/features/appointments/simpleOptions";
 import { findConflicts, findNextAvailableSlot } from "@/features/appointments/conflicts";
 import { expandRecurrenceDates } from "@/features/appointments/recurrence";
 import { checkAvailability } from "@/features/workingHours/logic";
@@ -316,7 +317,7 @@ export function AppointmentSheet({
     }
   }
 
-  const visibilityOptions: { value: Visibility; title: string; hint: string }[] = [
+  const allVisibilityOptions: { value: Visibility; title: string; hint: string }[] = [
     { value: "normal", title: messages.visibilityNormal, hint: messages.visibilityNormalHint },
     { value: "private", title: messages.visibilityPrivate, hint: messages.visibilityPrivateHint },
     {
@@ -326,12 +327,17 @@ export function AppointmentSheet({
     },
     { value: "custom", title: messages.visibilityCustom, hint: messages.visibilityCustomHint },
   ];
+  // Simple UI: Normal / Private; an advanced value already on the record stays visible and selectable.
+  const visibleVisibility = visibilityChoices(initialValue?.visibility);
+  const visibilityOptions = allVisibilityOptions.filter((o) => visibleVisibility.includes(o.value));
 
-  const bucketOptions: { value: FinancialBucket; title: string }[] = [
+  const allBucketOptions: { value: FinancialBucket; title: string }[] = [
     { value: "main", title: messages.bucketMain },
     { value: "private", title: messages.bucketPrivate },
     { value: "custom", title: messages.bucketCustom },
   ];
+  const visibleBuckets = financialBucketChoices(initialValue?.financialBucket);
+  const bucketOptions = allBucketOptions.filter((o) => visibleBuckets.includes(o.value));
 
   const conflictMessage = conflict.staffConflict
     ? {
