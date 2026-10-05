@@ -3,7 +3,8 @@ import type { ServiceDefinition } from "@/features/services/types";
 import type { StaffMember } from "@/features/staff/types";
 import type { ResourceDefinition } from "@/features/resources/types";
 import type { WorkingHoursProfile } from "@/features/workingHours/types";
-import { checkAvailability } from "@/features/workingHours/logic";
+import { checkAvailability, resolveDay } from "@/features/workingHours/logic";
+import { fromMinutes, gridStarts, SLOT_INTERVAL_DEFAULT } from "@/features/scheduling/intervals";
 import { findConflicts } from "./conflicts";
 
 export interface AvailableSlot {
@@ -13,9 +14,17 @@ export interface AvailableSlot {
   resourceId: string | null;
 }
 
-const DAY_START_MINUTES = 8 * 60;
-const DAY_END_MINUTES = 20 * 60;
-const STEP_MINUTES = 15;
+/**
+ * `notBefore` is a Date whose LOCAL fields hold the workspace wall clock
+ * (see `nowAsWallClock`). Compared as wall-clock strings/minutes so a slot
+ * time never has to exist as a local Date (DST gaps on the server).
+ */
+function isBeforeNotBefore(date: string, minutes: number, notBefore: Date): boolean {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const nbDate = `${notBefore.getFullYear()}-${pad(notBefore.getMonth() + 1)}-${pad(notBefore.getDate())}`;
+  if (date !== nbDate) return date < nbDate;
+  return minutes * 60 < notBefore.getHours() * 3600 + notBefore.getMinutes() * 60 + notBefore.getSeconds();
+}
 
 /**
  * THE shared availability engine (§ Public Booking: "не создавать вторую
@@ -51,6 +60,8 @@ export function computeAvailableSlots(params: {
    * Server callers pass `nowAsWallClock(now, workspaceTimeZone)`.
    */
   notBefore?: Date;
+  /** Granularity of start times in minutes (booking rule, default 15). Start times lie on the clock grid; NOT the service duration. */
+  slotIntervalMinutes?: number;
 }): AvailableSlot[] {
   const {
     service,
@@ -63,27 +74,34 @@ export function computeAvailableSlots(params: {
     notBefore,
   } = params;
 
+  const step = params.slotIntervalMinutes ?? SLOT_INTERVAL_DEFAULT;
   const slots: AvailableSlot[] = [];
 
   for (const staff of eligibleStaff) {
-    for (let minutes = DAY_START_MINUTES; minutes < DAY_END_MINUTES; minutes += STEP_MINUTES) {
-      const time = `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+    if (staff.active === false) continue;
+    // Effective hours (business INTERSECT staff, minus breaks / time off) of this person that day.
+    const day = resolveDay(staff.id, date, workingHours, staff.name);
+    // No schedule known at all (profile-less callers only; real workspaces are default-deny): a neutral daytime window.
+    const intervals = day.unrestricted ? [{ start: 8 * 60, end: 20 * 60 }] : day.effective;
+    for (const interval of intervals) {
+      for (const minutes of gridStarts(interval, service.durationMinutes, step)) {
+        if (notBefore && isBeforeNotBefore(date, minutes, notBefore)) continue;
+        const time = fromMinutes(minutes);
 
-      if (notBefore && new Date(`${date}T${time}:00`).getTime() < notBefore.getTime()) continue;
+        const check = (resourceId: string | null) =>
+          checkSlotConflicts({ service, staff, resourceId, date, time, existingAppointments, allServices });
 
-      const check = (resourceId: string | null) =>
-        checkSlotAvailable({ service, staff, resourceId, date, time, existingAppointments, allServices, workingHours });
+        let resourceId: string | null = null;
+        if (service.requiredResourceType) {
+          const freeResource = candidateResources.find((resource) => resource.active !== false && check(resource.id).available);
+          if (!freeResource) continue;
+          resourceId = freeResource.id;
+        } else if (!check(null).available) {
+          continue;
+        }
 
-      let resourceId: string | null = null;
-      if (service.requiredResourceType) {
-        const freeResource = candidateResources.find((resource) => check(resource.id).available);
-        if (!freeResource) continue;
-        resourceId = freeResource.id;
-      } else if (!check(null).available) {
-        continue;
+        slots.push({ time, staffId: staff.id, staffName: staff.name, resourceId });
       }
-
-      slots.push({ time, staffId: staff.id, staffName: staff.name, resourceId });
     }
   }
 
@@ -120,7 +138,21 @@ export function checkSlotAvailable(params: {
 
   const hours = checkAvailability(staff.id, date, time, service.durationMinutes, workingHours, staff.name);
   if (!hours.available) return { available: false, reason: hours.reason };
+  return checkSlotConflicts({ service, staff, resourceId, date, time, existingAppointments, allServices, ignoreAppointmentId: params.ignoreAppointmentId });
+}
 
+/** Collisions only (staff and resource, buffers included) — the second half of `checkSlotAvailable`. */
+function checkSlotConflicts(params: {
+  service: Pick<ServiceDefinition, "id" | "name" | "durationMinutes">;
+  staff: Pick<StaffMember, "id" | "name">;
+  resourceId: string | null;
+  date: string;
+  time: string;
+  existingAppointments: Appointment[];
+  allServices: ServiceDefinition[];
+  ignoreAppointmentId?: string;
+}): SlotCheck {
+  const { service, staff, resourceId, date, time, existingAppointments, allServices } = params;
   const conflict = findConflicts(
     {
       id: params.ignoreAppointmentId ?? "candidate",
@@ -158,10 +190,13 @@ export function computeSlotsFor(params: {
   workingHours: WorkingHoursProfile[];
   date: string;
   notBefore?: Date;
+  slotIntervalMinutes?: number;
 }): AvailableSlot[] {
-  const { serviceId, staffId, services, staff, resources } = params;
+  const { serviceId, staffId, services, staff: allStaff, resources } = params;
   const service = services.find((s) => s.id === serviceId);
   if (!service) return [];
+  // Archived people / resources are never offered (they stay resolvable for history elsewhere).
+  const staff = allStaff.filter((s) => s.active !== false);
 
   const eligibleStaff = staffId
     ? staff.filter((s) => s.id === staffId && (service.allowedStaffIds.length === 0 || service.allowedStaffIds.includes(s.id)))
@@ -169,9 +204,7 @@ export function computeSlotsFor(params: {
       ? staff.filter((s) => service.allowedStaffIds.includes(s.id))
       : staff;
 
-  const candidateResources = service.requiredResourceType
-    ? resources.filter((r) => r.type === service.requiredResourceType)
-    : [];
+  const candidateResources = candidateResourcesFor(service, resources);
 
   return computeAvailableSlots({
     service,
@@ -182,7 +215,23 @@ export function computeSlotsFor(params: {
     workingHours: params.workingHours,
     date: params.date,
     notBefore: params.notBefore,
+    slotIntervalMinutes: params.slotIntervalMinutes,
   });
+}
+
+/**
+ * Resources a service may use: the ones linked to it if any link exists,
+ * otherwise every resource of `requiredResourceType`. Archived ones never.
+ * No required type = no resource.
+ */
+export function candidateResourcesFor(
+  service: Pick<ServiceDefinition, "requiredResourceType" | "resourceIds">,
+  resources: ResourceDefinition[],
+): ResourceDefinition[] {
+  if (!service.requiredResourceType) return [];
+  const active = resources.filter((r) => r.active !== false);
+  const linked = service.resourceIds ?? [];
+  return linked.length > 0 ? active.filter((r) => linked.includes(r.id)) : active.filter((r) => r.type === service.requiredResourceType);
 }
 
 /**

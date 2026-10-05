@@ -29,7 +29,9 @@ describe("migrations — static policy checks", () => {
   it("new migrations (0007+) never drop, truncate or delete data", () => {
     for (const f of files.filter((f) => f >= "0007")) {
       // The one legitimate delete: pruning expired rows of the rate-limit table itself.
-      const sql = sqlOf(f).replace(/--.*$/gm, "").replace(/delete\s+from\s+public\.rate_limits\s+where\s+window_start/gi, "");
+      const sql = sqlOf(f).replace(/--.*$/gm, "").replace(/delete\s+from\s+public\.rate_limits\s+where\s+window_start/gi, "")
+        // 0020: replace_working_hours deletes ONE owner's own week inside the same transaction that re-inserts it (SECURITY INVOKER, RLS applies).
+        .replace(/delete\s+from\s+public\.working_hours\s+where\s+workspace_id\s*=\s*p_workspace_id/gi, "");
       expect(sql, f).not.toMatch(/\bdrop\s+(table|schema|column|type|extension)\b/i);
       expect(sql, f).not.toMatch(/\btruncate\b/i);
       expect(sql, f).not.toMatch(/\bdelete\s+from\b/i);
@@ -119,6 +121,28 @@ describe("migrations — static policy checks", () => {
       expect(p).not.toMatch(/\bfor all\b/i); // no policy may cover SELECT besides the *_select ones
     }
     expect(sql).toMatch(/alter extension btree_gist set schema extensions/i);
+  });
+
+  it("0019: new policies are authenticated-only and split per command; RPCs stay service-role only; trigger functions are not an API", () => {
+    const sql = sqlOf("0019_staff_scheduling.sql").replace(/--.*$/gm, "");
+    const policies = sql.match(/create policy[\s\S]*?;/gi) ?? [];
+    expect(policies.length).toBe(8); // time_off + service_resources x (select, insert, update, delete)
+    for (const p of policies) {
+      expect(p.match(/\bto\s+([a-z_, ]+?)\s+(?:using|with\s+check)/i)?.[1].trim()).toBe("authenticated");
+      expect(p).not.toMatch(/\bfor all\b|service_role/i);
+      if (/for (insert|update|delete)/i.test(p)) expect(p).toMatch(/staff\.manage/);
+    }
+    expect(sql).toMatch(/alter table public\.time_off enable row level security/i);
+    expect(sql).toMatch(/alter table public\.service_resources enable row level security/i);
+    expect(sql).toMatch(/revoke all on public\.time_off from anon/i);
+    for (const fn of ["get_public_booking_catalog", "create_public_booking", "cancel_my_booking", "reschedule_my_booking"]) {
+      expect(sql, fn).toMatch(new RegExp(`revoke all on function public\\.${fn}[\\s\\S]*?from public, anon, authenticated`, "i"));
+      expect(sql, fn).toMatch(new RegExp(`grant execute on function public\\.${fn}[\\s\\S]*?to service_role`, "i"));
+    }
+    for (const fn of ["guard_working_hours_integrity", "guard_scheduling_references", "guard_restrict_delete_with_appointments"]) {
+      expect(sql, fn).toMatch(new RegExp(`revoke all on function public\\.${fn}\\(\\) from public, anon, authenticated`, "i"));
+    }
+    expect(sql).not.toMatch(/\bgrant\b[^;]*\bto\s+(anon|public)\b/i);
   });
 
   it("0015 grants default privileges to the service role ONLY (never anon/authenticated) and changes no RLS", () => {

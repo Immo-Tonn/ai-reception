@@ -3,6 +3,9 @@ import { getAppointmentsRepository } from "@/features/appointments/repository";
 import { getClientsRepository } from "@/features/clients/repository";
 import { getAuditLogRepository } from "@/features/auditLog/repository";
 import { computeSlotsFor, pickSlot, type AvailableSlot } from "@/features/appointments/availability";
+import { computeAvailableDates } from "@/features/scheduling/availableDates";
+import { defaultBookingRules } from "@/features/scheduling/types";
+import { resolveToday } from "@/lib/time/zonedTime";
 import { demoWorkingHours } from "@/features/workingHours/demoData";
 import type { PublicBookingService } from "./bookingService";
 import {
@@ -60,6 +63,26 @@ async function findOrCreateClient(workspaceSlug: string, details: ClientBookingD
 
 export const localDemoBookingService: PublicBookingService = {
   getAvailableSlots: loadSlots,
+
+  async getAvailableDates(workspaceSlug, serviceId, staffId, fromDate, days) {
+    const workspace = findWorkspaceConfig(workspaceSlug);
+    if (!workspace) return [];
+    const now = new Date();
+    return computeAvailableDates({
+      serviceId,
+      staffId,
+      services: workspace.services,
+      staff: workspace.staff,
+      resources: workspace.resources,
+      existingAppointments: await getAppointmentsRepository(workspaceSlug).list(),
+      workingHours: demoWorkingHours,
+      fromDate,
+      days,
+      today: resolveToday(now, null),
+      maxHorizonDays: defaultBookingRules.maxHorizonDays,
+      notBefore: now,
+    });
+  },
 
   async createBooking(workspaceSlug, request) {
     const workspace = findWorkspaceConfig(workspaceSlug);

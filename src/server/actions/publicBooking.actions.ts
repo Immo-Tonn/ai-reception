@@ -6,6 +6,7 @@ import { clientIpFromHeaders } from "@/server/ratelimit/rateLimiter";
 import { getPublicBookingDeps } from "@/server/booking/deps";
 import {
   createPublicBooking,
+  getPublicAvailableDates,
   getPublicSlots,
   PublicBookingError,
   type PublicBookingErrorCode,
@@ -45,6 +46,17 @@ export async function getPublicSlotsAction(
   date: string,
 ): Promise<PublicActionResult<AvailableSlot[]>> {
   return run((deps, ip) => getPublicSlots(deps, { ip }, { slug, serviceId, staffId, date }));
+}
+
+/** Days in [fromDate, fromDate + days) that really have a bookable slot (the date strip shows only these). */
+export async function getPublicAvailableDatesAction(
+  slug: string,
+  serviceId: string,
+  staffId: string | null,
+  fromDate: string,
+  days: number,
+): Promise<PublicActionResult<string[]>> {
+  return run((deps, ip) => getPublicAvailableDates(deps, { ip }, { slug, serviceId, staffId, fromDate, days }));
 }
 
 export async function createPublicBookingAction(

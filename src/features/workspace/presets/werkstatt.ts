@@ -334,6 +334,7 @@ export const werkstattWorkspace: WorkspaceConfig = {
     uk: "Ключові показники бізнесу на основі записів, замовлень, клієнтів та фінансів.",
     ru: "Ключевые показатели бизнеса на основе записей, заказов, клиентов и финансов.",
   },
+  bookingRules: { autoConfirm: false, minNoticeMinutes: 1440, maxHorizonDays: 90, slotIntervalMinutes: 30, cancellationDeadlineHours: 48, rescheduleDeadlineHours: 48 },
   services,
   staff,
   resources,

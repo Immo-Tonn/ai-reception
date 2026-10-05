@@ -12,6 +12,7 @@ const TABLES = [
   "profiles", "workspaces", "workspace_members", "role_permissions", "clients", "staff_profiles",
   "services", "service_staff", "resources", "working_hours", "financial_buckets", "appointment_series",
   "appointments", "appointment_resources", "waiting_list", "invoices", "invoice_items", "payments", "audit_logs",
+  "time_off", "service_resources",
 ];
 
 let db: PGlite;

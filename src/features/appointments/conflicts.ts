@@ -102,6 +102,8 @@ export function findNextAvailableSlot(params: {
   services: ServiceDefinition[];
   workingHours: WorkingHoursProfile[];
   maxDaysAhead?: number;
+  /** Booking-rule grid (default 15). */
+  slotIntervalMinutes?: number;
 }): { date: string; time: string } | null {
   const {
     staff,
@@ -116,9 +118,9 @@ export function findNextAvailableSlot(params: {
     maxDaysAhead = 14,
   } = params;
 
-  const step = 15;
+  const step = params.slotIntervalMinutes ?? 15;
   let cursorDate = fromDate;
-  let cursorMinutes = toMinutes(fromTime);
+  let cursorMinutes = Math.ceil(toMinutes(fromTime) / step) * step;
 
   for (let dayOffset = 0; dayOffset <= maxDaysAhead; dayOffset++) {
     if (dayOffset > 0) cursorMinutes = 0;

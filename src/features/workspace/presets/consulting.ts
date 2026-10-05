@@ -252,6 +252,7 @@ export const consultingWorkspace: WorkspaceConfig = {
     uk: "Ключові показники бізнесу на основі клієнтів, проєктів та фінансів.",
     ru: "Ключевые показатели бизнеса на основе клиентов, проектов и финансов.",
   },
+  bookingRules: { autoConfirm: true, minNoticeMinutes: 240, maxHorizonDays: 90, slotIntervalMinutes: 30, cancellationDeadlineHours: 24, rescheduleDeadlineHours: 12 },
   services,
   staff,
   resources,

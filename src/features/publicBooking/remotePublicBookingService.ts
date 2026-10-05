@@ -1,5 +1,5 @@
 import type { AvailableSlot } from "@/features/appointments/availability";
-import { createPublicBookingAction, getPublicSlotsAction } from "@/server/actions/publicBooking.actions";
+import { createPublicBookingAction, getPublicAvailableDatesAction, getPublicSlotsAction } from "@/server/actions/publicBooking.actions";
 import type { PublicBookingService } from "./bookingService";
 import { BookingRateLimitedError, BookingUnavailableError } from "./bookingRules";
 
@@ -15,6 +15,13 @@ export const remotePublicBookingService: PublicBookingService = {
     if (result.ok) return result.data;
     if (result.code === "rate_limited") throw new BookingRateLimitedError();
     return [];
+  },
+
+  async getAvailableDates(workspaceSlug, serviceId, staffId, fromDate, days): Promise<string[] | null> {
+    const result = await getPublicAvailableDatesAction(workspaceSlug, serviceId, staffId, fromDate, days);
+    if (result.ok) return result.data;
+    if (result.code === "rate_limited") throw new BookingRateLimitedError();
+    return null; // unknown: the UI keeps every day selectable and shows "no times" per day
   },
 
   async createBooking(workspaceSlug, request) {

@@ -15,6 +15,10 @@ export interface ResourceDefinition {
   id: string;
   name: string;
   type: ResourceType;
+  /** Archived resources are `false`: never offered. Absent = active. */
+  active?: boolean;
+  description?: string;
+  sortOrder?: number;
   /** Per-locale display label for this workspace's own catalog — same
    * pattern as `ServiceDefinition.translations` (business/demo data,
    * deliberately off the `Messages`/i18n layer). A real workspace's own

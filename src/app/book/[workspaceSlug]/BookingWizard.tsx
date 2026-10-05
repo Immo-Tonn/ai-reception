@@ -30,6 +30,8 @@ import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency, formatDate } from "@/lib/i18n/format";
 import styles from "./page.module.css";
 
+const DATE_STRIP_DAYS = 28;
+
 type Step = "service" | "staff" | "date" | "time" | "details" | "confirmation";
 const steps: Step[] = ["service", "staff", "date", "time", "details", "confirmation"];
 
@@ -89,7 +91,11 @@ export function BookingWizard({
   const emailFieldRef = useRef<HTMLInputElement>(null);
   const phoneFieldRef = useRef<HTMLInputElement>(null);
 
-  const dateStrip = useMemo(() => buildDateStrip(new Date(), timezone), [timezone]);
+  const dateStrip = useMemo(() => buildDateStrip(new Date(), timezone, { maxDaysAhead: DATE_STRIP_DAYS - 1 }), [timezone]);
+  // Days that really have slots (server-computed with the same engine as the time step).
+  // null = not known yet / could not be determined: every day stays selectable then.
+  const [availableDates, setAvailableDates] = useState<Set<string> | null>(null);
+  const [datesLoading, setDatesLoading] = useState(false);
   // Slots and booked times are the business's wall clock. Say so when the
   // visitor's own zone differs (detected after mount to keep SSR stable).
   const [visitorZone, setVisitorZone] = useState<string | null>(null);
@@ -116,6 +122,30 @@ export function BookingWizard({
     setEmail((current) => current || identity.email);
     setPhone((current) => current || identity.phone);
   }, [identity]);
+
+  useEffect(() => {
+    if (step !== "date" || !selectedServiceId) return;
+    let cancelled = false;
+    setDatesLoading(true);
+    setAvailableDates(null);
+    const staffId = selectedStaffId === "any" ? null : selectedStaffId;
+    getPublicBookingService(workspaceSlug)
+      .getAvailableDates(workspaceSlug, selectedServiceId, staffId, dateStrip[0], dateStrip.length)
+      .then((dates) => {
+        if (!cancelled) setAvailableDates(dates ? new Set(dates) : null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setAvailableDates(null);
+        if (err instanceof BookingRateLimitedError) setError(booking.rateLimitedError);
+      })
+      .finally(() => {
+        if (!cancelled) setDatesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step, workspaceSlug, selectedServiceId, selectedStaffId, dateStrip, booking.rateLimitedError]);
 
   useEffect(() => {
     if (step !== "time" || !selectedServiceId) return;
@@ -293,8 +323,9 @@ export function BookingWizard({
               {staffList
                 .filter(
                   (s) =>
-                    !selectedService?.allowedStaffIds.length ||
-                    selectedService.allowedStaffIds.includes(s.id),
+                    s.active !== false &&
+                    (!selectedService?.allowedStaffIds.length ||
+                    selectedService.allowedStaffIds.includes(s.id)),
                 )
                 .map((staff) => (
                   <button
@@ -322,14 +353,25 @@ export function BookingWizard({
               {booking.stepStaff}
             </button>
             <h1 className={styles.stepTitle}>{booking.stepDate}</h1>
+            {error && <p className={styles.errorText}>{error}</p>}
+            {datesLoading ? <p className={styles.fieldHint}>{booking.datesLoading}</p> : null}
+            {!datesLoading && availableDates && availableDates.size === 0 ? (
+              <div className={styles.empty}>
+                <span className={styles.emptyTitle}>{booking.noDatesTitle}</span>
+                {booking.noDatesDescription}
+              </div>
+            ) : null}
             <div className={styles.dateStrip}>
               {dateStrip.map((iso) => {
                 const date = new Date(iso + "T00:00:00");
+                const unavailable = datesLoading || (availableDates !== null && !availableDates.has(iso));
                 return (
                   <button
                     key={iso}
                     type="button"
-                    className={`${styles.dateChip} ${selectedDate === iso ? styles.dateChipActive : ""}`}
+                    disabled={unavailable}
+                    title={unavailable && !datesLoading ? booking.dateUnavailable : undefined}
+                    className={`${styles.dateChip} ${selectedDate === iso ? styles.dateChipActive : ""} ${unavailable ? styles.dateChipDisabled : ""}`}
                     onClick={() => {
                       setSelectedDate(iso);
                       goTo("time");

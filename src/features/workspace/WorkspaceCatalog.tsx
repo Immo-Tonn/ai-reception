@@ -3,6 +3,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { demoWorkingHours } from "@/features/workingHours/demoData";
 import type { WorkingHoursProfile } from "@/features/workingHours/types";
+import { defaultBookingRules, type BookingRules, type TimeOffEntry } from "@/features/scheduling/types";
 import { isValidTimeZone, resolveToday } from "@/lib/time/zonedTime";
 import { getWorkspaceConfig, isDemoWorkspaceSlug } from "./registry";
 import type { WorkspaceConfig } from "./types";
@@ -22,6 +23,12 @@ export interface WorkspaceCatalogData {
   staff: WorkspaceConfig["staff"];
   resources: WorkspaceConfig["resources"];
   workingHours: WorkingHoursProfile[];
+  /** Real workspaces: booking rules (min notice, horizon, slot grid, ...). Absent = defaults. */
+  bookingRules?: BookingRules;
+  /** Time off / closures with private reasons (business side only). */
+  timeOff?: TimeOffEntry[];
+  /** Archived staff: NOT offered in pickers; only so old appointments keep showing their name. */
+  inactiveStaff?: { id: string; name: string }[];
 }
 
 const Context = createContext<WorkspaceCatalogData | null>(null);
@@ -70,4 +77,11 @@ export function useWorkspaceWorkingHours(workspaceSlug: string): WorkingHoursPro
   const catalog = useContext(Context);
   if (isDemoWorkspaceSlug(workspaceSlug) || !catalog || catalog.slug !== workspaceSlug) return demoWorkingHours;
   return catalog.workingHours;
+}
+
+/** Booking rules of the workspace (defaults for demo workspaces / missing data). */
+export function useWorkspaceBookingRules(workspaceSlug: string): BookingRules {
+  const catalog = useContext(Context);
+  if (isDemoWorkspaceSlug(workspaceSlug) || !catalog || catalog.slug !== workspaceSlug) return defaultBookingRules;
+  return catalog.bookingRules ?? defaultBookingRules;
 }

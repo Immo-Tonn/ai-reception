@@ -56,6 +56,23 @@ export default async function SettingsPage({
         </Link>
       )}
 
+      {(
+        [
+          ["staff", settings.staff],
+          ["resources", settings.resources],
+          ["hours", settings.hours],
+          ["booking", settings.booking],
+        ] as const
+      ).map(([path, entry]) => (
+        <Link key={path} href={`/${workspaceSlug}/settings/${path}`} className={styles.row}>
+          <div className={styles.rowBody}>
+            <p className={styles.rowLabel}>{entry.label}</p>
+            <p className={styles.rowDescription}>{entry.description}</p>
+          </div>
+          <Icon name="chevronRight" size={18} />
+        </Link>
+      ))}
+
       <div className={styles.row}>
         <div className={styles.rowBody}>
           <p className={styles.rowLabel}>{settings.language.label}</p>

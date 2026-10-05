@@ -218,6 +218,12 @@
   color: var(--color-paper);
 }
 
+.dateChipDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: transparent;
+}
+
 .dateChipWeekday {
   font-size: 11px;
   text-transform: uppercase;

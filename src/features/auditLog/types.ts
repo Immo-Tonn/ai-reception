@@ -18,7 +18,12 @@ export interface AuditLogEntry {
     | "lead"
     | "quote"
     | "job"
-    | "project";
+    | "project"
+    | "staff"
+    | "resource"
+    | "workingHours"
+    | "timeOff"
+    | "bookingRules";
   entityId: string;
   summary: string; // human-readable, already localized at write time
   source: "user" | "assistant" | "automation" | "public";

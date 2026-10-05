@@ -3,6 +3,7 @@ import type { ClientRecord } from "@/features/clients/types";
 import type { ServiceDefinition } from "@/features/services/types";
 import type { StaffMember } from "@/features/staff/types";
 import type { ResourceDefinition } from "@/features/resources/types";
+import type { BookingRules } from "@/features/scheduling/types";
 import type { Locale } from "@/lib/i18n/locales";
 
 /**
@@ -74,6 +75,8 @@ export interface WorkspaceConfig {
    * shown business-side, in the workspace switcher, and isn't localized).
    * Falls back to `tagline` when unset. */
   clientDescription?: Partial<Record<Locale, string>>;
+  /** Demo booking rules, shown read-only in Settings (same shared type as real workspaces). Falls back to `defaultBookingRules`. */
+  bookingRules?: BookingRules;
   services: ServiceDefinition[];
   staff: StaffMember[];
   resources: ResourceDefinition[];

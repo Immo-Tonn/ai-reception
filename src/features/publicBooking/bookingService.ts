@@ -31,6 +31,18 @@ export interface PublicBookingService {
   ): Promise<AvailableSlot[]>;
 
   /**
+   * Days in [fromDate, fromDate + days) that really have at least one slot
+   * (same engine as `getAvailableSlots`). `null` = could not be determined.
+   */
+  getAvailableDates(
+    workspaceSlug: string,
+    serviceId: string,
+    staffId: string | null,
+    fromDate: string,
+    days: number,
+  ): Promise<string[] | null>;
+
+  /**
    * Re-validates availability at write time and creates the booking.
    * Throws `BookingUnavailableError` if the time is gone.
    */

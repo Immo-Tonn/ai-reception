@@ -23,6 +23,7 @@ import {
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { demoWorkingHours } from "@/features/workingHours/demoData";
 import type { WorkingHoursProfile } from "@/features/workingHours/types";
+import type { ScheduleMode, TimeOffEntry } from "@/features/scheduling/types";
 import { workingHoursFromRows, type WorkingHoursRow } from "@/server/booking/workingHoursMapper";
 import { toRepositoryError } from "./errors";
 
@@ -102,17 +103,73 @@ export function getServerAuditLogRepository(workspaceId: string): Repository<Aud
   return isDemoWorkspaceSlug(workspaceId) ? mockAuditLogRepository(workspaceId) : createSupabaseAuditLogRepository(workspaceId);
 }
 
+/** Rows of `time_off` -> business-side entries (with the private reason). */
+function timeOffEntries(rows: TimeOffDbRow[]): TimeOffEntry[] {
+  return rows.map((r) => ({
+    id: r.id,
+    staffId: r.staff_id,
+    startDate: String(r.start_date).slice(0, 10),
+    endDate: String(r.end_date).slice(0, 10),
+    startTime: r.start_time ? String(r.start_time).slice(0, 5) : null,
+    endTime: r.end_time ? String(r.end_time).slice(0, 5) : null,
+    ...(r.reason ? { reason: r.reason } : {}),
+  }));
+}
+
+interface TimeOffDbRow {
+  id: string;
+  staff_id: string | null;
+  start_date: string;
+  end_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  reason?: string | null;
+}
+
+export interface ServerScheduling {
+  workingHours: WorkingHoursProfile[];
+  timeOff: TimeOffEntry[];
+}
+
 /**
- * Working hours for the availability rules. Demo: the shared demo schedule.
- * Real workspace: the `working_hours` rows, read as the signed-in user (RLS).
+ * Everything the availability rules need for a workspace: working hours (several
+ * intervals, day-off rows), time off / closures and per-staff schedule modes.
+ * Demo: the shared demo schedule. Real workspace: read as the signed-in user (RLS).
+ * Databases that do not have migration 0019 yet (no `time_off`, no `schedule_mode`)
+ * keep working: those parts are simply empty.
  */
-export async function getServerWorkingHours(workspaceId: string): Promise<WorkingHoursProfile[]> {
-  if (isDemoWorkspaceSlug(workspaceId)) return demoWorkingHours;
+export async function getServerScheduling(workspaceId: string): Promise<ServerScheduling> {
+  if (isDemoWorkspaceSlug(workspaceId)) return { workingHours: demoWorkingHours, timeOff: [] };
   const client = await createSupabaseServerClient();
-  const { data, error } = await client
-    .from("working_hours")
-    .select("staff_id,weekday,start_time,end_time,is_day_off")
-    .eq("workspace_id", workspaceId);
-  if (error) throw toRepositoryError(error, "workingHours.list");
-  return workingHoursFromRows((data as WorkingHoursRow[]) ?? []);
+  const [hours, timeOff, staff] = await Promise.all([
+    client.from("working_hours").select("staff_id,weekday,start_time,end_time,is_day_off").eq("workspace_id", workspaceId),
+    client.from("time_off").select("*").eq("workspace_id", workspaceId),
+    client.from("staff_profiles").select("*").eq("workspace_id", workspaceId).eq("active", true),
+  ]);
+  if (hours.error) throw toRepositoryError(hours.error, "workingHours.list");
+  const offRows = timeOff.error ? [] : ((timeOff.data as TimeOffDbRow[]) ?? []);
+  const staffModes: Record<string, ScheduleMode> = {};
+  for (const row of (staff.error ? [] : ((staff.data as { id: string; schedule_mode?: string }[]) ?? []))) {
+    if (row.schedule_mode === "inherit" || row.schedule_mode === "custom") staffModes[row.id] = row.schedule_mode;
+  }
+  return {
+    workingHours: workingHoursFromRows(
+      (hours.data as WorkingHoursRow[]) ?? [],
+      offRows.map((r) => ({
+        staff_id: r.staff_id,
+        start_date: String(r.start_date).slice(0, 10),
+        end_date: String(r.end_date).slice(0, 10),
+        start_time: r.start_time,
+        end_time: r.end_time,
+        reason: r.reason,
+      })),
+      staffModes,
+    ),
+    timeOff: timeOffEntries(offRows),
+  };
+}
+
+/** Working hours (incl. time off and modes) for the availability rules. */
+export async function getServerWorkingHours(workspaceId: string): Promise<WorkingHoursProfile[]> {
+  return (await getServerScheduling(workspaceId)).workingHours;
 }
