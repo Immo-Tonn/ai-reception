@@ -1,5 +1,6 @@
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
+import { loadAppCatalog } from "@/server/loaders/appCatalog";
 import { CalendarView } from "./CalendarView";
 
 export default async function CalendarPage({
@@ -21,10 +22,12 @@ export default async function CalendarPage({
     conflict,
     auditLog,
   } = getMessages(locale);
+  const catalog = await loadAppCatalog(workspaceSlug);
 
   return (
     <CalendarView
       workspaceSlug={workspaceSlug}
+      catalog={catalog}
       locale={locale}
       common={common}
       calendar={calendar}

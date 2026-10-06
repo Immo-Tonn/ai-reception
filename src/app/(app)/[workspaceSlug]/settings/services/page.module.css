@@ -134,3 +134,24 @@
   justify-content: flex-end;
   gap: var(--space-3);
 }
+
+.staffFieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2, 8px);
+  padding: var(--space-3) var(--space-4);
+}
+
+.staffLegend {
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+}
+
+.staffOption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

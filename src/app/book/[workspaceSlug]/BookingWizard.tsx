@@ -2,9 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, Icon, Input } from "@/components/ui";
-import { getWorkspaceConfig } from "@/features/workspace/registry";
 import { getClientAvailableSlots, type AvailableSlot } from "@/features/publicBooking/availability";
 import { createClientBooking, BookingUnavailableError } from "@/features/publicBooking/createBooking";
+import {
+  createPublicBookingAction,
+  getAvailabilityAction,
+  getAvailableDatesAction,
+} from "@/server/actions/booking.actions";
 import { getClientDetailsFieldErrors } from "@/features/publicBooking/detailsValidation";
 import { getServiceLabel } from "@/features/services/label";
 import { getStaffLabel } from "@/features/staff/label";
@@ -20,17 +24,27 @@ import styles from "./page.module.css";
 type Step = "service" | "staff" | "date" | "time" | "details" | "confirmation";
 const steps: Step[] = ["service", "staff", "date", "time", "details", "confirmation"];
 
-function buildDateStrip() {
+const GRID_DAYS = 42;
+
+/** Monday-first calendar grid: from this week's Monday, GRID_DAYS days. */
+function buildCalendarGrid() {
   const today = new Date();
-  return Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    return localIsoDate(d);
+  today.setHours(0, 0, 0, 0);
+  const offset = (today.getDay() + 6) % 7; // Monday = 0
+  const start = new Date(today);
+  start.setDate(today.getDate() - offset);
+  return Array.from({ length: GRID_DAYS }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return { iso: localIsoDate(d), day: d.getDate(), month: d.getMonth(), date: d };
   });
 }
 
 export function BookingWizard({
   workspaceSlug,
+  mode,
+  services,
+  staffList,
   locale,
   booking,
   client,
@@ -40,6 +54,10 @@ export function BookingWizard({
   headerActions,
 }: {
   workspaceSlug: string;
+  /** "demo" = the four demo presets (browser storage); "real" = Supabase via server actions. */
+  mode: "demo" | "real";
+  services: ServiceDefinition[];
+  staffList: StaffMember[];
   locale: Locale;
   booking: Messages["booking"];
   client: Messages["client"];
@@ -50,15 +68,12 @@ export function BookingWizard({
 }) {
   const { identity } = useClientAuth();
   const [step, setStep] = useState<Step>("service");
-  const [services, setServices] = useState<ServiceDefinition[]>([]);
-  const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null | "any">("any");
   const [selectedDate, setSelectedDate] = useState(localIsoDate(new Date()));
-  const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
-  const [slotsLoading, setSlotsLoading] = useState(false);
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
@@ -69,46 +84,104 @@ export function BookingWizard({
   // attempt (`submitAttempted`), never on first render of an empty form
   // (§ validation UX: don't just disable Submit with no explanation, but
   // don't scold an untouched field either).
-  const [touched, setTouched] = useState<{ name?: boolean; email?: boolean; phone?: boolean }>({});
+  const [touched, setTouched] = useState<{
+    firstName?: boolean;
+    lastName?: boolean;
+    email?: boolean;
+    phone?: boolean;
+  }>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
-  const nameFieldRef = useRef<HTMLInputElement>(null);
+  const firstNameFieldRef = useRef<HTMLInputElement>(null);
+  const lastNameFieldRef = useRef<HTMLInputElement>(null);
   const emailFieldRef = useRef<HTMLInputElement>(null);
   const phoneFieldRef = useRef<HTMLInputElement>(null);
 
-  const dateStrip = buildDateStrip();
+  const calendarGrid = useMemo(() => buildCalendarGrid(), []);
+  const todayIso = localIsoDate(new Date());
+  const weekdayLabels = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, i) =>
+        new Date(2024, 0, 1 + i).toLocaleDateString(locale, { weekday: "short" }),
+      ),
+    [locale],
+  );
   const selectedService = services.find((s) => s.id === selectedServiceId) ?? null;
+  const name = `${firstName.trim()} ${lastName.trim()}`.trim();
   const fieldErrors = useMemo(
     () => getClientDetailsFieldErrors({ name, email, phone }),
     [name, email, phone],
   );
-  const showNameError = Boolean(fieldErrors.name) && (touched.name || submitAttempted);
+  const firstNameInvalid = firstName.trim() === "";
+  const lastNameInvalid = lastName.trim() === "" || Boolean(fieldErrors.name);
+  const nameInvalid = firstNameInvalid || lastNameInvalid;
+  const showFirstNameError = firstNameInvalid && (touched.firstName || submitAttempted);
+  const showLastNameError = lastNameInvalid && (touched.lastName || submitAttempted);
   const showEmailError = Boolean(fieldErrors.email) && (touched.email || submitAttempted);
   const showPhoneError = Boolean(fieldErrors.phone) && (touched.phone || submitAttempted);
-
-  useEffect(() => {
-    const workspace = getWorkspaceConfig(workspaceSlug);
-    setServices(workspace.services);
-    setStaffList(workspace.staff);
-  }, [workspaceSlug]);
 
   // A signed-in client (see /client/login, /client/signup) doesn't have
   // to retype their details every booking — guest checkout still works
   // without ever touching this (§ booking never depends on registration).
-  useEffect(() => {
-    if (!identity) return;
-    setName((current) => current || identity.name);
-    setEmail((current) => current || identity.email);
-    setPhone((current) => current || identity.phone);
-  }, [identity]);
+  // Adjusts state during render when identity changes, instead of in an effect.
+  const [prefilledIdentity, setPrefilledIdentity] = useState(identity);
+  if (identity !== prefilledIdentity) {
+    setPrefilledIdentity(identity);
+    if (identity) {
+      const [first, ...rest] = identity.name.split(" ");
+      setFirstName((current) => current || first);
+      setLastName((current) => current || rest.join(" "));
+      setEmail((current) => current || identity.email);
+      setPhone((current) => current || identity.phone);
+    }
+  }
+
+  function eligibleStaffFor(service: ServiceDefinition | null): StaffMember[] {
+    if (!service || service.allowedStaffIds.length === 0) return staffList;
+    return staffList.filter((s) => service.allowedStaffIds.includes(s.id));
+  }
+  // The specialist step only appears when the client actually has a choice.
+  const hasStaffChoice = eligibleStaffFor(selectedService).length > 1;
+
+  // Free dates for the calendar (real workspaces): fetched once per
+  // service/specialist, tagged with their request like the slots below.
+  const datesKey =
+    mode === "real" && step === "date" && selectedServiceId
+      ? [workspaceSlug, selectedServiceId, selectedStaffId, todayIso].join("|")
+      : null;
+  const [datesResult, setDatesResult] = useState<{ key: string; dates: string[] } | null>(null);
+  const datesLoading = datesKey !== null && datesResult?.key !== datesKey;
+  const availableDates =
+    datesKey !== null && datesResult?.key === datesKey ? new Set(datesResult.dates) : null;
 
   useEffect(() => {
-    if (step !== "time" || !selectedServiceId) return;
-    setSlotsLoading(true);
+    if (!datesKey || !selectedServiceId) return;
     const staffId = selectedStaffId === "any" ? null : selectedStaffId;
-    getClientAvailableSlots(workspaceSlug, selectedServiceId, staffId, selectedDate)
-      .then(setSlots)
-      .finally(() => setSlotsLoading(false));
-  }, [step, workspaceSlug, selectedServiceId, selectedStaffId, selectedDate]);
+    getAvailableDatesAction(workspaceSlug, selectedServiceId, staffId, todayIso, GRID_DAYS)
+      .then((dates) => setDatesResult({ key: datesKey, dates }))
+      .catch(() => setDatesResult({ key: datesKey, dates: [] }));
+  }, [datesKey, workspaceSlug, selectedServiceId, selectedStaffId, todayIso]);
+
+  // Slots are tagged with the request they belong to, so "loading" is derived
+  // from whether the latest result matches the current selection (no sync setState in an effect).
+  const slotsKey =
+    step === "time" && selectedServiceId
+      ? [workspaceSlug, selectedServiceId, selectedStaffId, selectedDate].join("|")
+      : null;
+  const [slotsResult, setSlotsResult] = useState<{ key: string; slots: AvailableSlot[] } | null>(null);
+  const slotsLoading = slotsKey !== null && slotsResult?.key !== slotsKey;
+  const slots = slotsResult && slotsResult.key === slotsKey ? slotsResult.slots : [];
+
+  useEffect(() => {
+    if (!slotsKey || !selectedServiceId) return;
+    const staffId = selectedStaffId === "any" ? null : selectedStaffId;
+    const load =
+      mode === "real"
+        ? getAvailabilityAction(workspaceSlug, selectedServiceId, staffId, selectedDate)
+        : getClientAvailableSlots(workspaceSlug, selectedServiceId, staffId, selectedDate);
+    load
+      .then((result) => setSlotsResult({ key: slotsKey, slots: result }))
+      .catch(() => setSlotsResult({ key: slotsKey, slots: [] }));
+  }, [slotsKey, mode, workspaceSlug, selectedServiceId, selectedStaffId, selectedDate]);
 
   // Embed resizing (§3): tell the parent page how tall we are so an
   // iframe embed can size itself instead of showing a scrollbar.
@@ -137,30 +210,51 @@ export function BookingWizard({
 
   async function handleSubmit() {
     if (!selectedService || !selectedSlot) return;
-    if (fieldErrors.name || fieldErrors.email || fieldErrors.phone) {
+    if (nameInvalid || fieldErrors.email || fieldErrors.phone) {
       setSubmitAttempted(true);
-      const firstInvalidRef = fieldErrors.name
-        ? nameFieldRef
-        : fieldErrors.email
-          ? emailFieldRef
-          : phoneFieldRef;
+      const firstInvalidRef = firstNameInvalid
+        ? firstNameFieldRef
+        : lastNameInvalid
+          ? lastNameFieldRef
+          : fieldErrors.email
+            ? emailFieldRef
+            : phoneFieldRef;
       firstInvalidRef.current?.focus();
       return;
     }
     setSubmitting(true);
     setError(null);
+    const staffId = selectedStaffId === "any" ? null : selectedStaffId;
     try {
-      await createClientBooking(workspaceSlug, {
-        serviceId: selectedService.id,
-        staffId: selectedStaffId === "any" ? null : selectedStaffId,
-        date: selectedDate,
-        time: selectedSlot.time,
-        client: { name, email, phone, notes },
-      });
+      if (mode === "real") {
+        const result = await createPublicBookingAction(workspaceSlug, {
+          serviceId: selectedService.id,
+          staffId,
+          date: selectedDate,
+          time: selectedSlot.time,
+          client: { name, email: email.trim(), phone: phone.trim(), notes: notes.trim() },
+        });
+        if (!result.ok) {
+          if (result.error === "unavailable") {
+            setError(booking.slotTakenError);
+            setStep("time");
+          } else {
+            setError(booking.genericError);
+          }
+          return;
+        }
+      } else {
+        await createClientBooking(workspaceSlug, {
+          serviceId: selectedService.id,
+          staffId,
+          date: selectedDate,
+          time: selectedSlot.time,
+          client: { name, email, phone, notes },
+        });
+      }
       goTo("confirmation");
     } catch (err) {
       if (!(err instanceof BookingUnavailableError)) {
-        // eslint-disable-next-line no-console
         console.error("Public booking failed", err);
       }
       setError(booking.slotTakenError);
@@ -197,6 +291,11 @@ export function BookingWizard({
         {step === "service" && (
           <>
             <h1 className={styles.stepTitle}>{booking.stepService}</h1>
+            {services.length === 0 && (
+              <div className={styles.empty}>
+                <span className={styles.emptyTitle}>{booking.noSlotsTitle}</span>
+              </div>
+            )}
             <div className={styles.optionList}>
               {services.map((service) => (
                 <button
@@ -205,7 +304,8 @@ export function BookingWizard({
                   className={`${styles.optionCard} ${selectedServiceId === service.id ? styles.optionCardSelected : ""}`}
                   onClick={() => {
                     setSelectedServiceId(service.id);
-                    goTo("staff");
+                    setSelectedStaffId("any");
+                    goTo(eligibleStaffFor(service).length > 1 ? "staff" : "date");
                   }}
                 >
                   <span className={styles.optionBody}>
@@ -244,13 +344,7 @@ export function BookingWizard({
                   <span className={styles.optionHint}>{booking.anyStaffHint}</span>
                 </span>
               </button>
-              {staffList
-                .filter(
-                  (s) =>
-                    !selectedService?.allowedStaffIds.length ||
-                    selectedService.allowedStaffIds.includes(s.id),
-                )
-                .map((staff) => (
+              {eligibleStaffFor(selectedService).map((staff) => (
                   <button
                     key={staff.id}
                     type="button"
@@ -271,32 +365,49 @@ export function BookingWizard({
 
         {step === "date" && (
           <>
-            <button type="button" className={styles.stepBack} onClick={() => goTo("staff")}>
+            <button
+              type="button"
+              className={styles.stepBack}
+              onClick={() => goTo(hasStaffChoice ? "staff" : "service")}
+            >
               <Icon name="arrowLeft" size={16} strokeWidth={1.8} />
-              {booking.stepStaff}
+              {hasStaffChoice ? booking.stepStaff : booking.stepService}
             </button>
             <h1 className={styles.stepTitle}>{booking.stepDate}</h1>
-            <div className={styles.dateStrip}>
-              {dateStrip.map((iso) => {
-                const date = new Date(iso + "T00:00:00");
+            <div className={styles.calendarGrid} aria-busy={datesLoading}>
+              {weekdayLabels.map((label, i) => (
+                <span key={i} className={styles.calendarWeekday}>
+                  {label}
+                </span>
+              ))}
+              {calendarGrid.map((cell, index) => {
+                const isPast = cell.iso < todayIso;
+                const enabled = !isPast && (availableDates ? availableDates.has(cell.iso) : mode === "demo");
+                const showMonth = cell.day === 1 || index === 0;
                 return (
                   <button
-                    key={iso}
+                    key={cell.iso}
                     type="button"
-                    className={`${styles.dateChip} ${selectedDate === iso ? styles.dateChipActive : ""}`}
+                    disabled={!enabled}
+                    className={`${styles.calendarDay} ${selectedDate === cell.iso ? styles.calendarDayActive : ""}`}
                     onClick={() => {
-                      setSelectedDate(iso);
+                      setSelectedDate(cell.iso);
                       goTo("time");
                     }}
                   >
-                    <span className={styles.dateChipWeekday}>
-                      {date.toLocaleDateString(locale, { weekday: "short" })}
-                    </span>
-                    <span className={styles.dateChipNum}>{date.getDate()}</span>
+                    {showMonth && (
+                      <span className={styles.calendarDayMonth}>
+                        {cell.date.toLocaleDateString(locale, { month: "short" })}
+                      </span>
+                    )}
+                    {cell.day}
                   </button>
                 );
               })}
             </div>
+            {availableDates && availableDates.size === 0 && (
+              <p className={styles.errorText}>{booking.noFreeDates}</p>
+            )}
           </>
         )}
 
@@ -353,13 +464,23 @@ export function BookingWizard({
 
             <div className={styles.form}>
               <Input
-                ref={nameFieldRef}
-                label={`${booking.nameLabel} *`}
-                autoComplete="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={() => setTouched((t) => ({ ...t, name: true }))}
-                error={showNameError ? booking.nameError : undefined}
+                ref={lastNameFieldRef}
+                label={`${booking.lastNameLabel} *`}
+                autoComplete="family-name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, lastName: true }))}
+                error={showLastNameError ? booking.nameError : undefined}
+                required
+              />
+              <Input
+                ref={firstNameFieldRef}
+                label={`${booking.firstNameLabel} *`}
+                autoComplete="given-name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, firstName: true }))}
+                error={showFirstNameError ? booking.nameError : undefined}
                 required
               />
               <Input
@@ -425,7 +546,8 @@ export function BookingWizard({
                 setSelectedServiceId(null);
                 setSelectedStaffId("any");
                 setSelectedSlot(null);
-                setName("");
+                setFirstName("");
+                setLastName("");
                 setEmail("");
                 setPhone("");
                 setNotes("");

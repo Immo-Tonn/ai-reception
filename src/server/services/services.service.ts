@@ -28,7 +28,7 @@ export async function createService(
     currency: data.currency,
     bufferBeforeMinutes: data.bufferBeforeMinutes,
     bufferAfterMinutes: data.bufferAfterMinutes,
-    allowedStaffIds: [],
+    allowedStaffIds: data.allowedStaffIds,
     requiredResourceType: null,
   };
   return getServerServicesRepository(session.workspaceId).create(service);

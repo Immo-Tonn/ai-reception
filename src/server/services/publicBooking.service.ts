@@ -6,6 +6,7 @@ import {
   getServerServicesRepository,
 } from "@/server/repository/registry";
 import { publicBookingSchema, type PublicBookingInput } from "@/server/validation/availability.schema";
+import { AppointmentConflictError } from "@/server/repository/supabase/appointmentsRepository";
 import { getAvailableSlots } from "./availability.service";
 import type { Appointment } from "@/features/appointments/types";
 import type { ClientRecord } from "@/features/clients/types";
@@ -48,11 +49,11 @@ export async function createPublicBooking(
   const clientsRepo = getServerClientsRepository(workspaceId);
   const existingClients = await clientsRepo.list();
   let client = existingClients.find(
-    (c) => c.email.toLowerCase() === data.client.email.toLowerCase(),
+    (c) => c.email !== "" && c.email.toLowerCase() === data.client.email.toLowerCase(),
   );
   if (!client) {
-    client = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    client = await clientsRepo.create({
+      id: crypto.randomUUID(),
       name: data.client.name,
       email: data.client.email,
       phone: data.client.phone,
@@ -61,15 +62,17 @@ export async function createPublicBooking(
       upcoming: [],
       history: [],
       notes: "",
-    } satisfies ClientRecord;
-    await clientsRepo.create(client);
+    } satisfies ClientRecord);
   }
 
-  const appointment: Appointment = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  const draft: Appointment = {
+    id: crypto.randomUUID(),
     client: client.name,
+    clientId: client.id,
     service: service.name,
+    serviceId: service.id,
     staff: chosenSlot.staffName,
+    staffId: chosenSlot.staffId,
     resourceId: chosenSlot.resourceId,
     date: data.date,
     time: data.time,
@@ -83,14 +86,23 @@ export async function createPublicBooking(
     paid: false,
     seriesId: null,
     recurrence: null,
+    source: "public",
   };
 
   const appointmentsRepo = getServerAppointmentsRepository(workspaceId);
-  await appointmentsRepo.create(appointment);
+  let appointment: Appointment;
+  try {
+    appointment = await appointmentsRepo.create(draft);
+  } catch (error) {
+    // Two visitors picking the same slot at the same instant: the database
+    // refuses the second one, which is "slot taken" to the visitor.
+    if (error instanceof AppointmentConflictError) throw new BookingUnavailableError();
+    throw error;
+  }
 
   const auditRepo = getServerAuditLogRepository(workspaceId);
   await auditRepo.create({
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: crypto.randomUUID(),
     timestamp: new Date().toISOString(),
     action: "created",
     entityType: "appointment",

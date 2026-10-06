@@ -419,3 +419,55 @@
   color: var(--color-accent-blue);
   font-weight: var(--font-weight-medium);
 }
+
+/* Calendar grid (date step) */
+.calendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-1);
+  margin-bottom: var(--space-5);
+}
+
+.calendarWeekday {
+  text-align: center;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  padding-bottom: var(--space-1);
+}
+
+.calendarDay {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-weight: var(--font-weight-semibold);
+}
+
+.calendarDay:disabled {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-muted);
+  opacity: 0.4;
+  font-weight: var(--font-weight-regular, 400);
+  cursor: default;
+}
+
+.calendarDayActive {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: var(--color-paper);
+}
+
+.calendarDayMonth {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-size: 9px;
+  text-transform: uppercase;
+  opacity: 0.7;
+}

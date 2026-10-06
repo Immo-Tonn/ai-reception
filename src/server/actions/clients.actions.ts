@@ -3,22 +3,34 @@
 import { getSession } from "@/server/auth/session";
 import * as clientsService from "@/server/services/clients.service";
 import type { CreateClientInput, UpdateClientInput } from "@/server/validation/client.schema";
+import type { ClientRecord } from "@/features/clients/types";
+import { runAction } from "./runAction";
+import type { ActionResult } from "./result";
 
-export async function listClientsAction(workspaceId: string) {
-  const session = await getSession(workspaceId);
-  return clientsService.listClients(session);
+export async function listClientsAction(workspaceSlug: string): Promise<ActionResult<ClientRecord[]>> {
+  return runAction(async () => {
+    const session = await getSession(workspaceSlug);
+    return clientsService.listClients(session);
+  });
 }
 
-export async function createClientAction(workspaceId: string, input: CreateClientInput) {
-  const session = await getSession(workspaceId);
-  return clientsService.createClient(session, input);
+export async function createClientAction(
+  workspaceSlug: string,
+  input: CreateClientInput,
+): Promise<ActionResult<ClientRecord>> {
+  return runAction(async () => {
+    const session = await getSession(workspaceSlug);
+    return clientsService.createClient(session, input);
+  });
 }
 
 export async function updateClientAction(
-  workspaceId: string,
+  workspaceSlug: string,
   id: string,
   input: UpdateClientInput,
-) {
-  const session = await getSession(workspaceId);
-  return clientsService.updateClient(session, id, input);
+): Promise<ActionResult<ClientRecord | undefined>> {
+  return runAction(async () => {
+    const session = await getSession(workspaceSlug);
+    return clientsService.updateClient(session, id, input);
+  });
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Button, BackLink } from "@/components/ui";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
 import { getMessages } from "@/lib/i18n";
@@ -49,16 +50,16 @@ export default async function LoginPage() {
 
             <p className={styles.signupPrompt}>
               {login.signupPrompt}{" "}
-              <a className={styles.signupLink} href="/signup">
+              <Link className={styles.signupLink} href="/signup">
                 {login.signupLink}
-              </a>
+              </Link>
             </p>
 
             <p className={styles.signupPrompt}>
               {login.clientPrompt}{" "}
-              <a className={styles.signupLink} href="/client">
+              <Link className={styles.signupLink} href="/client">
                 {login.clientLink}
-              </a>
+              </Link>
             </p>
           </div>
         </section>

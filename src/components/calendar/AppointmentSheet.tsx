@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button, Icon, Input, Sheet } from "@/components/ui";
 import { ClientPicker } from "./ClientPicker";
 import type { ClientRecord } from "@/features/clients/types";
@@ -65,6 +65,12 @@ function todayIso() {
   return localIsoDate(new Date());
 }
 
+// Outside the component so event handlers don't call an impure function during render.
+// Real UUIDs: real workspaces store these ids as-is in Postgres.
+function newId() {
+  return crypto.randomUUID();
+}
+
 export function AppointmentSheet({
   open,
   onClose,
@@ -126,13 +132,14 @@ export function AppointmentSheet({
 
   // Keep duration/price in sync with the chosen service, but only when
   // creating — editing shouldn't silently overwrite a custom price.
-  useEffect(() => {
-    if (isEditing || !selectedService) return;
-    setDuration(selectedService.durationMinutes);
-    setPrice(selectedService.price);
-    if (!selectedService.requiredResourceType) setResourceId(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serviceName]);
+  function handleServiceChange(name: string) {
+    setServiceName(name);
+    const service = services.find((s) => s.name === name);
+    if (isEditing || !service) return;
+    setDuration(service.durationMinutes);
+    setPrice(service.price);
+    if (!service.requiredResourceType) setResourceId(null);
+  }
 
   const eligibleStaff = useMemo(() => {
     if (!selectedService || selectedService.allowedStaffIds.length === 0) return staffList;
@@ -184,11 +191,14 @@ export function AppointmentSheet({
   function buildBaseFields() {
     return {
       client,
+      clientId: clients.find((c) => c.name === client)?.id,
       service: serviceName,
+      serviceId: selectedService?.id,
       staff,
+      staffId: staffList.find((s) => s.name === staff)?.id,
       resourceId,
       price,
-      currency: "EUR",
+      currency: selectedService?.currency ?? initialValue?.currency ?? "EUR",
       notes,
       visibility,
       financialBucket,
@@ -208,7 +218,7 @@ export function AppointmentSheet({
     let result: AppointmentSaveResult;
 
     if (!isEditing && recurrenceFreq !== "none") {
-      const seriesId = `series-${Date.now()}`;
+      const seriesId = newId();
       const dates = recurrencePreviewDates;
       const created: Appointment[] = [];
       for (const occurrenceDate of dates) {
@@ -227,7 +237,7 @@ export function AppointmentSheet({
         );
         if (occurrenceConflict.hasConflict) continue;
         created.push({
-          id: `${Date.now()}-${occurrenceDate}`,
+          id: newId(),
           date: occurrenceDate,
           time,
           durationMinutes: duration,
@@ -263,7 +273,7 @@ export function AppointmentSheet({
         mode: "create",
         appointments: [
           {
-            id: `${Date.now()}`,
+            id: newId(),
             date,
             time,
             durationMinutes: duration,
@@ -280,7 +290,6 @@ export function AppointmentSheet({
       await onSave(result);
       onClose();
     } catch (error) {
-      // eslint-disable-next-line no-console
       console.error("Failed to save appointment", error);
       setSaveError(true);
     } finally {
@@ -366,7 +375,7 @@ export function AppointmentSheet({
           <select
             className={styles.select}
             value={serviceName}
-            onChange={(event) => setServiceName(event.target.value)}
+            onChange={(event) => handleServiceChange(event.target.value)}
           >
             {services.map((item) => (
               <option key={item.id} value={item.name}>

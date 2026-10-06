@@ -49,4 +49,15 @@ export interface Appointment {
   /** Present on every occurrence of a recurring series, shared by all of them. */
   seriesId: string | null;
   recurrence: RecurrenceRule | null;
+  /** Real database ids — only set for Supabase-backed (real) workspaces.
+   * The display fields above (`client`, `service`, `staff`) stay the
+   * human-readable names every UI component already uses; when an id is
+   * present it is preferred over a name lookup, so two clients who share
+   * a name can never be confused. Demo workspaces never set these. */
+  clientId?: string | null;
+  serviceId?: string | null;
+  staffId?: string | null;
+  /** Where the booking came from. Defaults to "user" (entered by staff);
+   * "public" marks one made by a visitor through the online booking page. */
+  source?: "user" | "public" | "assistant" | "automation";
 }

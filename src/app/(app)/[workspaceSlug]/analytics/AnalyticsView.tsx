@@ -50,12 +50,6 @@ export function AnalyticsView({
     [appointments, invoices, leads, periodDays, service, staff, bucket],
   );
 
-  const bucketLabel: Record<FinancialBucket, string> = {
-    main: messages.bucketMain,
-    private: messages.bucketPrivate,
-    custom: messages.bucketMain,
-  };
-
   const maxServiceCount = result.popularServices[0]?.count ?? 0;
   const maxUtilizationMinutes = result.staffUtilization[0]?.minutes ?? 0;
 

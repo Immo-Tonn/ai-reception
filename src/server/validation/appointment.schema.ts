@@ -16,8 +16,22 @@ export const appointmentStatusSchema = z.enum([
 const timeSchema = z.string().regex(/^\d{2}:\d{2}$/, "Expected HH:mm");
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
+const recurrenceSchema = z.object({
+  frequency: z.enum(["weekly", "biweekly", "monthly", "custom"]),
+  intervalDays: z.number().int().min(1).max(365).optional(),
+  count: z.number().int().min(1).max(100),
+});
+
 export const createAppointmentSchema = z.object({
+  /** Optional client-generated id (a UUID), so the UI can keep referring
+   * to the appointment it just created. */
+  id: z.string().uuid().optional(),
   client: z.string().min(1).max(200),
+  clientId: z.string().uuid().nullable().optional(),
+  serviceId: z.string().uuid().nullable().optional(),
+  staffId: z.string().uuid().nullable().optional(),
+  seriesId: z.string().uuid().nullable().optional(),
+  recurrence: recurrenceSchema.nullable().optional(),
   service: z.string().min(1),
   staff: z.string().min(1),
   resourceId: z.string().nullable(),
@@ -33,7 +47,11 @@ export const createAppointmentSchema = z.object({
   paid: z.boolean().default(false),
 });
 
-export const updateAppointmentSchema = createAppointmentSchema.partial();
+// An existing appointment's identity and recurring series can't be
+// rewritten through an update.
+export const updateAppointmentSchema = createAppointmentSchema
+  .omit({ id: true, seriesId: true, recurrence: true })
+  .partial();
 
 export const moveAppointmentSchema = z.object({
   id: z.string().min(1),

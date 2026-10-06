@@ -28,10 +28,30 @@ export function useRepositoryCollection<T extends { id: string }>(
   // change), so a mount-only effect would keep showing the previous
   // workspace's data. `loaded` resets too, so consumers gating on it
   // (e.g. ClientDetailView) don't flash stale content while this loads.
-  useEffect(() => {
+  // Reset `loaded` during render when the repository changes (not in an effect).
+  const [loadedFor, setLoadedFor] = useState(repository);
+  if (repository !== loadedFor) {
+    setLoadedFor(repository);
     setLoaded(false);
-    refresh();
-  }, [refresh]);
+  }
+
+  useEffect(() => {
+    let active = true;
+    repository
+      .list()
+      .then((list) => {
+        if (!active) return;
+        setItems(list);
+        setLoaded(true);
+      })
+      .catch((error) => {
+        console.error("Failed to load collection", error);
+        if (active) setLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [repository]);
 
   const create = useCallback(
     async (item: T) => {

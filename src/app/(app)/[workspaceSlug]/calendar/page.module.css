@@ -458,3 +458,16 @@
     display: none;
   }
 }
+
+/* List view: appointments grouped by day */
+.listGroup {
+  margin-top: var(--space-5);
+}
+
+.listGroupTitle {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-muted);
+  margin-bottom: var(--space-2);
+  text-transform: capitalize;
+}

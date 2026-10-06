@@ -6,6 +6,11 @@ import { Button, Icon } from "@/components/ui";
 import type { Messages } from "@/lib/i18n";
 import styles from "./page.module.css";
 
+// Outside the component so event handlers don't call an impure function during render
+function newId(suffix: string) {
+  return `${Date.now()}-${suffix}`;
+}
+
 interface TextMessage {
   kind: "text";
   id: string;
@@ -48,7 +53,7 @@ export function AssistantView({
     if (!text.trim()) return;
     const userMessage: TextMessage = {
       kind: "text",
-      id: `${Date.now()}-user`,
+      id: newId("user"),
       role: "user",
       text,
     };
@@ -56,10 +61,10 @@ export function AssistantView({
     const isMoveRequest = /move|перенес|перенос|verschieb/i.test(text);
 
     const replyMessage: ThreadMessage = isMoveRequest
-      ? { kind: "action", id: `${Date.now()}-action`, role: "assistant" }
+      ? { kind: "action", id: newId("action"), role: "assistant" }
       : {
           kind: "text",
-          id: `${Date.now()}-assistant`,
+          id: newId("assistant"),
           role: "assistant",
           text: messages.demoReplyIntro,
         };

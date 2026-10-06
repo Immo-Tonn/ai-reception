@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Icon } from "@/components/ui";
 import type { ClientRecord } from "@/features/clients/types";
 import type { Messages } from "@/lib/i18n";
@@ -30,6 +30,7 @@ export function ClientPicker({
   clientLabelOverride,
 }: ClientPickerProps) {
   const [open, setOpen] = useState(false);
+  const listboxId = useId();
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
   const [newEmail, setNewEmail] = useState("");
@@ -177,11 +178,12 @@ export function ClientPicker({
             onKeyDown={handleSearchKeyDown}
             role="combobox"
             aria-expanded={open}
+            aria-controls={listboxId}
             aria-autocomplete="list"
           />
 
           {!creating && (
-            <div className={styles.results} role="listbox">
+            <div id={listboxId} className={styles.results} role="listbox">
               {results.length === 0 ? (
                 <div className={styles.emptyState}>{messages.clientNoResults}</div>
               ) : (

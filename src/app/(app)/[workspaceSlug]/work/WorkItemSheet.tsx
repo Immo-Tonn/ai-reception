@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button, Input, Sheet } from "@/components/ui";
 import type { FinancialBucket, Visibility } from "@/features/appointments/types";
 import type { Messages } from "@/lib/i18n";
@@ -41,10 +41,12 @@ export function WorkItemSheet({
   const [visibility, setVisibility] = useState<Visibility>("normal");
   const [financialBucket, setFinancialBucket] = useState<FinancialBucket>("main");
 
-  useEffect(() => {
+  // Re-prefill the client when the sheet opens (adjusting state during render, not in an effect)
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) setClientName(prefillClient ?? "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }
 
   function reset() {
     setClientName("");

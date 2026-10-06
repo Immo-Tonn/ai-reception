@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
@@ -26,9 +27,9 @@ export default async function ClientLoginPage() {
         <LoginForm messages={client} />
         <p className={styles.promptRow}>
           {client.businessPrompt}{" "}
-          <a href="/business" className={styles.promptLink}>
+          <Link href="/business" className={styles.promptLink}>
             {client.businessLink}
-          </a>
+          </Link>
         </p>
       </div>
     </main>

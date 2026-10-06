@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Icon } from "@/components/ui";
 import { useLeads, useQuotes, useJobs, useProjects } from "@/features/work/useWork";
@@ -12,6 +12,15 @@ import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency } from "@/lib/i18n/format";
 import { WorkItemSheet, type WorkItemDraft, type WorkKind } from "./WorkItemSheet";
 import styles from "./page.module.css";
+
+// Outside the component so event handlers don't call an impure function during render
+function newId(prefix: string) {
+  return `${prefix}-${Date.now()}`;
+}
+
+function newInvoiceNumber() {
+  return `INV-${Date.now().toString().slice(-6)}`;
+}
 
 type Tab = "leads" | "quotes" | "jobs" | "projects";
 
@@ -129,7 +138,7 @@ export function WorkView({
 
   function handleLeadToQuote(lead: Lead) {
     const quote: Quote = {
-      id: `quote-${Date.now()}`,
+      id: newId("quote"),
       leadId: lead.id,
       clientName: lead.clientName,
       title: lead.title,
@@ -149,7 +158,7 @@ export function WorkView({
 
   function handleQuoteToJob(quote: Quote) {
     const job: Job = {
-      id: `job-${Date.now()}`,
+      id: newId("job"),
       quoteId: quote.id,
       clientName: quote.clientName,
       title: quote.title,
@@ -169,10 +178,10 @@ export function WorkView({
   }
 
   function handleJobToInvoice(job: Job) {
-    const invoiceId = `invoice-${Date.now()}`;
+    const invoiceId = newId("invoice");
     createInvoice({
       id: invoiceId,
-      number: `INV-${Date.now().toString().slice(-6)}`,
+      number: newInvoiceNumber(),
       client: job.clientName,
       amount: job.amount,
       currency: job.currency,

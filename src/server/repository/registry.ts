@@ -13,6 +13,10 @@ import { demoInvoices } from "@/features/finance/demoData";
 import { demoWaitingList } from "@/features/waitingList/demoData";
 import { getWorkspaceConfig, isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { getSupabaseServicesRepository } from "./servicesSupabaseRepository";
+import { getSupabaseStaffRepository } from "./supabase/staffRepository";
+import { getSupabaseClientsRepository } from "./supabase/clientsRepository";
+import { getSupabaseAppointmentsRepository } from "./supabase/appointmentsRepository";
+import { getSupabaseAuditLogRepository } from "./supabase/auditLogRepository";
 
 /**
  * One mock repository instance per (workspace, entity), created lazily
@@ -35,11 +39,27 @@ function registryFactory<T extends { id: string }>(seed: (workspaceId: string) =
   };
 }
 
-export const getServerAppointmentsRepository = registryFactory<Appointment>(
-  (workspaceId) => getWorkspaceConfig(workspaceId).appointments,
+/**
+ * Demo vs. real: the four demo presets keep running on the in-memory mock
+ * repositories (unchanged); every real workspace (an id that isn't one of
+ * the four demo slugs — i.e. a real `workspaces.id` UUID) is backed by
+ * its Supabase table, scoped by workspace_id, via the service_role admin
+ * client. `byWorkspaceKind` is the one place that branch lives.
+ */
+function byWorkspaceKind<T extends { id: string }>(
+  mock: (workspaceId: string) => Repository<T>,
+  real: (workspaceId: string) => Repository<T>,
+): (workspaceId: string) => Repository<T> {
+  return (workspaceId) => (isDemoWorkspaceSlug(workspaceId) ? mock(workspaceId) : real(workspaceId));
+}
+
+export const getServerAppointmentsRepository = byWorkspaceKind<Appointment>(
+  registryFactory<Appointment>((workspaceId) => getWorkspaceConfig(workspaceId).appointments),
+  getSupabaseAppointmentsRepository,
 );
-export const getServerClientsRepository = registryFactory<ClientRecord>(
-  (workspaceId) => getWorkspaceConfig(workspaceId).clients,
+export const getServerClientsRepository = byWorkspaceKind<ClientRecord>(
+  registryFactory<ClientRecord>((workspaceId) => getWorkspaceConfig(workspaceId).clients),
+  getSupabaseClientsRepository,
 );
 // Real workspaces have no demo invoices/waiting-list entries of their
 // own yet (Track B hasn't migrated these two entities to Supabase) — an
@@ -66,10 +86,16 @@ export function getServerServicesRepository(workspaceId: string): Repository<Ser
   return getSupabaseServicesRepository(workspaceId);
 }
 
-export const getServerStaffRepository = registryFactory<StaffMember>(
-  (workspaceId) => getWorkspaceConfig(workspaceId).staff,
+export const getServerStaffRepository = byWorkspaceKind<StaffMember>(
+  registryFactory<StaffMember>((workspaceId) => getWorkspaceConfig(workspaceId).staff),
+  getSupabaseStaffRepository,
 );
+// Resources (rooms, lifts, ...) aren't modeled for real workspaces yet —
+// they get the (empty) mock list, so no service ever requires one.
 export const getServerResourcesRepository = registryFactory<ResourceDefinition>(
   (workspaceId) => getWorkspaceConfig(workspaceId).resources,
 );
-export const getServerAuditLogRepository = registryFactory<AuditLogEntry>(() => []);
+export const getServerAuditLogRepository = byWorkspaceKind<AuditLogEntry>(
+  registryFactory<AuditLogEntry>(() => []),
+  getSupabaseAuditLogRepository,
+);

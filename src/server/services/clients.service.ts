@@ -28,7 +28,7 @@ export async function createClient(
   const data = createClientSchema.parse(input);
   const client: ClientRecord = {
     ...data,
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: crypto.randomUUID(),
     lastVisit: null,
     upcoming: [],
     history: [],

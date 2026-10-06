@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui";
 import { StatusBadge } from "@/components/calendar/StatusBadge";
@@ -54,12 +55,16 @@ export function BookingsView({
   }
 
   useEffect(() => {
-    if (!identity) {
+    if (!identity) return;
+    let active = true;
+    listMyBookings(identity).then((list) => {
+      if (!active) return;
+      setRows(list);
       setLoaded(true);
-      return;
-    }
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    });
+    return () => {
+      active = false;
+    };
   }, [identity]);
 
   const todayIso = localIsoDate(new Date());
@@ -92,7 +97,8 @@ export function BookingsView({
     setTimeout(() => setToast(null), 2500);
   }
 
-  if (!authLoaded || !loaded) return null;
+  // Without an identity there's nothing to load, so only wait for `loaded` when signed in.
+  if (!authLoaded || (identity && !loaded)) return null;
 
   if (!identity) {
     return (
@@ -101,9 +107,9 @@ export function BookingsView({
           <h1 className={styles.title}>{client.myBookingsTitle}</h1>
           <div className={styles.signInPrompt}>
             <p>{client.createAccountPrompt}</p>
-            <a href="/client/login?redirect=/client/bookings" className={styles.signInPromptLink}>
+            <Link href="/client/login?redirect=/client/bookings" className={styles.signInPromptLink}>
               {client.loginLink}
-            </a>
+            </Link>
           </div>
         </div>
       </main>
@@ -294,19 +300,24 @@ function ReschedulePanel({
   const staffMember = workspace.staff.find((s) => s.name === appointment.staff);
 
   const [selectedDate, setSelectedDate] = useState(dateStrip[0]);
-  const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Slots are tagged with the request they belong to, so "loading" is derived
+  // from whether the latest result matches the current selection (no sync setState in an effect).
+  const slotsKey = service
+    ? [row.workspaceSlug, service.id, staffMember?.id ?? "", selectedDate].join("|")
+    : null;
+  const [slotsResult, setSlotsResult] = useState<{ key: string; slots: AvailableSlot[] } | null>(null);
+  const loading = slotsKey !== null && slotsResult?.key !== slotsKey;
+  const slots = slotsResult && slotsResult.key === slotsKey ? slotsResult.slots : [];
+
   useEffect(() => {
-    if (!service) return;
-    setLoading(true);
-    setSelectedSlot(null);
+    if (!slotsKey || !service) return;
     getClientAvailableSlots(row.workspaceSlug, service.id, staffMember?.id ?? null, selectedDate)
-      .then(setSlots)
-      .finally(() => setLoading(false));
-  }, [row.workspaceSlug, service, staffMember, selectedDate]);
+      .then((result) => setSlotsResult({ key: slotsKey, slots: result }))
+      .catch(() => setSlotsResult({ key: slotsKey, slots: [] }));
+  }, [slotsKey, row.workspaceSlug, service, staffMember, selectedDate]);
 
   async function handleConfirm() {
     if (!selectedSlot) return;
@@ -332,7 +343,10 @@ function ReschedulePanel({
               key={iso}
               type="button"
               className={`${styles.dateChip} ${selectedDate === iso ? styles.dateChipActive : ""}`}
-              onClick={() => setSelectedDate(iso)}
+              onClick={() => {
+                setSelectedDate(iso);
+                setSelectedSlot(null);
+              }}
             >
               <span>{date.toLocaleDateString(locale, { weekday: "short" })}</span>
               <strong>{date.getDate()}</strong>

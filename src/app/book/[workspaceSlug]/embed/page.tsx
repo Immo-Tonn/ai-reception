@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
-import { getWorkspaceBranding } from "@/features/branding/demoData";
+import { loadBookingPageData } from "../loadBookingData";
 import { BookingWizard } from "../BookingWizard";
 
 export const metadata: Metadata = {
@@ -21,15 +22,19 @@ export default async function EmbeddedBookingPage({
   const { workspaceSlug } = await params;
   const locale = await getRequestLocale();
   const { common, booking, client } = getMessages(locale);
-  const branding = getWorkspaceBranding(workspaceSlug);
+  const data = await loadBookingPageData(workspaceSlug);
+  if (!data) notFound();
 
   return (
     <BookingWizard
       workspaceSlug={workspaceSlug}
+      mode={data.mode}
+      services={data.services}
+      staffList={data.staffList}
       locale={locale}
       booking={booking}
       client={client}
-      branding={branding}
+      branding={data.branding}
       youLabel={common.you}
       chromeless
     />

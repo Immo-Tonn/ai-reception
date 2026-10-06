@@ -15,7 +15,7 @@ import {
   type MoveAppointmentInput,
 } from "@/server/validation/appointment.schema";
 import { findConflicts } from "@/features/appointments/conflicts";
-import { demoWorkingHours } from "@/features/workingHours/demoData";
+import { getServerWorkingHours } from "@/server/repository/workingHours";
 import { checkAvailability } from "@/features/workingHours/logic";
 import { applyVisibility, applyVisibilityToList, type VisibleAppointment } from "./masking";
 import type { Appointment } from "@/features/appointments/types";
@@ -37,7 +37,7 @@ async function auditLog(
   const repo = getServerAuditLogRepository(session.workspaceId);
   await repo.create({
     ...entry,
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: crypto.randomUUID(),
     timestamp: new Date().toISOString(),
   });
 }
@@ -69,14 +69,18 @@ async function checkBusinessRules(
 ) {
   const repo = getServerAppointmentsRepository(session.workspaceId);
   const servicesRepo = getServerServicesRepository(session.workspaceId);
-  const [existing, services] = await Promise.all([repo.list(), servicesRepo.list()]);
+  const [existing, services, workingHours] = await Promise.all([
+    repo.list(),
+    servicesRepo.list(),
+    getServerWorkingHours(session.workspaceId),
+  ]);
 
   const availability = checkAvailability(
     candidate.staff,
     candidate.date,
     candidate.time,
     candidate.durationMinutes,
-    demoWorkingHours,
+    workingHours,
   );
   if (!availability.available) {
     throw new BusinessRuleError(
@@ -114,15 +118,15 @@ export async function createAppointment(
     service: data.service,
   });
 
-  const appointment: Appointment = {
+  const draft: Appointment = {
     ...data,
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    seriesId: null,
-    recurrence: null,
+    id: data.id ?? crypto.randomUUID(),
+    seriesId: data.seriesId ?? null,
+    recurrence: data.recurrence ?? null,
   };
 
   const repo = getServerAppointmentsRepository(session.workspaceId);
-  await repo.create(appointment);
+  const appointment = await repo.create(draft);
 
   await auditLog(session, {
     action: "created",
@@ -147,16 +151,29 @@ export async function updateAppointment(
   const before = await repo.get(id);
   if (!before) return undefined;
 
-  const merged = { ...before, ...patch };
-  await checkBusinessRules(session, {
-    id,
-    staff: merged.staff,
-    resourceId: merged.resourceId,
-    date: merged.date,
-    time: merged.time,
-    durationMinutes: merged.durationMinutes,
-    service: merged.service,
-  });
+  // Only re-validate the schedule when something about *when/who/what*
+  // actually changed — a status change, "mark paid" or a notes edit must
+  // never fail just because working hours were edited after the booking
+  // was made.
+  const reschedules =
+    patch.staff !== undefined ||
+    patch.date !== undefined ||
+    patch.time !== undefined ||
+    patch.durationMinutes !== undefined ||
+    patch.resourceId !== undefined ||
+    patch.service !== undefined;
+  if (reschedules) {
+    const merged = { ...before, ...patch };
+    await checkBusinessRules(session, {
+      id,
+      staff: merged.staff,
+      resourceId: merged.resourceId,
+      date: merged.date,
+      time: merged.time,
+      durationMinutes: merged.durationMinutes,
+      service: merged.service,
+    });
+  }
 
   const updated = await repo.update(id, patch);
 
@@ -220,4 +237,22 @@ export async function cancelAppointment(
   });
 
   return updated;
+}
+
+/** Permanently deletes an appointment (cancelling keeps it, with status). */
+export async function removeAppointment(session: Session, id: string): Promise<void> {
+  assertCan(session.role, "appointments.cancel");
+  const repo = getServerAppointmentsRepository(session.workspaceId);
+  const before = await repo.get(id);
+  if (!before) return;
+
+  await repo.remove(id);
+
+  await auditLog(session, {
+    action: "deleted",
+    entityType: "appointment",
+    entityId: id,
+    summary: `${before.client} · ${before.service}`,
+    source: "user",
+  });
 }

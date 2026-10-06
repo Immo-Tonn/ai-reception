@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Input, Icon } from "@/components/ui";
 import { useClientAuth } from "@/features/clientAuth/useClientAuth";
@@ -82,9 +83,9 @@ export function SignupForm({ messages }: { messages: Messages["client"] }) {
 
       <p className={styles.promptRow}>
         {messages.loginPrompt}{" "}
-        <a href="/client/login" className={styles.promptLink}>
+        <Link href="/client/login" className={styles.promptLink}>
           {messages.loginLink}
-        </a>
+        </Link>
       </p>
     </>
   );

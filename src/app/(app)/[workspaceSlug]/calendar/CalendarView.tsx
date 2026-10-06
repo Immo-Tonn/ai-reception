@@ -16,7 +16,8 @@ import { useAuditLog } from "@/features/auditLog/useAuditLog";
 import { useWaitingList } from "@/features/waitingList/useWaitingList";
 import { matchWaitingList } from "@/features/waitingList/matching";
 import type { Appointment, AppointmentStatus } from "@/features/appointments/types";
-import { getWorkspaceConfig } from "@/features/workspace/registry";
+import { getWorkspaceConfig, isDemoWorkspaceSlug } from "@/features/workspace/registry";
+import type { AppCatalog } from "@/server/loaders/appCatalog";
 import { demoWorkingHours } from "@/features/workingHours/demoData";
 import { useClients } from "@/features/clients/useClients";
 import { resolveServiceLabel } from "@/features/services/label";
@@ -24,7 +25,7 @@ import { getStaffLabel } from "@/features/staff/label";
 import type { Locale, Messages } from "@/lib/i18n";
 import styles from "./page.module.css";
 
-type DesktopView = "day" | "week" | "month" | "staff";
+type DesktopView = "day" | "week" | "month" | "staff" | "list";
 
 function initials(name: string) {
   return name
@@ -57,6 +58,7 @@ function buildWeekStrip(centerDate: string) {
 
 export function CalendarView({
   workspaceSlug,
+  catalog,
   locale,
   common,
   calendar,
@@ -70,6 +72,8 @@ export function CalendarView({
   auditLog,
 }: {
   workspaceSlug: string;
+  /** Real workspaces: their own services/specialists/hours (null = demo preset). */
+  catalog: AppCatalog | null;
   locale: Locale;
   common: Messages["common"];
   calendar: Messages["calendar"];
@@ -89,9 +93,10 @@ export function CalendarView({
   // src/features/workspace. Swapping `/demo-salon` for `/demo-werkstatt`
   // changes only this lookup's result, never the components below it.
   const workspace = useMemo(() => getWorkspaceConfig(workspaceSlug), [workspaceSlug]);
-  const demoServices = workspace.services;
-  const demoStaff = workspace.staff;
-  const demoResources = workspace.resources;
+  const demoServices = catalog?.services ?? workspace.services;
+  const demoStaff = catalog?.staff ?? workspace.staff;
+  const demoResources = catalog?.resources ?? workspace.resources;
+  const activeWorkingHours = catalog?.workingHours ?? demoWorkingHours;
   const youLabel = common.you;
   const staffLabelOverride = workspace.staffLabel?.[locale];
   const resourceLabelOverride = workspace.resourceLabel?.[locale];
@@ -102,9 +107,12 @@ export function CalendarView({
   const { items: waitingListEntries } = useWaitingList(workspaceSlug);
   const { items: clients, create: createClient } = useClients(workspaceSlug);
 
-  const [selectedDate, setSelectedDate] = useState(searchParams.get("date") ?? "2026-09-22");
+  const [selectedDate, setSelectedDate] = useState(
+    searchParams.get("date") ?? (isDemoWorkspaceSlug(workspaceSlug) ? "2026-09-22" : localIsoDate(new Date())),
+  );
   const [staffFilter, setStaffFilter] = useState<string>("all");
   const [desktopView, setDesktopView] = useState<DesktopView>("day");
+  const [listScope, setListScope] = useState<"upcoming" | "past">("upcoming");
 
   const [editing, setEditing] = useState<Appointment | null>(null);
   const [sheetOpen, setSheetOpen] = useState(searchParams.get("create") === "appointment");
@@ -134,14 +142,38 @@ export function CalendarView({
 
   const weekStrip = useMemo(() => buildWeekStrip(selectedDate), [selectedDate]);
   const staffList = useMemo(
-    () => Array.from(new Set(appointments.map((item) => item.staff))),
-    [appointments],
+    () =>
+      catalog
+        ? catalog.staff.map((member) => member.name)
+        : Array.from(new Set(appointments.map((item) => item.staff))),
+    [appointments, catalog],
   );
 
   const dayAppointments = appointments
     .filter((item) => item.date === selectedDate)
     .filter((item) => staffFilter === "all" || item.staff === staffFilter)
     .sort((a, b) => a.time.localeCompare(b.time));
+
+  // "List" view: every appointment, grouped by day. Upcoming = today and
+  // later, soonest first; Past = earlier, most recent first.
+  const listGroups = useMemo(() => {
+    const today = localIsoDate(new Date());
+    const filtered = appointments
+      .filter((item) => (listScope === "upcoming" ? item.date >= today : item.date < today))
+      .filter((item) => staffFilter === "all" || item.staff === staffFilter)
+      .sort((a, b) =>
+        listScope === "upcoming"
+          ? `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)
+          : `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`),
+      );
+    const groups: { date: string; items: Appointment[] }[] = [];
+    for (const item of filtered) {
+      const last = groups[groups.length - 1];
+      if (last && last.date === item.date) last.items.push(item);
+      else groups.push({ date: item.date, items: [item] });
+    }
+    return groups;
+  }, [appointments, listScope, staffFilter]);
 
   function openCreate() {
     setEditing(null);
@@ -366,7 +398,39 @@ export function CalendarView({
     { key: "week", label: calendar.weekView },
     { key: "month", label: calendar.monthView },
     { key: "staff", label: calendar.staffView },
+    { key: "list", label: calendar.listView },
   ];
+
+  const listSection = (
+    <div>
+      <div className={styles.viewSwitcher}>
+        {(["upcoming", "past"] as const).map((scope) => (
+          <button
+            key={scope}
+            type="button"
+            className={`${styles.viewTab} ${listScope === scope ? styles.viewTabActive : ""}`}
+            onClick={() => setListScope(scope)}
+          >
+            {scope === "upcoming" ? calendar.listUpcoming : calendar.listPast}
+          </button>
+        ))}
+      </div>
+      {listGroups.length === 0 ? (
+        <div className={styles.empty}>
+          <span className={styles.emptyTitle}>{calendar.noAppointments}</span>
+        </div>
+      ) : (
+        listGroups.map((group) => (
+          <section key={group.date} className={styles.listGroup}>
+            <h2 className={styles.listGroupTitle}>
+              {new Date(group.date + "T00:00:00").toLocaleDateString(locale, { dateStyle: "full" })}
+            </h2>
+            <div className={styles.list}>{group.items.map(renderRow)}</div>
+          </section>
+        ))
+      )}
+    </div>
+  );
 
   return (
     <main className={styles.page}>
@@ -485,6 +549,8 @@ export function CalendarView({
           />
         )}
 
+        {desktopView === "list" && listSection}
+
         {desktopView === "staff" && (
           <div className={styles.gridScroll}>
             <TimeGrid
@@ -594,6 +660,8 @@ export function CalendarView({
           />
         )}
 
+        {desktopView === "list" && listSection}
+
         {desktopView === "staff" && (
           <TimeGrid
             columns={staffColumns}
@@ -625,7 +693,7 @@ export function CalendarView({
         services={demoServices}
         staffList={demoStaff}
         resources={demoResources}
-        workingHours={demoWorkingHours}
+        workingHours={activeWorkingHours}
         clients={clients}
         onCreateClient={(client) => createClient(client)}
         prefillClient={prefillClient}
@@ -664,7 +732,7 @@ export function CalendarView({
         appointment={moveTarget}
         allAppointments={appointments}
         services={demoServices}
-        workingHours={demoWorkingHours}
+        workingHours={activeWorkingHours}
         messages={move}
         conflictMessages={conflict}
         onConfirm={(date, time) => moveTarget && handleMoveConfirm(moveTarget, date, time)}

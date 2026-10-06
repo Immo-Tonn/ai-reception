@@ -1,0 +1,46 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+
+.sectionTitle {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.danger {
+  padding: var(--space-5);
+  border: 1px solid var(--panel-status-negative-text, #b42318);
+  border-radius: var(--radius-3, 12px);
+}
+
+.warning {
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+}
+
+.success {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.dangerButton {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--panel-status-negative-text, #b42318);
+  background: transparent;
+  color: var(--panel-status-negative-text, #b42318);
+  font: inherit;
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.dangerButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

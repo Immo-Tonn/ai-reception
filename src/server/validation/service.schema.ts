@@ -7,6 +7,8 @@ export const createServiceSchema = z.object({
   currency: z.string().min(1).max(8).default("EUR"),
   bufferBeforeMinutes: z.coerce.number().int().min(0).max(24 * 60).default(0),
   bufferAfterMinutes: z.coerce.number().int().min(0).max(24 * 60).default(0),
+  /** Specialists who perform this service; empty = every specialist. */
+  allowedStaffIds: z.array(z.string().min(1)).max(100).default([]),
 });
 
 export const updateServiceSchema = createServiceSchema.partial();

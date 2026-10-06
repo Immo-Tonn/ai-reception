@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button, Icon, Input } from "@/components/ui";
 import type { Messages } from "@/lib/i18n";
 import type { ServiceDefinition } from "@/features/services/types";
+import type { StaffMember } from "@/features/staff/types";
 import {
   createServiceAction,
   removeServiceAction,
@@ -19,6 +20,7 @@ interface FormState {
   currency: string;
   bufferBeforeMinutes: string;
   bufferAfterMinutes: string;
+  allowedStaffIds: string[];
 }
 
 const emptyForm: FormState = {
@@ -28,6 +30,7 @@ const emptyForm: FormState = {
   currency: "EUR",
   bufferBeforeMinutes: "0",
   bufferAfterMinutes: "0",
+  allowedStaffIds: [],
 };
 
 function toFormState(service: ServiceDefinition): FormState {
@@ -38,17 +41,20 @@ function toFormState(service: ServiceDefinition): FormState {
     currency: service.currency,
     bufferBeforeMinutes: String(service.bufferBeforeMinutes),
     bufferAfterMinutes: String(service.bufferAfterMinutes),
+    allowedStaffIds: service.allowedStaffIds,
   };
 }
 
 export function ServicesView({
   workspaceSlug,
   initialServices,
+  staff,
   messages,
   backLabel,
 }: {
   workspaceSlug: string;
   initialServices: ServiceDefinition[];
+  staff: StaffMember[];
   messages: Messages["settingsServices"];
   backLabel: string;
 }) {
@@ -58,6 +64,23 @@ export function ServicesView({
   const [form, setForm] = useState<FormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  function performersLabel(service: ServiceDefinition): string {
+    if (service.allowedStaffIds.length === 0) return "";
+    return staff
+      .filter((member) => service.allowedStaffIds.includes(member.id))
+      .map((member) => member.name)
+      .join(", ");
+  }
+
+  function toggleStaff(id: string) {
+    setForm((f) => ({
+      ...f,
+      allowedStaffIds: f.allowedStaffIds.includes(id)
+        ? f.allowedStaffIds.filter((x) => x !== id)
+        : [...f.allowedStaffIds, id],
+    }));
+  }
 
   function openCreateForm() {
     setEditingId(null);
@@ -87,6 +110,7 @@ export function ServicesView({
       currency: form.currency,
       bufferBeforeMinutes: Number(form.bufferBeforeMinutes) || 0,
       bufferAfterMinutes: Number(form.bufferAfterMinutes) || 0,
+      allowedStaffIds: form.allowedStaffIds,
     };
 
     startTransition(async () => {
@@ -143,6 +167,7 @@ export function ServicesView({
                 <p className={styles.rowLabel}>{service.name}</p>
                 <p className={styles.rowMeta}>
                   {service.durationMinutes} {messages.minutesSuffix} · {service.price} {service.currency}
+                  {staff.length > 1 && service.allowedStaffIds.length > 0 && ` · ${performersLabel(service)}`}
                 </p>
               </div>
               <div className={styles.rowActions}>
@@ -205,6 +230,22 @@ export function ServicesView({
               onChange={(event) => setForm((f) => ({ ...f, bufferAfterMinutes: event.target.value }))}
             />
           </div>
+          {staff.length > 1 && (
+            <fieldset className={styles.staffFieldset}>
+              <legend className={styles.staffLegend}>{messages.staffLabel}</legend>
+              {staff.map((member) => (
+                <label key={member.id} className={styles.staffOption}>
+                  <input
+                    type="checkbox"
+                    checked={form.allowedStaffIds.includes(member.id)}
+                    onChange={() => toggleStaff(member.id)}
+                  />
+                  {member.name}
+                </label>
+              ))}
+              <p className={styles.rowMeta}>{messages.staffAllHint}</p>
+            </fieldset>
+          )}
           <div className={styles.formActions}>
             <Button variant="secondary" type="button" onClick={closeForm} disabled={isPending}>
               {messages.cancel}

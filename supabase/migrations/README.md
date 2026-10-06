@@ -19,6 +19,7 @@ by the ones before it.
 | `0005_invoicing.sql` | `invoices`, `invoice_items`, `payments` |
 | `0006_audit_log.sql` | `audit_logs` |
 | `0007_onboarding_booking_mode.sql` | `workspaces.booking_mode` (adds a column, no new table) |
+| `0008_booking_foundation.sql` | unique specialist names, one default schedule row per weekday, no-overlap constraint on `appointments` |
 
 ## Design notes that mirror the app layer
 

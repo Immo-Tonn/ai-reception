@@ -6,6 +6,11 @@ import { Icon, type IconName } from "../Icon/Icon";
 import { THEME_COOKIE, type Theme } from "@/lib/theme/theme";
 import styles from "./ThemeSwitcher.module.css";
 
+// Module-level so the cookie write isn't treated as mutating state during render
+function writeCookie(name: string, value: string) {
+  document.cookie = `${name}=${value}; path=/; max-age=31536000; SameSite=Lax`;
+}
+
 const options: { value: Theme; icon: IconName }[] = [
   { value: "light", icon: "sun" },
   { value: "dark", icon: "moon" },
@@ -24,7 +29,7 @@ export function ThemeSwitcher({
 
   function selectTheme(value: Theme) {
     setTheme(value);
-    document.cookie = `${THEME_COOKIE}=${value}; path=/; max-age=31536000; SameSite=Lax`;
+    writeCookie(THEME_COOKIE, value);
     const root = document.documentElement;
     if (value === "system") {
       root.removeAttribute("data-theme");
