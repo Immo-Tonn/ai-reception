@@ -230,6 +230,7 @@ export function BookingWizard({
         date: selectedDate,
         time: selectedSlot.time,
         client: { name, email, phone, notes },
+        locale,
       });
       setResult(booked);
       goTo("confirmation");

@@ -17,9 +17,15 @@
   z-index: 2;
   flex-shrink: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
   padding: calc(var(--space-3) + env(safe-area-inset-top)) var(--space-4) var(--space-3);
+}
+
+.topBar > :last-child {
+  margin-left: auto;
 }
 
 @media (min-width: 900px) {
@@ -113,6 +119,7 @@
 }
 
 .brandTitle {
+  overflow-wrap: break-word;
   font-size: 1.5rem;
   line-height: 1.2;
   font-weight: var(--font-weight-semibold);
@@ -129,6 +136,7 @@
 }
 
 .brandSubtitle {
+  overflow-wrap: break-word;
   font-size: var(--font-size-body);
   line-height: var(--line-height-relaxed);
   color: var(--color-muted);
@@ -198,6 +206,7 @@
 }
 
 .formTitle {
+  overflow-wrap: break-word;
   font-size: var(--font-size-h2);
   font-weight: var(--font-weight-semibold);
   letter-spacing: -0.01em;
@@ -273,4 +282,12 @@
   .brandPanelCompact .brandFoot {
     display: none;
   }
+}
+
+/* German compounds: hyphenate instead of overflowing the screen. */
+:global(html[lang="de"]) .brandTitle,
+:global(html[lang="de"]) .brandSubtitle,
+:global(html[lang="de"]) .formTitle {
+  hyphens: auto;
+  overflow-wrap: anywhere;
 }

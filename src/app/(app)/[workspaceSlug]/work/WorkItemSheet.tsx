@@ -202,6 +202,18 @@ function WorkItemForm({
   const showAmount = kind === "quote" || kind === "job";
   const saving = state === "saving";
 
+  const visibilityLabel: Record<Visibility, string> = {
+    normal: appointmentMessages.visibilityNormal,
+    private: appointmentMessages.visibilityPrivate,
+    ownerOnly: appointmentMessages.visibilityOwnerOnly,
+    custom: appointmentMessages.visibilityCustom,
+  };
+  const bucketLabel: Record<FinancialBucket, string> = {
+    main: appointmentMessages.bucketMain,
+    private: appointmentMessages.bucketPrivate,
+    custom: appointmentMessages.bucketCustom,
+  };
+
   return (
     <div className={styles.form}>
       {real ? (

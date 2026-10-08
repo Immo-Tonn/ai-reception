@@ -2,6 +2,7 @@ import type { Appointment } from "@/features/appointments/types";
 import type { AvailableSlot } from "@/features/appointments/availability";
 import type { ClientRecord } from "@/features/clients/types";
 import type { ServiceDefinition } from "@/features/services/types";
+import type { Locale } from "@/lib/i18n";
 
 /**
  * Storage-free business rules of a public booking. EVERY booking write
@@ -41,6 +42,13 @@ export interface PublicBookingRequest {
   date: string;
   time: string;
   client: ClientBookingDetails;
+  /**
+   * Language for the client's confirmation notification. Consumed only by
+   * `localDemoBookingService` (fire-and-forget, console/mock channel today);
+   * the remote/Supabase adapter does not forward it to the Server Action —
+   * production notifications are a separate, server-side follow-up.
+   */
+  locale?: Locale;
 }
 
 /** What the booking UI gets back — enough for the success screen, nothing internal. */

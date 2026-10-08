@@ -17,6 +17,7 @@ import {
   matchExistingClient,
   type ClientBookingDetails,
 } from "./bookingRules";
+import { notifyBookingEvent } from "./bookingNotifications";
 
 /**
  * LOCAL / DEMO adapter of `PublicBookingService`. Reads and writes the
@@ -113,6 +114,15 @@ export const localDemoBookingService: PublicBookingService = {
       entityId: appointment.id,
       summary: buildPublicBookingAuditSummary(appointment),
       source: "public",
+    });
+
+    // Booking is saved. Notify AFTER, and never let it affect the result:
+    // notifyBookingEvent reports and swallows its own failures.
+    await notifyBookingEvent("BOOKING_CONFIRMED", {
+      workspaceSlug,
+      appointment,
+      contact: { name: client.name, email: request.client.email, phone: request.client.phone },
+      locale: request.locale ?? "en",
     });
 
     return buildPublicBookingResult(appointment);

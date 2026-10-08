@@ -330,6 +330,116 @@ Architecture: docs/CLIENT_ACCOUNTS.md. ClientRecord (per business) and client ac
 
 ---
 
+## NOTIFICATIONS FOUNDATION ✅ ЗАВЕРШЕНО — в ветке `task/task-1-ui-finish`
+
+Provider-agnostic задел под уведомления. Supabase, реальные email/SMS/
+push-провайдеры, ключи и платные сервисы НЕ подключались. Не смержено в
+main, не запушено.
+
+**Схема:** Booking flow → `NotificationService` → интерфейс
+`NotificationProvider` → адаптер. Сегодня есть только Console/Mock
+адаптер (`ok: true, delivered: false` — он НЕ отправляет и не врёт об
+этом).
+
+**Файлы (`src/features/notifications/`):** `types.ts` (каналы EMAIL/SMS/
+PUSH/IN_APP, события, payload, preferences), `NotificationProvider.ts`,
+`providers/ConsoleNotificationProvider.ts`, `notificationService.ts`
+(`createNotificationService` + app-wide `notificationService`),
+`preferences.ts`, `templates/{email,sms,shared}.ts`. Плюс
+`src/lib/errorReporter.ts` (пока только log, точка для будущего
+reporter/retry), `src/features/publicBooking/bookingNotifications.ts`
+(whitelist-payload + `notifyBookingEvent`), `manageBooking.ts`
+(cancel/reschedule клиента).
+
+**События:** BOOKING_CONFIRMED (публичная бронь), BOOKING_RESCHEDULED и
+BOOKING_CANCELLED (My Bookings), BOOKING_REMINDER — только шаблоны,
+**scheduler НЕ реализован** (появится вместе с backend).
+
+**Гарантии:** сначала запись сохраняется, потом уведомление; любая ошибка
+уведомления репортится и глотается — бронь не отменяется. Payload
+собирается явным whitelist (workspace/бизнес, имя, email, phone,
+услуга, дата, время, специалист, id записи) — internal notes,
+visibility, financial bucket, цена/paid не попадают клиенту.
+Preferences: email=true если есть email, sms=false, push=false.
+
+**Шаблоны:** email (text+HTML, с экранированием) и короткие SMS на
+DE/EN/UK/RU для всех 4 событий. Тексты не обещают несуществующего.
+
+**Важное исправление UX:** экран успеха брони раньше говорил «Мы
+отправили подтверждение на {email}» — это ложь без провайдера. Теперь во
+всех 4 языках: «Спасибо — ваша запись подтверждена».
+
+**Тесты:** +15 (confirmed/rescheduled/cancelled raise events; сбой
+уведомления не ломает бронь; whitelist payload; локали DE/EN/UK/RU и
+fallback; HTML-escape; Console не заявляет delivery; preferences).
+Итого 74/74. typecheck чисто, build OK. Живая проверка в браузере:
+бронь → один mock-лог EMAIL «(mock — not sent)», ровно 1 запись.
+
+**Статусы:** Notifications — FOUNDATION READY · Real Email / Real SMS /
+Push — NOT CONNECTED · Supabase scheduler/reminders — NOT CONNECTED.
+
+**Resume From Here (notifications):** реальный провайдер = один новый
+адаптер `NotificationProvider`, регистрируется в `notificationService.ts`;
+вызывающий код не меняется. Для напоминаний нужен scheduler после
+Supabase. Retry-очередь — через `reportError`/будущий reporter.
+
+---
+
+## TASK 1 (UI finish) ✅ ЗАВЕРШЕНО — ветка `task/task-1-ui-finish` (от `team/main` 5027202)
+
+Только UI/терминология. Backend/Supabase (`team/Sa-Ev`) НЕ тронут и не
+подтягивался. Tasks 2/3/4 НЕ начинались. Не смержено в main, не запушено.
+
+**Термин Lead → Request (только пользовательский текст).** DE Anfrage /
+EN Request / UK Запит / RU Запрос — вкладка Work, «Новый запрос»,
+пустое состояние, «Из запроса», кнопка в Inbox, блок Analytics
+(«Конверсия запросов: N из M запросов стали работой» — без «выиграно»).
+Внутри кода остались `Lead`, `leadId`, `leads`, `LeadStage`, ключи
+i18n `newLead`/`tabLeads`/… — Work engine и связи не затронуты. Client и
+Request по-прежнему разные сущности.
+
+**Won/Lost скрыты.** На карточке запроса остались только Новый /
+Связались / Смета отправлена. Значения `won`/`lost` в модели сохранены
+(конвертация Quote→Job по-прежнему ставит `won`, Analytics читает его).
+
+**Visibility в UI = Normal/Private** (DE Normal/Privat, EN Normal/Private,
+UK Звичайна/Приватна, RU Обычная/Приватная). **Financial account в UI =
+Main/Private** (DE Hauptgeschäft/Privat, EN Main business/Private, UK
+Основний бізнес/Приватний, RU Основной бизнес/Приватный). `ownerOnly`/
+`custom` и bucket `custom` остаются в domain/БД; скрыты из форм через
+`src/features/appointments/selectableOptions.ts`. Если редактируемая
+запись уже имеет скрытое значение, оно показывается и не перезаписывается.
+Одна и та же логика в: AppointmentSheet, WorkItemSheet («Новый запрос»),
+NewInvoiceSheet. Две оси независимы — все 4 комбинации допустимы, общего
+`isPrivate` нет (покрыто unit-тестом).
+
+**Подписи финансового счёта унифицированы** (убрано «бакет/Bucket» из
+Work и Analytics, фильтры Finance/Analytics используют те же полные
+названия; род у «Приватный» в onboarding исправлен).
+
+**Mobile (пункт 11).**
+- Шапка: на экранах с живым фоном (`/business`, `/client`) блок заголовка
+  и шапка были на одном `z-index`, поэтому заголовок просвечивал поверх
+  открытого меню языка. Шапка теперь выше (`z-index: 3`), может
+  переноситься на 2 строки (`flex-wrap`), BackLink не ломает подпись.
+- Длинные немецкие слова: перенос внутри колонки (`overflow-wrap` +
+  `hyphens: auto` только для `html[lang="de"]`; RU/UK — без дефисов).
+  Применено: intro-заголовки, login/signup, шаги booking, onboarding.
+- Вкладки Work переносятся, не обрезаются справа.
+- Проверка: 176 автоматических сканов (Light/Dark × DE/UK/RU/EN ×
+  375/440px × 11 экранов) — единственная находка (вкладки Work) исправлена;
+  визуально проверены форма «Новый запрос» и шапка/меню языка на 375px.
+  390px отдельно не снимался (между 375 и 440 — тот же layout).
+
+**Проверки:** typecheck чисто, tests 59/59, production build OK.
+
+**Resume From Here:** Task 1 закрыт. Ждём подтверждения на merge/push.
+Дальше — отдельно по решению команды: Task 2/3/4 и интеграция Supabase
+(аудит `team/Sa-Ev` см. в чате; рекомендация — `integration/…` от
+`team/main`).
+
+---
+
 ## ТЕКУЩАЯ ЗАДАЧА — Back navigation + Native mobile (Expo) foundation ✅ ЗАВЕРШЕНО
 
 Две части: (1) единый contextual Back pattern на secondary/flow экранах

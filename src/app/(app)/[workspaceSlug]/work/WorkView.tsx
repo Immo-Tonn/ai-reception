@@ -450,7 +450,10 @@ export function WorkView({
                 {real && lead.estimatedValue ? <span className={styles.cardAmount}>{formatCurrency(lead.estimatedValue, lead.currency ?? "EUR", locale)}</span> : null}
               </div>
               <div className={styles.chipRow}>
-                {(["new", "contacted", "quoted", "won", "lost"] as LeadStage[]).map((stage) => (
+                {/* "won"/"lost" stay in the model (a quote→job conversion still sets
+                    "won", analytics reads it) but aren't shown as buttons: that's CRM
+                    pipeline vocabulary the product doesn't need yet. */}
+                {(["new", "contacted", "quoted"] as LeadStage[]).map((stage) => (
                   <button
                     key={stage}
                     type="button"
