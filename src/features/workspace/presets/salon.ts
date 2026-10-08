@@ -251,6 +251,7 @@ export const salonWorkspace: WorkspaceConfig = {
     uk: "Ключові показники бізнесу на основі записів, клієнтів та фінансів.",
     ru: "Ключевые показатели бизнеса на основе записей, клиентов и финансов.",
   },
+  bookingRules: { autoConfirm: true, minNoticeMinutes: 60, maxHorizonDays: 60, slotIntervalMinutes: 15, cancellationDeadlineHours: 24, rescheduleDeadlineHours: 24 },
   services,
   staff,
   resources,

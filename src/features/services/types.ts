@@ -18,4 +18,10 @@ export interface ServiceDefinition {
   bufferAfterMinutes: number;
   allowedStaffIds: string[]; // empty = all staff allowed
   requiredResourceType: string | null; // e.g. "room" — null = no resource needed
+  /** Resources this service may use (service_resources). Empty/absent = every active resource of `requiredResourceType`. */
+  resourceIds?: string[];
+  /** Archived services are `false`: hidden from booking/new appointments, kept on history. Absent = active. */
+  active?: boolean;
+  /** Optional owner-written text shown under the name in public booking (<= 1000 chars). Absent/empty = none. */
+  description?: string;
 }

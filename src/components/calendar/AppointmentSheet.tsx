@@ -13,6 +13,7 @@ import type {
   Visibility,
 } from "@/features/appointments/types";
 import { statusOrder } from "@/features/appointments/statusMeta";
+import { financialBucketChoices, visibilityChoices } from "@/features/appointments/simpleOptions";
 import { findConflicts, findNextAvailableSlot } from "@/features/appointments/conflicts";
 import { expandRecurrenceDates } from "@/features/appointments/recurrence";
 import { checkAvailability } from "@/features/workingHours/logic";
@@ -24,6 +25,8 @@ import type { ResourceDefinition } from "@/features/resources/types";
 import { getResourceLabel } from "@/features/resources/label";
 import type { WorkingHoursProfile } from "@/features/workingHours/types";
 import type { Locale, Messages } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n/I18nProvider";
+import { describeSaveError } from "@/lib/repository/describeSaveError";
 import styles from "./AppointmentSheet.module.css";
 
 export type AppointmentSaveResult =
@@ -52,13 +55,15 @@ interface AppointmentSheetProps {
   resources: ResourceDefinition[];
   workingHours: WorkingHoursProfile[];
   clients: ClientRecord[];
-  onCreateClient: (client: ClientRecord) => void;
+  onCreateClient: (client: ClientRecord) => Promise<ClientRecord | void> | void;
   prefillClient?: string;
   clientLabelOverride?: string;
   staffLabelOverride?: string;
   resourceLabelOverride?: string;
   noResourceLabelOverride?: string;
   youLabel: string;
+  /** Workspace-local today (YYYY-MM-DD); falls back to the browser date. */
+  today?: string;
 }
 
 function todayIso() {
@@ -90,14 +95,16 @@ export function AppointmentSheet({
   resourceLabelOverride,
   noResourceLabelOverride,
   youLabel,
+  today,
 }: AppointmentSheetProps) {
   const isEditing = Boolean(initialValue);
   const isSeries = Boolean(initialValue?.seriesId);
 
   const [client, setClient] = useState(initialValue?.client ?? prefillClient ?? "");
+  const [selectedClientId, setSelectedClientId] = useState<string | undefined>(initialValue?.clientId);
   const [serviceName, setServiceName] = useState(initialValue?.service ?? services[0]?.name ?? "");
   const [staff, setStaff] = useState(initialValue?.staff ?? staffList[0]?.name ?? "");
-  const [date, setDate] = useState(initialValue?.date ?? defaultDate ?? todayIso());
+  const [date, setDate] = useState(initialValue?.date ?? defaultDate ?? today ?? todayIso());
   const [time, setTime] = useState(initialValue?.time ?? "09:00");
   const [duration, setDuration] = useState(
     initialValue?.durationMinutes ?? services[0]?.durationMinutes ?? 30,
@@ -119,10 +126,12 @@ export function AppointmentSheet({
   const [recurrenceIntervalDays, setRecurrenceIntervalDays] = useState(10);
   const [applyToSeries, setApplyToSeries] = useState(false);
   const [validationError, setValidationError] = useState(false);
-  const [saveError, setSaveError] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const { messages: allMessages } = useI18n();
   const [saving, setSaving] = useState(false);
 
   const selectedService = services.find((s) => s.name === serviceName);
+  const selectedStaffId = staffList.find((s) => s.name === staff)?.id;
 
   // Keep duration/price in sync with the chosen service, but only when
   // creating — editing shouldn't silently overwrite a custom price.
@@ -144,9 +153,19 @@ export function AppointmentSheet({
     [resources, selectedService],
   );
 
-  const availability = checkAvailability(staff, date, time, duration, workingHours);
+  const availability = checkAvailability(selectedStaffId ?? staff, date, time, duration, workingHours, staff);
   const conflict = findConflicts(
-    { id: initialValue?.id ?? "new", staff, resourceId, date, time, durationMinutes: duration, service: serviceName },
+    {
+      id: initialValue?.id ?? "new",
+      staff,
+      staffId: selectedStaffId,
+      resourceId,
+      date,
+      time,
+      durationMinutes: duration,
+      service: serviceName,
+      serviceId: selectedService?.id,
+    },
     allAppointments,
     services,
   );
@@ -182,10 +201,18 @@ export function AppointmentSheet({
   }
 
   function buildBaseFields() {
+    // Prefer the id of the client the user actually picked; fall back to a
+    // name match only to link a typed name to an existing record.
+    const clientId =
+      clients.find((c) => c.id === selectedClientId && c.name === client)?.id ??
+      clients.find((c) => c.name === client)?.id;
     return {
       client,
+      ...(clientId ? { clientId } : {}),
       service: serviceName,
+      ...(selectedService ? { serviceId: selectedService.id } : {}),
       staff,
+      ...(selectedStaffId ? { staffId: selectedStaffId } : {}),
       resourceId,
       price,
       currency: "EUR",
@@ -198,7 +225,7 @@ export function AppointmentSheet({
   }
 
   async function handleSave() {
-    setSaveError(false);
+    setSaveError(null);
     if (!client.trim() || !staff) {
       setValidationError(true);
       return;
@@ -216,11 +243,13 @@ export function AppointmentSheet({
           {
             id: "new",
             staff,
+            staffId: selectedStaffId,
             resourceId,
             date: occurrenceDate,
             time,
             durationMinutes: duration,
             service: serviceName,
+            serviceId: selectedService?.id,
           },
           [...allAppointments, ...created],
           services,
@@ -282,13 +311,13 @@ export function AppointmentSheet({
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error("Failed to save appointment", error);
-      setSaveError(true);
+      setSaveError(describeSaveError(error, allMessages.repositoryErrors));
     } finally {
       setSaving(false);
     }
   }
 
-  const visibilityOptions: { value: Visibility; title: string; hint: string }[] = [
+  const allVisibilityOptions: { value: Visibility; title: string; hint: string }[] = [
     { value: "normal", title: messages.visibilityNormal, hint: messages.visibilityNormalHint },
     { value: "private", title: messages.visibilityPrivate, hint: messages.visibilityPrivateHint },
     {
@@ -298,12 +327,17 @@ export function AppointmentSheet({
     },
     { value: "custom", title: messages.visibilityCustom, hint: messages.visibilityCustomHint },
   ];
+  // Simple UI: Normal / Private; an advanced value already on the record stays visible and selectable.
+  const visibleVisibility = visibilityChoices(initialValue?.visibility);
+  const visibilityOptions = allVisibilityOptions.filter((o) => visibleVisibility.includes(o.value));
 
-  const bucketOptions: { value: FinancialBucket; title: string }[] = [
+  const allBucketOptions: { value: FinancialBucket; title: string }[] = [
     { value: "main", title: messages.bucketMain },
     { value: "private", title: messages.bucketPrivate },
     { value: "custom", title: messages.bucketCustom },
   ];
+  const visibleBuckets = financialBucketChoices(initialValue?.financialBucket);
+  const bucketOptions = allBucketOptions.filter((o) => visibleBuckets.includes(o.value));
 
   const conflictMessage = conflict.staffConflict
     ? {
@@ -355,7 +389,10 @@ export function AppointmentSheet({
         <ClientPicker
           clients={clients}
           value={client}
-          onSelect={(selectedClient) => setClient(selectedClient.name)}
+          onSelect={(selectedClient) => {
+            setClient(selectedClient.name);
+            setSelectedClientId(selectedClient.id);
+          }}
           onCreateClient={onCreateClient}
           messages={messages}
           clientLabelOverride={clientLabelOverride}
@@ -363,7 +400,7 @@ export function AppointmentSheet({
 
         <div className={styles.field}>
           <label className={styles.label}>{messages.serviceLabel}</label>
-          <select
+          <select suppressHydrationWarning
             className={styles.select}
             value={serviceName}
             onChange={(event) => setServiceName(event.target.value)}
@@ -378,7 +415,7 @@ export function AppointmentSheet({
 
         <div className={styles.field}>
           <label className={styles.label}>{staffLabelOverride ?? messages.staffLabel}</label>
-          <select
+          <select suppressHydrationWarning
             className={styles.select}
             value={staff}
             onChange={(event) => setStaff(event.target.value)}
@@ -394,7 +431,7 @@ export function AppointmentSheet({
         {selectedService?.requiredResourceType && (
           <div className={styles.field}>
             <label className={styles.label}>{resourceLabelOverride ?? messages.resourceLabel}</label>
-            <select
+            <select suppressHydrationWarning
               className={styles.select}
               value={resourceId ?? ""}
               onChange={(event) => setResourceId(event.target.value || null)}
@@ -457,7 +494,7 @@ export function AppointmentSheet({
         <div className={styles.row2}>
           <div className={styles.field}>
             <label className={styles.label}>{messages.durationLabel}</label>
-            <select
+            <select suppressHydrationWarning
               className={styles.select}
               value={duration}
               onChange={(event) => setDuration(Number(event.target.value))}
@@ -505,7 +542,7 @@ export function AppointmentSheet({
         {!isEditing && (
           <div className={styles.section}>
             <span className={styles.sectionLabel}>{messages.recurrenceLabel}</span>
-            <select
+            <select suppressHydrationWarning
               className={styles.select}
               value={recurrenceFreq}
               onChange={(event) =>
@@ -547,7 +584,7 @@ export function AppointmentSheet({
 
         <div className={styles.field}>
           <label className={styles.label}>{messages.notesLabel}</label>
-          <textarea
+          <textarea suppressHydrationWarning
             className={styles.textarea}
             placeholder={messages.notesPlaceholder}
             value={notes}
@@ -621,7 +658,7 @@ export function AppointmentSheet({
           <div className={styles.warningCard}>
             <span className={styles.warningTitle}>
               <Icon name="close" size={14} />
-              {validationError ? messages.validationRequired : messages.saveError}
+              {validationError ? messages.validationRequired : saveError}
             </span>
           </div>
         )}

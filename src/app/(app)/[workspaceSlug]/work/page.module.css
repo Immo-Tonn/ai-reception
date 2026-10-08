@@ -58,13 +58,13 @@
 
 .tabRow {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   margin-bottom: var(--space-4);
-  overflow-x: auto;
 }
 
 .tab {
-  height: 40px;
+  min-height: 44px;
   padding: 0 var(--space-4);
   border-radius: var(--radius-pill);
   border: 1px solid var(--color-border);
@@ -135,7 +135,7 @@
 }
 
 .chip {
-  height: 30px;
+  min-height: 44px;
   padding: 0 var(--space-3);
   border-radius: var(--radius-pill);
   border: 1px solid var(--color-border);
@@ -158,7 +158,7 @@
 }
 
 .actionButton {
-  height: 34px;
+  min-height: 44px;
   padding: 0 var(--space-3);
   border-radius: var(--radius-sm);
   border: 1px dashed var(--color-border);
@@ -249,7 +249,7 @@
 }
 
 .option {
-  height: 40px;
+  min-height: 44px;
   padding: 0 var(--space-3);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
@@ -263,4 +263,96 @@
   background: var(--color-ink);
   border-color: var(--color-ink);
   color: var(--color-paper);
+}
+
+.chip:disabled {
+  opacity: 0.5;
+}
+
+.saveLine {
+  min-height: 28px;
+  margin-bottom: var(--space-3);
+}
+
+.select,
+.selectInline {
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: var(--font-size-body);
+  font-family: inherit;
+}
+
+.selectInline {
+  font-size: 12px;
+  color: var(--color-accent-blue);
+  max-width: 100%;
+}
+
+.confirmBar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-paper);
+}
+
+.confirmText {
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--color-ink);
+}
+
+.confirmButton,
+.confirmDanger {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+}
+
+.confirmDanger {
+  background: var(--color-error, #b3261e);
+  border-color: var(--color-error, #b3261e);
+}
+
+.itemRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px 84px 44px;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.itemInput {
+  min-height: 44px;
+  min-width: 0;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: var(--font-size-small);
+  font-family: inherit;
+}
+
+.itemNumber {
+  text-align: right;
+}
+
+.itemRemove {
+  min-height: 44px;
+  min-width: 44px;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 20px;
 }

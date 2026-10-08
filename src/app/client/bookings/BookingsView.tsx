@@ -1,137 +1,235 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Icon } from "@/components/ui";
+import { Icon, SaveStatus } from "@/components/ui";
+import type { SaveState } from "@/components/ui";
 import { StatusBadge } from "@/components/calendar/StatusBadge";
-import { useClientAuth } from "@/features/clientAuth/useClientAuth";
-import { listMyBookings, type ClientBookingRow } from "@/features/publicBooking/myBookings";
-import { getClientAvailableSlots, type AvailableSlot } from "@/features/publicBooking/availability";
-import { getAppointmentsRepository } from "@/features/appointments/repository";
-import { getWorkspaceConfig } from "@/features/workspace/registry";
-import { resolveServiceLabel } from "@/features/services/label";
-import { getStaffLabel } from "@/features/staff/label";
-import { localIsoDate } from "@/lib/date/localIsoDate";
+import {
+  cancelMyBookingAction,
+  claimPendingBookingsAction,
+  getMyRescheduleSlotsAction,
+  rescheduleMyBookingAction,
+} from "@/server/actions/clientAccount.actions";
+import type { AvailableSlot } from "@/features/appointments/availability";
+import { uniqueSlotTimes } from "@/features/appointments/availability";
+import type { MyBooking } from "@/features/clientAccount/types";
+import {
+  clientErrorKey,
+  showZoneLabel,
+  splitMyBookings,
+  toAppointmentStatus,
+} from "@/features/clientAccount/presentation";
+import { clientAuthHref } from "@/features/clientAccount/redirect";
+import { customerStaffLabel } from "@/features/staff/customerLabel";
+import { ClientNav } from "@/components/layout/ClientNav/ClientNav";
+import { browserTimeZone, buildDateStrip, zoneCityLabel } from "@/lib/time/dateStrip";
 import type { Locale, Messages } from "@/lib/i18n";
-import { formatDate } from "@/lib/i18n/format";
+import { formatCurrency, formatDate } from "@/lib/i18n/format";
 import styles from "./BookingsView.module.css";
 
-function buildDateStrip() {
-  const today = new Date();
-  return Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    return localIsoDate(d);
-  });
-}
+export type BookingsViewState = "signed_out" | "ready";
 
-const inactiveStatuses = new Set(["cancelled", "completed", "noShow"]);
+interface Feedback {
+  state: SaveState;
+  text: string;
+}
+const IDLE: Feedback = { state: "idle", text: "" };
 
 export function BookingsView({
   locale,
   client,
   appointmentStatus,
-  youLabel,
+  state,
+  bookings,
+  hasPendingClaims,
+  email,
 }: {
   locale: Locale;
   client: Messages["client"];
   appointmentStatus: Messages["appointmentStatus"];
-  youLabel: string;
+  state: BookingsViewState;
+  bookings: MyBooking[];
+  hasPendingClaims: boolean;
+  email: string | null;
+}) {
+  const [expired, setExpired] = useState(false);
+  const handleExpired = useCallback(() => setExpired(true), []);
+
+  if (state === "signed_out" || expired) {
+    return <SignedOutPrompt client={client} expired={expired} />;
+  }
+  return (
+    <ReadyView
+      locale={locale}
+      client={client}
+      appointmentStatus={appointmentStatus}
+      bookings={bookings}
+      hasPendingClaims={hasPendingClaims}
+      email={email}
+      onExpired={handleExpired}
+    />
+  );
+}
+
+function SignedOutPrompt({ client, expired }: { client: Messages["client"]; expired: boolean }) {
+  return (
+    <main className={styles.screen}>
+      <div className={styles.body}>
+        <h1 className={styles.title}>{client.signedOutTitle}</h1>
+        {expired ? (
+          <p className={styles.inlineError} role="alert">
+            {client.errUnauthenticated}
+          </p>
+        ) : null}
+        <div className={styles.signInPrompt}>
+          <p>{client.signedOutBody}</p>
+          <div className={styles.promptActions}>
+            <Link href={clientAuthHref("login")} className={styles.primaryLink}>
+              {client.loginLink}
+            </Link>
+            <Link href={clientAuthHref("signup")} className={styles.secondaryLink}>
+              {client.createAccountCta}
+            </Link>
+          </div>
+        </div>
+        <p className={styles.guestNote}>{client.guestNote}</p>
+        <Link href="/client" className={styles.backLink}>
+          {client.backToHome}
+        </Link>
+      </div>
+    </main>
+  );
+}
+
+function ReadyView({
+  locale,
+  client,
+  appointmentStatus,
+  bookings,
+  hasPendingClaims,
+  email,
+  onExpired,
+}: {
+  locale: Locale;
+  client: Messages["client"];
+  appointmentStatus: Messages["appointmentStatus"];
+  bookings: MyBooking[];
+  hasPendingClaims: boolean;
+  email: string | null;
+  onExpired: () => void;
 }) {
   const router = useRouter();
-  const { identity, loaded: authLoaded, signOut } = useClientAuth();
-  const [rows, setRows] = useState<ClientBookingRow[]>([]);
-  const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
   const [rescheduleTargetId, setRescheduleTargetId] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Feedback>(IDLE);
+  const [busy, setBusy] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [browserZone, setBrowserZone] = useState<string | null>(null);
+  const claimStarted = useRef(false);
 
-  async function refresh() {
-    if (!identity) return;
-    setRows(await listMyBookings(identity));
-    setLoaded(true);
-  }
+  // Browser zone is only known on the client; reading it after mount keeps SSR and hydration identical.
+  useEffect(() => setBrowserZone(browserTimeZone()), []);
 
+  // Bookings made as a guest in this browser are linked once, right after sign-in.
   useEffect(() => {
-    if (!identity) {
-      setLoaded(true);
-      return;
-    }
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identity]);
+    if (!hasPendingClaims || claimStarted.current) return;
+    claimStarted.current = true;
+    setClaiming(true);
+    claimPendingBookingsAction()
+      .then((result) => {
+        if (!result.ok && result.code === "unauthenticated") onExpired();
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        setClaiming(false);
+        router.refresh();
+      });
+  }, [hasPendingClaims, onExpired, router]);
 
-  const todayIso = localIsoDate(new Date());
-  const { upcoming, past } = useMemo(() => {
-    const sorted = [...rows].sort((a, b) =>
-      (a.appointment.date + a.appointment.time).localeCompare(b.appointment.date + b.appointment.time),
-    );
-    return {
-      upcoming: sorted.filter(
-        (r) => r.appointment.date >= todayIso && !inactiveStatuses.has(r.appointment.status),
-      ),
-      past: sorted.filter(
-        (r) => r.appointment.date < todayIso || inactiveStatuses.has(r.appointment.status),
-      ),
-    };
-  }, [rows, todayIso]);
-
+  const { upcoming, past } = useMemo(() => splitMyBookings(bookings), [bookings]);
   const visible = tab === "upcoming" ? upcoming : past;
 
-  async function handleCancel(row: ClientBookingRow) {
-    await getAppointmentsRepository(row.workspaceSlug).update(row.appointment.id, { status: "cancelled" });
-    setCancelTargetId(null);
-    setToast(client.bookingCancelled);
-    setTimeout(() => setToast(null), 2500);
-    await refresh();
+  function fail(code: Parameters<typeof clientErrorKey>[0]) {
+    if (code === "unauthenticated") {
+      onExpired();
+      return;
+    }
+    setFeedback({ state: "error", text: client[clientErrorKey(code)] });
   }
 
-  function showToast(message: string) {
-    setToast(message);
-    setTimeout(() => setToast(null), 2500);
+  async function handleCancel(id: string) {
+    setBusy(true);
+    setFeedback({ state: "saving", text: client.cancelling });
+    try {
+      const result = await cancelMyBookingAction(id);
+      if (result.ok) {
+        setCancelTargetId(null);
+        setFeedback({ state: "saved", text: client.bookingCancelled });
+        router.refresh();
+      } else {
+        fail(result.code);
+      }
+    } catch {
+      fail("unknown");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  if (!authLoaded || !loaded) return null;
-
-  if (!identity) {
-    return (
-      <main className={styles.screen}>
-        <div className={styles.body}>
-          <h1 className={styles.title}>{client.myBookingsTitle}</h1>
-          <div className={styles.signInPrompt}>
-            <p>{client.createAccountPrompt}</p>
-            <a href="/client/login?redirect=/client/bookings" className={styles.signInPromptLink}>
-              {client.loginLink}
-            </a>
-          </div>
-        </div>
-      </main>
-    );
+  async function handleReschedule(id: string, date: string, slot: AvailableSlot) {
+    setBusy(true);
+    setFeedback({ state: "saving", text: client.rescheduling });
+    try {
+      const result = await rescheduleMyBookingAction(id, date, slot.time, slot.staffId || null);
+      if (result.ok) {
+        setRescheduleTargetId(null);
+        setFeedback({ state: "saved", text: client.bookingRescheduled });
+        router.refresh();
+      } else {
+        fail(result.code);
+      }
+    } catch {
+      fail("unknown");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <main className={styles.screen}>
-      <div className={styles.topBar}>
-        <span />
-        <button
-          type="button"
-          className={styles.signOutButton}
-          onClick={() => {
-            signOut();
-            router.push("/client");
-          }}
-        >
-          {client.signOut}
-        </button>
-      </div>
+      <ClientNav client={client} active="bookings" />
       <div className={styles.body}>
         <h1 className={styles.title}>{client.myBookingsTitle}</h1>
-        <p className={styles.signedInAs}>{client.signedInAs.replace("{name}", identity.name || identity.email)}</p>
+        {email ? <p className={styles.signedInAs}>{client.signedInAs.replace("{name}", email)}</p> : null}
+        {claiming ? (
+          <p className={styles.metaLine} role="status">
+            {client.claiming}
+          </p>
+        ) : null}
 
-        <div className={styles.tabs}>
+        <div className={styles.feedback}>
+          <SaveStatus
+            state={feedback.state}
+            labels={{ unsaved: "", saving: feedback.text, saved: feedback.text }}
+            error={feedback.text}
+            onSavedExpire={() => setFeedback(IDLE)}
+          />
+        </div>
+
+        {bookings.length > 0 ? (
+          <Link href="/client/book" className={styles.bookCta}>
+            {client.bookAppointmentCta}
+          </Link>
+        ) : null}
+
+        <div className={styles.tabs} role="tablist">
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === "upcoming"}
             className={`${styles.tab} ${tab === "upcoming" ? styles.tabActive : ""}`}
             onClick={() => setTab("upcoming")}
           >
@@ -139,6 +237,8 @@ export function BookingsView({
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === "past"}
             className={`${styles.tab} ${tab === "past" ? styles.tabActive : ""}`}
             onClick={() => setTab("past")}
           >
@@ -147,50 +247,58 @@ export function BookingsView({
         </div>
 
         {visible.length === 0 ? (
-          <div className={styles.emptyState}>{tab === "upcoming" ? client.noUpcoming : client.noPast}</div>
+          <div className={styles.emptyState}>
+            <p>{tab === "upcoming" ? client.noUpcoming : client.noPast}</p>
+            {bookings.length === 0 ? (
+              <Link href="/client/book" className={styles.bookCta}>
+                {client.firstBookingCta}
+              </Link>
+            ) : null}
+          </div>
         ) : (
           <div className={styles.list}>
-            {visible.map((row) => (
+            {visible.map((booking) => (
               <BookingCard
-                key={`${row.workspaceSlug}-${row.appointment.id}`}
-                row={row}
+                key={booking.id}
+                booking={booking}
                 locale={locale}
                 client={client}
                 appointmentStatus={appointmentStatus}
-                youLabel={youLabel}
-                cancelling={cancelTargetId === row.appointment.id}
-                rescheduling={rescheduleTargetId === row.appointment.id}
-                onStartCancel={() => setCancelTargetId(row.appointment.id)}
-                onKeepBooking={() => setCancelTargetId(null)}
-                onConfirmCancel={() => handleCancel(row)}
-                onStartReschedule={() => setRescheduleTargetId(row.appointment.id)}
-                onCloseReschedule={() => setRescheduleTargetId(null)}
-                onRescheduled={async () => {
+                browserZone={browserZone}
+                busy={busy}
+                cancelling={cancelTargetId === booking.id}
+                rescheduling={rescheduleTargetId === booking.id}
+                onStartCancel={() => {
                   setRescheduleTargetId(null);
-                  showToast(client.bookingRescheduled);
-                  await refresh();
+                  setCancelTargetId(booking.id);
+                  setFeedback(IDLE);
                 }}
+                onKeepBooking={() => setCancelTargetId(null)}
+                onConfirmCancel={() => handleCancel(booking.id)}
+                onStartReschedule={() => {
+                  setCancelTargetId(null);
+                  setRescheduleTargetId(booking.id);
+                  setFeedback(IDLE);
+                }}
+                onCloseReschedule={() => setRescheduleTargetId(null)}
+                onConfirmReschedule={(date, slot) => handleReschedule(booking.id, date, slot)}
+                onExpired={onExpired}
               />
             ))}
           </div>
         )}
       </div>
-
-      {toast && (
-        <div className={styles.toast} role="status">
-          {toast}
-        </div>
-      )}
     </main>
   );
 }
 
 function BookingCard({
-  row,
+  booking,
   locale,
   client,
   appointmentStatus,
-  youLabel,
+  browserZone,
+  busy,
   cancelling,
   rescheduling,
   onStartCancel,
@@ -198,13 +306,15 @@ function BookingCard({
   onConfirmCancel,
   onStartReschedule,
   onCloseReschedule,
-  onRescheduled,
+  onConfirmReschedule,
+  onExpired,
 }: {
-  row: ClientBookingRow;
+  booking: MyBooking;
   locale: Locale;
   client: Messages["client"];
   appointmentStatus: Messages["appointmentStatus"];
-  youLabel: string;
+  browserZone: string | null;
+  busy: boolean;
   cancelling: boolean;
   rescheduling: boolean;
   onStartCancel: () => void;
@@ -212,49 +322,72 @@ function BookingCard({
   onConfirmCancel: () => void;
   onStartReschedule: () => void;
   onCloseReschedule: () => void;
-  onRescheduled: () => void;
+  onConfirmReschedule: (date: string, slot: AvailableSlot) => void;
+  onExpired: () => void;
 }) {
-  const { appointment } = row;
-  const workspace = getWorkspaceConfig(row.workspaceSlug);
-  const canAct = !inactiveStatuses.has(appointment.status);
-  const isMasked = appointment.visibility === "private";
+  const panelRef = useRef<HTMLDivElement>(null);
+  const zoneLabel = showZoneLabel(booking.timezone, browserZone) ? zoneCityLabel(booking.timezone) : null;
+  const canAct = (booking.canCancel || booking.canReschedule) && !cancelling && !rescheduling;
+
+  // Move focus into the panel that just opened so keyboard / screen-reader users land on it.
+  useEffect(() => {
+    if (cancelling || rescheduling) panelRef.current?.focus();
+  }, [cancelling, rescheduling]);
 
   return (
     <div className={styles.card}>
       <div className={styles.cardMain}>
         <div className={styles.cardTopRow}>
-          <span className={styles.businessName}>{row.workspaceName}</span>
-          <StatusBadge status={appointment.status} labels={appointmentStatus} />
+          <span className={styles.businessName}>{booking.businessName}</span>
+          <StatusBadge status={toAppointmentStatus(booking.status)} labels={appointmentStatus} />
         </div>
-        <span className={styles.serviceName}>
-          {isMasked ? appointmentStatus[appointment.status] : resolveServiceLabel(appointment.service, workspace.services, locale)}
-        </span>
+        <span className={styles.serviceName}>{booking.serviceName ?? "—"}</span>
         <span className={styles.metaLine}>
-          {formatDate(new Date(appointment.date + "T00:00:00"), locale, { dateStyle: "medium" })} ·{" "}
-          {appointment.time} · {getStaffLabel(appointment.staff, youLabel)}
+          {formatDate(new Date(booking.date + "T00:00:00"), locale, { dateStyle: "medium" })} · {booking.time}
+          {zoneLabel ? ` (${zoneLabel})` : ""}
+          {booking.staffName
+            ? ` · ${customerStaffLabel(booking.staffName, { businessName: booking.businessName, neutralLabel: client.specialistNeutral })}`
+            : ""}
         </span>
+        {booking.price > 0 ? (
+          <span className={styles.metaLine}>{formatCurrency(booking.price, booking.currency, locale)}</span>
+        ) : null}
       </div>
 
-      {canAct && !cancelling && !rescheduling && (
+      {canAct && (
         <div className={styles.actionsRow}>
-          <button type="button" className={styles.textButton} onClick={onStartReschedule}>
-            {client.reschedule}
-          </button>
-          <button type="button" className={`${styles.textButton} ${styles.textButtonDestructive}`} onClick={onStartCancel}>
-            {client.cancelBooking}
-          </button>
+          {booking.canReschedule ? (
+            <button type="button" className={styles.textButton} onClick={onStartReschedule} disabled={busy}>
+              {client.reschedule}
+            </button>
+          ) : null}
+          {booking.canCancel ? (
+            <button
+              type="button"
+              className={`${styles.textButton} ${styles.textButtonDestructive}`}
+              onClick={onStartCancel}
+              disabled={busy}
+            >
+              {client.cancelBooking}
+            </button>
+          ) : null}
         </div>
       )}
 
       {cancelling && (
-        <div className={styles.confirmPanel}>
-          <span>{client.cancelConfirmTitle}</span>
+        <div ref={panelRef} tabIndex={-1} className={styles.confirmPanel} role="group" aria-label={client.cancelConfirmTitle}>
+          <span className={styles.panelTitle}>{client.cancelConfirmTitle}</span>
           <span className={styles.metaLine}>{client.cancelConfirmDescription}</span>
           <div className={styles.confirmActions}>
-            <button type="button" className={styles.textButton} onClick={onKeepBooking}>
+            <button type="button" className={styles.textButton} onClick={onKeepBooking} disabled={busy}>
               {client.keepBooking}
             </button>
-            <button type="button" className={`${styles.textButton} ${styles.textButtonDestructive}`} onClick={onConfirmCancel}>
+            <button
+              type="button"
+              className={`${styles.textButton} ${styles.textButtonDestructive}`}
+              onClick={onConfirmCancel}
+              disabled={busy}
+            >
               {client.confirmCancel}
             </button>
           </div>
@@ -263,11 +396,14 @@ function BookingCard({
 
       {rescheduling && (
         <ReschedulePanel
-          row={row}
+          panelRef={panelRef}
+          booking={booking}
           locale={locale}
           client={client}
+          busy={busy}
           onClose={onCloseReschedule}
-          onRescheduled={onRescheduled}
+          onConfirm={onConfirmReschedule}
+          onExpired={onExpired}
         />
       )}
     </div>
@@ -275,62 +411,76 @@ function BookingCard({
 }
 
 function ReschedulePanel({
-  row,
+  panelRef,
+  booking,
   locale,
   client,
+  busy,
   onClose,
-  onRescheduled,
+  onConfirm,
+  onExpired,
 }: {
-  row: ClientBookingRow;
+  panelRef: React.RefObject<HTMLDivElement | null>;
+  booking: MyBooking;
   locale: Locale;
   client: Messages["client"];
+  busy: boolean;
   onClose: () => void;
-  onRescheduled: () => void;
+  onConfirm: (date: string, slot: AvailableSlot) => void;
+  onExpired: () => void;
 }) {
-  const { appointment } = row;
-  const dateStrip = buildDateStrip();
-  const workspace = getWorkspaceConfig(row.workspaceSlug);
-  const service = workspace.services.find((s) => s.name === appointment.service);
-  const staffMember = workspace.staff.find((s) => s.name === appointment.staff);
-
+  // Days are counted from the BUSINESS "today", never the browser's.
+  const dateStrip = useMemo(() => buildDateStrip(new Date(), booking.timezone), [booking.timezone]);
   const [selectedDate, setSelectedDate] = useState(dateStrip[0]);
   const [slots, setSlots] = useState<AvailableSlot[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!service) return;
+    let cancelled = false;
     setLoading(true);
-    setSelectedSlot(null);
-    getClientAvailableSlots(row.workspaceSlug, service.id, staffMember?.id ?? null, selectedDate)
-      .then(setSlots)
-      .finally(() => setLoading(false));
-  }, [row.workspaceSlug, service, staffMember, selectedDate]);
+    setSelectedTime(null);
+    setError(null);
+    getMyRescheduleSlotsAction(booking.id, selectedDate)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.ok) {
+          setSlots(uniqueSlotTimes(result.data));
+        } else if (result.code === "unauthenticated") {
+          onExpired();
+        } else {
+          setSlots([]);
+          setError(client[clientErrorKey(result.code)]);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSlots([]);
+          setError(client.errUnknown);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [booking.id, selectedDate, client, onExpired]);
 
-  async function handleConfirm() {
-    if (!selectedSlot) return;
-    setSaving(true);
-    await getAppointmentsRepository(row.workspaceSlug).update(appointment.id, {
-      date: selectedDate,
-      time: selectedSlot.time,
-      staff: selectedSlot.staffName,
-      resourceId: selectedSlot.resourceId,
-    });
-    setSaving(false);
-    onRescheduled();
-  }
+  const selectedSlot = slots.find((slot) => slot.time === selectedTime) ?? null;
 
   return (
-    <div className={styles.reschedulePanel}>
-      <span>{client.rescheduleTitle}</span>
-      <div className={styles.dateStrip}>
+    <div ref={panelRef} tabIndex={-1} className={styles.reschedulePanel} role="group" aria-label={client.rescheduleTitle}>
+      <span className={styles.panelTitle}>{client.rescheduleTitle}</span>
+      <div className={styles.dateStrip} role="group" aria-label={client.pickDay}>
         {dateStrip.map((iso) => {
           const date = new Date(iso + "T00:00:00");
           return (
             <button
               key={iso}
               type="button"
+              aria-pressed={selectedDate === iso}
               className={`${styles.dateChip} ${selectedDate === iso ? styles.dateChipActive : ""}`}
               onClick={() => setSelectedDate(iso)}
             >
@@ -341,16 +491,25 @@ function ReschedulePanel({
         })}
       </div>
 
-      {!loading && slots.length === 0 && <span className={styles.emptySlots}>—</span>}
-
-      {!loading && slots.length > 0 && (
-        <div className={styles.timeGrid}>
+      {loading ? (
+        <span className={styles.emptySlots} role="status">
+          {client.slotsLoading}
+        </span>
+      ) : error ? (
+        <span className={styles.inlineError} role="alert">
+          {error}
+        </span>
+      ) : slots.length === 0 ? (
+        <span className={styles.emptySlots}>{client.slotsEmpty}</span>
+      ) : (
+        <div className={styles.timeGrid} role="group" aria-label={client.pickTime}>
           {slots.map((slot) => (
             <button
-              key={`${slot.time}-${slot.staffId}`}
+              key={slot.time}
               type="button"
-              className={`${styles.timeSlot} ${selectedSlot?.time === slot.time ? styles.timeSlotSelected : ""}`}
-              onClick={() => setSelectedSlot(slot)}
+              aria-pressed={selectedTime === slot.time}
+              className={`${styles.timeSlot} ${selectedTime === slot.time ? styles.timeSlotSelected : ""}`}
+              onClick={() => setSelectedTime(slot.time)}
             >
               {slot.time}
             </button>
@@ -359,14 +518,14 @@ function ReschedulePanel({
       )}
 
       <div className={styles.confirmActions}>
-        <button type="button" className={styles.textButton} onClick={onClose}>
+        <button type="button" className={styles.textButton} onClick={onClose} disabled={busy}>
           {client.keepBooking}
         </button>
         <button
           type="button"
           className={styles.textButton}
-          onClick={handleConfirm}
-          disabled={!selectedSlot || saving}
+          onClick={() => selectedSlot && onConfirm(selectedDate, selectedSlot)}
+          disabled={!selectedSlot || busy}
         >
           <Icon name="check" size={14} aria-hidden="true" /> {client.rescheduleConfirm}
         </button>

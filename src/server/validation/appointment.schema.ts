@@ -16,10 +16,23 @@ export const appointmentStatusSchema = z.enum([
 const timeSchema = z.string().regex(/^\d{2}:\d{2}$/, "Expected HH:mm");
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
+const recurrenceSchema = z.object({
+  frequency: z.enum(["weekly", "biweekly", "monthly", "custom"]),
+  intervalDays: z.number().int().min(1).max(365).optional(),
+  count: z.number().int().min(1).max(60),
+});
+
 export const createAppointmentSchema = z.object({
   client: z.string().min(1).max(200),
   service: z.string().min(1),
   staff: z.string().min(1),
+  /** Stable references. Optional: display names above remain the fallback for demo/legacy callers. */
+  clientId: z.string().max(64).optional(),
+  serviceId: z.string().max(64).optional(),
+  staffId: z.string().max(64).optional(),
+  financialBucketId: z.string().max(64).optional(),
+  seriesId: z.string().max(64).nullable().optional(),
+  recurrence: recurrenceSchema.nullable().optional(),
   resourceId: z.string().nullable(),
   date: dateSchema,
   time: timeSchema,

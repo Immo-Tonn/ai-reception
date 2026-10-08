@@ -267,6 +267,7 @@ export const cleaningWorkspace: WorkspaceConfig = {
     uk: "Ключові показники бізнесу на основі записів, замовлень, клієнтів та фінансів.",
     ru: "Ключевые показатели бизнеса на основе записей, заказов, клиентов и финансов.",
   },
+  bookingRules: { autoConfirm: false, minNoticeMinutes: 720, maxHorizonDays: 120, slotIntervalMinutes: 60, cancellationDeadlineHours: 24, rescheduleDeadlineHours: 24 },
   services,
   staff,
   resources,

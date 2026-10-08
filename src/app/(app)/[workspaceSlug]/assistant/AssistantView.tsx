@@ -167,8 +167,8 @@ export function AssistantView({
         )}
       </div>
 
-      <form className={styles.composer} onSubmit={handleSubmit}>
-        <input
+      <form suppressHydrationWarning className={styles.composer} onSubmit={handleSubmit}>
+        <input suppressHydrationWarning
           type="text"
           className={styles.composerInput}
           placeholder={messages.composerPlaceholder}

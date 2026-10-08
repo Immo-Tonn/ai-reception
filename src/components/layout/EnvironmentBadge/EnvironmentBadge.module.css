@@ -1,0 +1,23 @@
+.badge {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483000;
+  max-width: calc(100vw - 24px);
+  padding: 2px 10px;
+  border-radius: 0 0 8px 8px;
+  background: #b45309;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.92;
+  pointer-events: none;
+  user-select: none;
+}

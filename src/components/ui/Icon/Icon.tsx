@@ -28,9 +28,16 @@ export type IconName =
   | "phone"
   | "search"
   | "send"
-  | "history";
+  | "history"
+  | "eye"
+  | "eyeOff"
+  | "alert";
 
 const paths: Record<IconName, string> = {
+  alert: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 8v5M12 16.5v.01",
+  eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
+  eyeOff:
+    "M3 3l18 18M10.6 6.1A9.8 9.8 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.7C3.9 8.4 2 12 2 12s3.5 7 10 7c1.6 0 3-.4 4.2-1M9.9 9.9a3 3 0 0 0 4.2 4.2",
   today:
     "M4 3h16M6 3v3M18 3v3M4 8h16M4 8v11a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V8M9 13h6",
   calendar:

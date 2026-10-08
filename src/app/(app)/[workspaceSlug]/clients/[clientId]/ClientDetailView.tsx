@@ -1,12 +1,16 @@
 "use client";
 
+import { belongsToClient } from "@/features/appointments/identity";
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/ui";
 import { useClients } from "@/features/clients/useClients";
 import { useAppointments } from "@/features/appointments/useAppointments";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency, formatDate } from "@/lib/i18n/format";
-import { localIsoDate } from "@/lib/date/localIsoDate";
+import { useWorkspaceToday } from "@/features/workspace/WorkspaceCatalog";
+import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
+import { EditClientSheet } from "./EditClientSheet";
+import { RelatedPanel } from "./RelatedPanel";
 import styles from "./page.module.css";
 
 type Tab = "upcoming" | "history" | "notes" | "contact";
@@ -25,27 +29,30 @@ export function ClientDetailView({
   clientId,
   locale,
   messages,
+  crossModule,
 }: {
   workspaceSlug: string;
   clientId: string;
   locale: Locale;
   messages: Messages["clients"];
+  crossModule: Messages["crossModule"];
 }) {
   const [tab, setTab] = useState<Tab>("upcoming");
+  const [editing, setEditing] = useState(false);
 
   // Client, Upcoming and History are always derived live from the same
   // repository-backed hooks the rest of the app uses (ClientPicker,
   // ClientsView, CalendarView) — never a locally duplicated copy, so a
   // client created mid-session (or an appointment booked for them) shows
   // up here immediately and again after reload.
-  const { items: clients, loaded: clientsLoaded } = useClients(workspaceSlug);
+  const { items: clients, loaded: clientsLoaded, update: updateClient } = useClients(workspaceSlug);
   const { items: appointments, loaded: appointmentsLoaded } = useAppointments(workspaceSlug);
 
   const client = clients.find((item) => item.id === clientId) ?? null;
 
-  const today = localIsoDate(new Date());
+  const today = useWorkspaceToday(workspaceSlug);
   const clientAppointments = useMemo(
-    () => (client ? appointments.filter((a) => a.client === client.name) : []),
+    () => (client ? appointments.filter((a) => belongsToClient(a, client)) : []),
     [appointments, client],
   );
   const upcoming = useMemo(
@@ -109,7 +116,19 @@ export function ClientDetailView({
             )}
           </div>
         </div>
+        <button type="button" className={styles.editButton} onClick={() => setEditing(true)}>
+          {messages.edit}
+        </button>
       </div>
+
+      <EditClientSheet
+        key={`${client.id}-${editing}`}
+        client={client}
+        open={editing}
+        onClose={() => setEditing(false)}
+        onSave={(patch) => updateClient(client.id, patch)}
+        messages={messages}
+      />
 
       <div className={styles.tabs}>
         {tabs.map((item) => (
@@ -196,6 +215,10 @@ export function ClientDetailView({
             </>
           )}
         </div>
+      )}
+
+      {!isDemoWorkspaceSlug(workspaceSlug) && (
+        <RelatedPanel workspaceSlug={workspaceSlug} clientId={client.id} locale={locale} messages={crossModule} />
       )}
     </main>
   );

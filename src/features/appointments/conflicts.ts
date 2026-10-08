@@ -2,6 +2,7 @@ import type { Appointment } from "./types";
 import type { ServiceDefinition } from "@/features/services/types";
 import { checkAvailability } from "@/features/workingHours/logic";
 import { localIsoDate } from "@/lib/date/localIsoDate";
+import { findServiceFor, isSameStaff } from "./identity";
 import type { WorkingHoursProfile } from "@/features/workingHours/types";
 
 function toMinutes(time: string): number {
@@ -18,7 +19,7 @@ function serviceBuffers(service: ServiceDefinition | undefined) {
 
 /** [start, end) in minutes, buffers included, for overlap comparisons. */
 function occupiedRange(appointment: Appointment, services: ServiceDefinition[]) {
-  const service = services.find((s) => s.name === appointment.service);
+  const service = findServiceFor(appointment, services);
   const { before, after } = serviceBuffers(service);
   const start = toMinutes(appointment.time) - before;
   const end = start + before + appointment.durationMinutes + after;
@@ -41,11 +42,12 @@ export function findConflicts(
   candidate: Pick<
     Appointment,
     "id" | "staff" | "resourceId" | "date" | "time" | "durationMinutes" | "service"
-  >,
+  > &
+    Partial<Pick<Appointment, "staffId" | "serviceId">>,
   existing: Appointment[],
   services: ServiceDefinition[],
 ): ConflictResult {
-  const candidateService = services.find((s) => s.name === candidate.service);
+  const candidateService = findServiceFor(candidate, services);
   const { before, after } = serviceBuffers(candidateService);
   const candidateStart = toMinutes(candidate.time) - before;
   const candidateEnd = candidateStart + before + candidate.durationMinutes + after;
@@ -63,7 +65,7 @@ export function findConflicts(
     const overlaps = candidateStart < end && candidateEnd > start;
     if (!overlaps) continue;
 
-    if (!staffConflict && item.staff === candidate.staff) {
+    if (!staffConflict && isSameStaff(item, candidate)) {
       staffConflict = item;
     }
     if (
@@ -100,6 +102,8 @@ export function findNextAvailableSlot(params: {
   services: ServiceDefinition[];
   workingHours: WorkingHoursProfile[];
   maxDaysAhead?: number;
+  /** Booking-rule grid (default 15). */
+  slotIntervalMinutes?: number;
 }): { date: string; time: string } | null {
   const {
     staff,
@@ -114,9 +118,9 @@ export function findNextAvailableSlot(params: {
     maxDaysAhead = 14,
   } = params;
 
-  const step = 15;
+  const step = params.slotIntervalMinutes ?? 15;
   let cursorDate = fromDate;
-  let cursorMinutes = toMinutes(fromTime);
+  let cursorMinutes = Math.ceil(toMinutes(fromTime) / step) * step;
 
   for (let dayOffset = 0; dayOffset <= maxDaysAhead; dayOffset++) {
     if (dayOffset > 0) cursorMinutes = 0;

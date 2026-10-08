@@ -21,17 +21,30 @@
   line-height: 1;
 }
 
+.triggerInitial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  background: var(--color-border);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* Visible on mobile too (the business name is the orientation cue), ellipsized. */
 .triggerLabel {
-  max-width: 140px;
+  max-width: 96px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: none;
 }
 
 @media (min-width: 640px) {
   .triggerLabel {
-    display: inline;
+    max-width: 140px;
   }
 }
 

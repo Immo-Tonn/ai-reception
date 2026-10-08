@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
-import { getWorkspaceBranding } from "@/features/branding/demoData";
+import { loadPublicPageData } from "@/server/booking/pageData";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
+import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
 import { BookingWizard } from "./BookingWizard";
+import styles from "./page.module.css";
 
 export const metadata: Metadata = {
   title: "Book an appointment — ServiceOS",
@@ -16,18 +18,25 @@ export default async function PublicBookingPage({
 }) {
   const { workspaceSlug } = await params;
   const locale = await getRequestLocale();
-  const { common, booking, client } = getMessages(locale);
-  const branding = getWorkspaceBranding(workspaceSlug);
+  const { booking, client } = getMessages(locale);
+  // Unknown slug = 404 inside (never another business's catalog).
+  const { branding, services, staff, profile, timezone } = await loadPublicPageData(workspaceSlug);
 
   return (
-    <BookingWizard
-      workspaceSlug={workspaceSlug}
-      locale={locale}
-      booking={booking}
-      client={client}
-      branding={branding}
-      youLabel={common.you}
-      headerActions={<Preferences />}
-    />
+    <div className={styles.page}>
+      <BookingWizard
+        workspaceSlug={workspaceSlug}
+        locale={locale}
+        booking={booking}
+        client={client}
+        branding={branding}
+        profile={profile}
+        timezone={timezone ?? null}
+        services={services}
+        staffList={staff}
+        headerActions={<Preferences />}
+      />
+      <PublicFooter />
+    </div>
   );
 }

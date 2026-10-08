@@ -83,7 +83,49 @@ Salon and another in Werkstatt — those two records are never merged.
 Guest booking works without a Client Account; a business-side
 ClientRecord is still created/reused automatically.
 
-## 7. Run the web app
+## 7. Notifications (foundation ready, nothing real connected)
+
+```
+Booking flow (create / reschedule / cancel)
+      ↓
+NotificationService            src/features/notifications/notificationService.ts
+      ↓
+NotificationProvider interface  src/features/notifications/NotificationProvider.ts
+      ↓
+Provider adapter                today: Console/Mock only
+                                future: Email / SMS / Push vendor adapters
+```
+
+- Events: `BOOKING_CONFIRMED`, `BOOKING_RESCHEDULED`, `BOOKING_CANCELLED`,
+  `BOOKING_REMINDER` (template only — no scheduler yet, nothing emits it).
+- Channels: `EMAIL`, `SMS`, `PUSH`, `IN_APP` are modeled; only EMAIL/SMS
+  have a (Console/Mock) adapter. Preferences: `email` on if an address
+  exists, `sms`/`push` off.
+- Wired at: public booking (`createClientBooking`), My Bookings cancel /
+  reschedule (`manageBooking.ts`). The booking is saved first; a
+  notification failure is reported (`src/lib/errorReporter.ts`) and never
+  undoes or fails it.
+- Client-facing payload is an explicit whitelist
+  (`buildBookingPayload`): no internal notes, visibility, financial
+  bucket, price or paid state — ever.
+- Templates: email + SMS in DE/EN/UK/RU
+  (`src/features/notifications/templates/`).
+- The Console/Mock adapter returns `ok: true, delivered: false`. The UI
+  must never say "email sent" while no real provider exists (the booking
+  success screen deliberately says only "your booking is confirmed").
+- To add a real provider: implement `NotificationProvider` for one
+  channel and register it in `notificationService.ts` — nothing upstream
+  changes. Do not call a vendor SDK from components or booking code.
+
+| Notifications | Status |
+|---|---|
+| Foundation (service, interface, events, templates, preferences, tests) | READY |
+| Real Email | NOT CONNECTED |
+| Real SMS | NOT CONNECTED |
+| Push | NOT CONNECTED |
+| Supabase scheduler / reminders | NOT CONNECTED |
+
+## 8. Run the web app
 
 ```bash
 npm install
@@ -93,7 +135,7 @@ npm test              # vitest
 npm run build         # production build
 ```
 
-## 8. Mobile foundation
+## 9. Mobile foundation
 
 `apps/mobile/` — React Native + Expo (Expo Router), TypeScript.
 
@@ -113,7 +155,7 @@ handful of placeholder screens (Welcome, Business, Client, Sign-in).
 real auth, no push, no payments, no Calendar/Finance/CRM screens, no
 signing certificates. See `apps/mobile/README.md` for the full list.
 
-## 9. Environment variables
+## 10. Environment variables
 
 No real values live in the repo or in this doc. Names only, and only
 ones actually referenced in code today or already planned:
@@ -125,7 +167,7 @@ Supabase env var names (`SUPABASE_URL`, `SUPABASE_ANON_KEY` or similar)
 are **not yet defined in code** — they'll be added when the Supabase
 integration in §4 actually starts, not before.
 
-## 10. Git / deployment
+## 11. Git / deployment
 
 **Team repository:** https://github.com/Immo-Tonn/ai-reception
 **Shared branch:** `main`
@@ -142,7 +184,7 @@ pushing regularly. Never force-push to `main`.
 Vercel: see the "Deployment Ready" section in `HANDOFF_GRAPH.md` for
 current connection status.
 
-## 11. Where to read next
+## 12. Where to read next
 
 - Current project state, in-progress work, known issues:
   → [`HANDOFF_GRAPH.md`](../HANDOFF_GRAPH.md)
@@ -150,7 +192,7 @@ current connection status.
   `PROJECT_STATUS.md` (repo root)
 - Quick start: → this file
 
-## 12. Current status
+## 13. Current status
 
 | Area | Status |
 |---|---|
@@ -163,3 +205,4 @@ current connection status.
 | Native app | FOUNDATION ONLY |
 | AI | NOT CONNECTED |
 | Payments | NOT CONNECTED |
+| Notifications | FOUNDATION READY (Console/Mock only; no real email/SMS/push) |

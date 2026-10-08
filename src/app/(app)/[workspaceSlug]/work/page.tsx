@@ -9,13 +9,15 @@ export default async function WorkPage({
 }) {
   const { workspaceSlug } = await params;
   const locale = await getRequestLocale();
-  const { work, appointment } = getMessages(locale);
+  const { work, workOps, appointment, repositoryErrors } = getMessages(locale);
 
   return (
     <WorkView
       workspaceSlug={workspaceSlug}
       locale={locale}
       messages={work}
+      opsMessages={workOps}
+      errorMessages={repositoryErrors}
       appointmentMessages={appointment}
     />
   );

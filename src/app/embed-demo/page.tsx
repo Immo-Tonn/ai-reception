@@ -9,7 +9,8 @@ export const metadata: Metadata = {
   title: "Embed preview — ServiceOS",
 };
 
-const DEMO_WORKSPACE = "demo";
+// Must be a real workspace slug — unknown slugs 404.
+const DEMO_WORKSPACE = "demo-salon";
 
 export default async function EmbedDemoPage() {
   const locale = await getRequestLocale();

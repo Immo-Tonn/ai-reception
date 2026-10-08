@@ -28,22 +28,22 @@ export async function createClient(
   const data = createClientSchema.parse(input);
   const client: ClientRecord = {
     ...data,
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: crypto.randomUUID(),
     lastVisit: null,
     upcoming: [],
     history: [],
   };
-  await getServerClientsRepository(session.workspaceId).create(client);
+  const created = await getServerClientsRepository(session.workspaceId).create(client);
   await getServerAuditLogRepository(session.workspaceId).create({
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: crypto.randomUUID(),
     timestamp: new Date().toISOString(),
     action: "created",
     entityType: "client",
-    entityId: client.id,
-    summary: client.name,
+    entityId: created.id,
+    summary: "Client created",
     source: "user",
   });
-  return client;
+  return created;
 }
 
 export async function updateClient(
@@ -56,12 +56,12 @@ export async function updateClient(
   const updated = await getServerClientsRepository(session.workspaceId).update(id, patch);
   if (updated) {
     await getServerAuditLogRepository(session.workspaceId).create({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      id: crypto.randomUUID(),
       timestamp: new Date().toISOString(),
       action: "updated",
       entityType: "client",
       entityId: id,
-      summary: updated.name,
+      summary: "Client updated",
       source: "user",
     });
   }

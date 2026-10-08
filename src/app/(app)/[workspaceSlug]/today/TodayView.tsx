@@ -5,9 +5,9 @@ import { Icon } from "@/components/ui";
 import { useAppointments } from "@/features/appointments/useAppointments";
 import { useInvoices } from "@/features/finance/useInvoices";
 import { calculateOutstanding } from "@/features/finance/calculations";
-import { getWorkspaceConfig } from "@/features/workspace/registry";
+import { isOpenInvoice } from "@/features/finance/status";
+import { useWorkspaceConfig, useWorkspaceToday } from "@/features/workspace/WorkspaceCatalog";
 import { resolveServiceLabel } from "@/features/services/label";
-import { localIsoDate } from "@/lib/date/localIsoDate";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency, formatDate } from "@/lib/i18n/format";
 import styles from "./page.module.css";
@@ -52,10 +52,9 @@ export function TodayView({
 }) {
   const { items: appointments } = useAppointments(workspaceSlug);
   const { items: invoices } = useInvoices(workspaceSlug);
-  const workspaceServices = getWorkspaceConfig(workspaceSlug).services;
+  const workspaceServices = useWorkspaceConfig(workspaceSlug).services;
 
-  const today = new Date();
-  const todayIso = localIsoDate(today);
+  const todayIso = useWorkspaceToday(workspaceSlug);
 
   const todayAppointments = appointments
     .filter((a) => a.date === todayIso && a.status !== "cancelled")
@@ -66,7 +65,7 @@ export function TodayView({
     .reduce((sum, a) => sum + a.price, 0);
   const pendingToday = todayAppointments.filter((a) => a.status === "pending");
   const outstanding = calculateOutstanding(invoices);
-  const firstUnpaidInvoice = invoices.find((i) => i.status !== "paid");
+  const firstUnpaidInvoice = invoices.find((i) => isOpenInvoice(i.status));
 
   const attentionItems: AttentionItem[] = [];
   if (pendingToday.length > 0) {
@@ -101,7 +100,7 @@ export function TodayView({
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <p className={styles.eyebrow}>{formatDate(today, locale, { dateStyle: "full" })}</p>
+        <p className={styles.eyebrow}>{formatDate(new Date(`${todayIso}T12:00:00`), locale, { dateStyle: "full" })}</p>
         <h1 className={styles.greeting}>{dashboard.greeting}</h1>
         <p className={styles.subtitle}>{dashboard.subtitle}</p>
       </header>

@@ -1,9 +1,31 @@
-.screen {
+/* Standalone page shell: wizard screen + public footer share ONE flex column
+   that is at least one dynamic viewport tall. Short steps therefore fit the
+   viewport exactly (the footer is pushed to the bottom via margin-top:auto,
+   it no longer adds its height on top of a full-height screen); long steps
+   simply grow and the document scrolls. `100vh` is only the fallback for
+   browsers without dvh (declared first, dvh overrides it). */
+.page {
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--color-paper);
+}
+
+/* The screen takes the free space of .page; it has no viewport-based height
+   of its own. */
+.screen {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-paper);
+}
+
+/* Embedded (iframe): no .page wrapper and no viewport-based height at all —
+   content defines the height so the resize message can shrink the frame. */
+.screenEmbedded {
+  flex: 0 0 auto;
+  min-height: 0;
 }
 
 /* flex-wrap lets Preferences (language + theme switchers in headerRight)
@@ -17,6 +39,7 @@
   row-gap: var(--space-2);
   gap: var(--space-3);
   padding: var(--space-4) var(--space-5);
+  padding-top: calc(var(--space-4) + env(safe-area-inset-top));
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -118,6 +141,7 @@
 }
 
 .stepTitle {
+  overflow-wrap: break-word;
   font-size: 1.375rem;
   font-weight: var(--font-weight-semibold);
   letter-spacing: -0.01em;
@@ -165,6 +189,13 @@
   color: var(--color-muted);
 }
 
+.optionDescription {
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
 .optionPrice {
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-semibold);
@@ -202,6 +233,12 @@
   background: var(--color-ink);
   border-color: var(--color-ink);
   color: var(--color-paper);
+}
+
+.dateChipDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: transparent;
 }
 
 .dateChipWeekday {
@@ -334,6 +371,28 @@
   margin-bottom: var(--space-5);
 }
 
+/* Confirmation summary: label/value rows that stack on narrow phones. */
+.summaryRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  justify-content: space-between;
+  padding: var(--space-1) 0;
+  margin: 0;
+}
+
+.summaryRow dt {
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+}
+
+.summaryRow dd {
+  margin: 0;
+  font-weight: var(--font-weight-medium);
+  text-align: end;
+  overflow-wrap: anywhere;
+}
+
 .summaryLine {
   font-size: var(--font-size-body-l);
   font-weight: var(--font-weight-semibold);
@@ -412,10 +471,86 @@
 }
 
 .createAccountLink {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   text-align: center;
   margin-top: var(--space-4);
   font-size: var(--font-size-small);
   color: var(--color-accent-blue);
   font-weight: var(--font-weight-medium);
+}
+
+.about {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-small);
+}
+
+.aboutText,
+.aboutLines {
+  margin: 0;
+}
+
+.aboutLines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  color: var(--color-muted);
+}
+
+.aboutLines a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.claimBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.claimNote {
+  margin: var(--space-4) 0 0;
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.claimBox .claimNote {
+  margin-top: 0;
+}
+
+.claimPrimary,
+.claimSecondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border-radius: var(--radius-pill);
+  font-weight: var(--font-weight-medium);
+  margin-top: var(--space-2);
+}
+
+.claimPrimary {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+.claimSecondary {
+  border: 1px solid var(--color-border);
+  color: var(--color-ink);
+}
+
+/* German compounds: hyphenate instead of overflowing the screen. */
+:global(html[lang="de"]) .stepTitle {
+  hyphens: auto;
+  overflow-wrap: anywhere;
 }

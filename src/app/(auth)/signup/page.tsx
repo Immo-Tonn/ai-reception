@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
+import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
 import { BackLink } from "@/components/ui";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 
 export default async function SignupPage() {
   const locale = await getRequestLocale();
-  const { signup, common } = getMessages(locale);
+  const { signup, common, authErrors } = getMessages(locale);
 
   return (
     <main className={styles.screen}>
@@ -22,13 +23,12 @@ export default async function SignupPage() {
       </div>
 
       <div className={styles.body}>
-        <section className={styles.brandPanel}>
+        <section className={`${styles.brandPanel} ${styles.brandPanelCompact}`}>
           <span className={styles.logo}>ServiceOS</span>
           <div className={styles.brandContent}>
             <h1 className={styles.brandTitle}>{signup.brandTitle}</h1>
             <p className={styles.brandSubtitle}>{signup.brandSubtitle}</p>
           </div>
-          <span className={styles.brandFoot}>© {new Date().getFullYear()} ServiceOS</span>
         </section>
 
         <section className={styles.formPanel}>
@@ -39,7 +39,11 @@ export default async function SignupPage() {
               <p className={styles.formSubtitle}>{signup.subtitle}</p>
             </div>
 
-            <SignupForm messages={signup} />
+            <SignupForm
+              messages={signup}
+              errors={authErrors}
+              passwordLabels={{ show: common.showPassword, hide: common.hidePassword }}
+            />
 
             <p className={styles.signupPrompt}>
               {signup.loginPrompt}{" "}
@@ -57,6 +61,7 @@ export default async function SignupPage() {
           </div>
         </section>
       </div>
+      <PublicFooter />
     </main>
   );
 }

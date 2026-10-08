@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Icon } from "@/components/ui";
 import { useClients } from "@/features/clients/useClients";
-import { getWorkspaceConfig } from "@/features/workspace/registry";
+import { useWorkspaceConfig } from "@/features/workspace/WorkspaceCatalog";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatDate } from "@/lib/i18n/format";
 import { AddClientSheet } from "./AddClientSheet";
@@ -30,7 +30,7 @@ export function ClientsView({
 }) {
   const searchParams = useSearchParams();
   const { items: clients, create: createClient } = useClients(workspaceSlug);
-  const workspace = useMemo(() => getWorkspaceConfig(workspaceSlug), [workspaceSlug]);
+  const workspace = useWorkspaceConfig(workspaceSlug);
   const pageTitle = workspace.clientLabelPlural ?? messages.title;
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(searchParams.get("create") === "client");
@@ -54,7 +54,7 @@ export function ClientsView({
         <span className={styles.searchIcon}>
           <Icon name="search" size={18} />
         </span>
-        <input
+        <input suppressHydrationWarning
           type="search"
           className={styles.searchInput}
           placeholder={messages.searchPlaceholder}

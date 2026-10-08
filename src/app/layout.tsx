@@ -5,6 +5,11 @@ import { localeMeta } from "@/lib/i18n";
 import { I18nProvider } from "@/lib/i18n/I18nProvider";
 import { getRequestTheme } from "@/lib/theme/next";
 import { ServiceWorkerRegistration } from "@/components/layout/ServiceWorkerRegistration";
+import { EnvironmentBadge } from "@/components/layout/EnvironmentBadge/EnvironmentBadge";
+import { DevHostWarning } from "@/components/layout/DevHostWarning/DevHostWarning";
+import { getPublicBaseUrl } from "@/lib/config/publicBaseUrl";
+import { isStagingEnv } from "@/lib/config/appEnv";
+import { headers } from "next/headers";
 import "./globals.css";
 
 const inter = Inter({
@@ -13,21 +18,30 @@ const inter = Inter({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: "ServiceOS",
-  description:
-    "AI-powered business assistant for service businesses — scheduling, clients, jobs, finance and communication in one calm workspace.",
-  manifest: "/manifest.webmanifest",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
+export async function generateMetadata(): Promise<Metadata> {
+  const host = (await headers()).get("host");
+  const { baseUrl } = getPublicBaseUrl(host);
+  return {
     title: "ServiceOS",
-  },
-  icons: {
-    icon: [{ url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" }],
-    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
-  },
-};
+    description:
+      "AI-powered business assistant for service businesses — scheduling, clients, jobs, finance and communication in one calm workspace.",
+    manifest: "/manifest.webmanifest",
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "default",
+      title: "ServiceOS",
+    },
+    icons: {
+      icon: [{ url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" }],
+      apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    },
+    // Absolute canonical/OG URLs derive from the single public-URL source
+    // (NEXT_PUBLIC_APP_URL > Vercel URLs > local request host); omitted when unknown.
+    ...(baseUrl ? { metadataBase: new URL(baseUrl) } : {}),
+    // Staging/test sites must never be indexed (also sent as an X-Robots-Tag header).
+    ...(isStagingEnv() ? { robots: { index: false, follow: false } } : {}),
+  };
+}
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -51,11 +65,16 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   // there is no client-side theme flip and therefore no flash.
   const dataTheme = theme === "system" ? undefined : theme;
 
+  // suppressHydrationWarning on <html>: Google Chrome for iOS adds `__gcrremoteframetoken` to it
+  // (and `__gcruniqueid` to forms/inputs) BEFORE React hydrates. It silences attribute differences
+  // on this one element only — children and text mismatches (real bugs) still warn.
   return (
-    <html lang={locale} dir={dir} data-theme={dataTheme} className={inter.variable}>
+    <html lang={locale} dir={dir} data-theme={dataTheme} className={inter.variable} suppressHydrationWarning>
       <body>
         <I18nProvider locale={locale}>{children}</I18nProvider>
         <ServiceWorkerRegistration />
+        <EnvironmentBadge />
+        <DevHostWarning />
       </body>
     </html>
   );

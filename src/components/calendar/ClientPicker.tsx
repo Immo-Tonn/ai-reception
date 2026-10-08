@@ -4,13 +4,16 @@ import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Icon } from "@/components/ui";
 import type { ClientRecord } from "@/features/clients/types";
 import type { Messages } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n/I18nProvider";
+import { describeSaveError } from "@/lib/repository/describeSaveError";
 import styles from "./ClientPicker.module.css";
 
 interface ClientPickerProps {
   clients: ClientRecord[];
   value: string;
   onSelect: (client: ClientRecord) => void;
-  onCreateClient: (client: ClientRecord) => void;
+  /** May return the stored client (real workspace: server-assigned id) or reject (e.g. duplicate e-mail). */
+  onCreateClient: (client: ClientRecord) => Promise<ClientRecord | void> | void;
   messages: Messages["appointment"];
   /** Workspace-specific override for the "Client" label — e.g. "Vehicle"
    * for a Werkstatt, "Property" for Cleaning. */
@@ -34,6 +37,8 @@ export function ClientPicker({
   const [creating, setCreating] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [newPhone, setNewPhone] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const { messages: allMessages } = useI18n();
   // -1 = nothing highlighted; 0..results.length-1 = a result row;
   // results.length = the "create new" row, when it's showing.
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -119,9 +124,10 @@ export function ClientPicker({
     }
   }
 
-  function handleCreateSave() {
+  async function handleCreateSave() {
     const name = query.trim();
     if (!name) return;
+    setCreateError(null);
     const client: ClientRecord = {
       id: makeClientId(),
       name,
@@ -133,9 +139,14 @@ export function ClientPicker({
       history: [],
       notes: "",
     };
-    onCreateClient(client);
-    onSelect(client);
-    closePanel();
+    try {
+      const stored = await onCreateClient(client);
+      onSelect(stored ?? client);
+      closePanel();
+    } catch (error) {
+      // Stay in the panel and say why (e.g. that e-mail already belongs to a client).
+      setCreateError(describeSaveError(error, allMessages.repositoryErrors, { duplicateClient: true }));
+    }
   }
 
   return (
@@ -163,7 +174,7 @@ export function ClientPicker({
 
       {open && (
         <div className={styles.panel}>
-          <input
+          <input suppressHydrationWarning
             ref={searchRef}
             type="text"
             className={styles.searchInput}
@@ -222,20 +233,25 @@ export function ClientPicker({
           {creating && (
             <div className={styles.createForm}>
               <span className={styles.resultName}>{query.trim()}</span>
-              <input
+              <input suppressHydrationWarning
                 type="email"
                 className={styles.searchInput}
                 placeholder={messages.clientCreateEmailLabel}
                 value={newEmail}
                 onChange={(event) => setNewEmail(event.target.value)}
               />
-              <input
+              <input suppressHydrationWarning
                 type="tel"
                 className={styles.searchInput}
                 placeholder={messages.clientCreatePhoneLabel}
                 value={newPhone}
                 onChange={(event) => setNewPhone(event.target.value)}
               />
+              {createError ? (
+                <p role="alert" className={styles.createError}>
+                  {createError}
+                </p>
+              ) : null}
               <button type="button" className={styles.createButton} onClick={handleCreateSave}>
                 <Icon name="check" size={16} />
                 {messages.clientCreateSave}

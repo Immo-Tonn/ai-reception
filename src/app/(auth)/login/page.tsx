@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Button, BackLink } from "@/components/ui";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
+import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { LoginForm } from "./LoginForm";
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 
 export default async function LoginPage() {
   const locale = await getRequestLocale();
-  const { login, common } = getMessages(locale);
+  const { login, common, authErrors } = getMessages(locale);
 
   return (
     <main className={styles.screen}>
@@ -28,7 +29,6 @@ export default async function LoginPage() {
             <h1 className={styles.brandTitle}>{login.brandTitle}</h1>
             <p className={styles.brandSubtitle}>{login.brandSubtitle}</p>
           </div>
-          <span className={styles.brandFoot}>© {new Date().getFullYear()} ServiceOS</span>
         </section>
 
         <section className={styles.formPanel}>
@@ -38,7 +38,11 @@ export default async function LoginPage() {
               <p className={styles.formSubtitle}>{login.subtitle}</p>
             </div>
 
-            <LoginForm messages={login} />
+            <LoginForm
+              messages={login}
+              errors={authErrors}
+              passwordLabels={{ show: common.showPassword, hide: common.hidePassword }}
+            />
 
             <div className={styles.formFoot}>
               <span className={styles.divider}>{login.orDivider}</span>
@@ -63,6 +67,7 @@ export default async function LoginPage() {
           </div>
         </section>
       </div>
+      <PublicFooter />
     </main>
   );
 }

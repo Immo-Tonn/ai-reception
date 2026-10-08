@@ -230,7 +230,7 @@ export function ConversationView({
           </button>
         </div>
 
-        <textarea
+        <textarea suppressHydrationWarning
           className={styles.composerTextarea}
           placeholder={mode === "reply" ? messages.composerPlaceholder : messages.composerInternalPlaceholder}
           value={body}
@@ -239,7 +239,7 @@ export function ConversationView({
 
         <div className={styles.composerActions}>
           <div className={styles.composerLeftActions}>
-            <select
+            <select suppressHydrationWarning
               className={styles.templateSelect}
               value=""
               onChange={(event) => handleTemplate(event.target.value)}

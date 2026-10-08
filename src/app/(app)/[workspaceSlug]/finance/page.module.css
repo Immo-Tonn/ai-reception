@@ -289,3 +289,41 @@
     display: none;
   }
 }
+
+.badgeDraft {
+  background: var(--surface-secondary, var(--color-surface));
+  color: var(--color-muted);
+}
+
+.badgeOverdue {
+  background: var(--tint-peach);
+  color: var(--color-status-no-show);
+  font-weight: var(--font-weight-semibold);
+}
+
+.badgeCancelled {
+  background: var(--surface-secondary, var(--color-surface));
+  color: var(--color-status-cancelled);
+  text-decoration: line-through;
+}
+
+.stateBox {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.stateTitle {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+}

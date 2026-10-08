@@ -7,8 +7,12 @@ export interface TimeRange {
 }
 
 export interface WeeklySchedule {
-  /** `null` for a weekday means that day is off. */
-  [weekday: number]: TimeRange | null;
+  /**
+   * `null` (or an empty list) for a weekday means that day is off. A day may
+   * hold several non-overlapping intervals (e.g. 09-13 + 14-18); a single
+   * range keeps working (demo presets). Read through `dayIntervals`.
+   */
+  [weekday: number]: TimeRange | TimeRange[] | null;
 }
 
 export interface DateRange {
@@ -27,6 +31,12 @@ export interface BlockedSlot {
 export interface WorkingHoursProfile {
   /** "business" = workspace default; otherwise a staff id/name. */
   ownerId: string;
+  /**
+   * Staff only. "inherit" = works exactly the business hours; "custom" (also
+   * the default when absent and the staff has own hours) = own hours,
+   * intersected with the business hours. Time off / blocks always apply.
+   */
+  mode?: "inherit" | "custom";
   weekly: WeeklySchedule;
   breaks: { weekday: Weekday; start: string; end: string }[];
   timeOff: DateRange[]; // vacations / absences

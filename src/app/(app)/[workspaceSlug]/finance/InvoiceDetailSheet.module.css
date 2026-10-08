@@ -115,3 +115,47 @@
 .closeRow {
   margin-top: var(--space-4);
 }
+
+.badgeDraft {
+  background: var(--surface-secondary, var(--color-surface));
+  color: var(--color-muted);
+}
+
+.badgeOverdue {
+  background: var(--tint-peach);
+  color: var(--color-status-no-show);
+  font-weight: var(--font-weight-semibold);
+}
+
+.badgeCancelled {
+  background: var(--surface-secondary, var(--color-surface));
+  color: var(--color-status-cancelled);
+  text-decoration: line-through;
+}
+
+.notes {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-small);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+.paymentForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+}
+
+.select {
+  height: 48px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: var(--font-size-body);
+}

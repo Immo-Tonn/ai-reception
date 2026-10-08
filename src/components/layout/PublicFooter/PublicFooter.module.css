@@ -1,0 +1,58 @@
+/* Quiet legal line. Sits above decorative mesh layers (z-index) and uses an
+   ink-based colour mix instead of a fixed grey so contrast holds on the tinted
+   hero backgrounds in light AND dark. margin-top:auto pins it to the bottom
+   of short flex-column screens; on long ones it simply follows the content. */
+.footer {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  column-gap: var(--space-5);
+  row-gap: 0;
+  padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
+  font-size: var(--font-size-small);
+  line-height: 1.4;
+  text-align: center;
+  color: color-mix(in srgb, var(--color-ink) 74%, var(--color-paper));
+}
+
+.item {
+  margin: 0;
+  padding: var(--space-2) 0;
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  column-gap: var(--space-5);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 3px;
+}
+
+.item .link {
+  min-height: 0;
+}
+
+.link:hover {
+  color: var(--color-ink);
+  text-decoration-color: currentColor;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--color-accent-blue);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
