@@ -440,6 +440,40 @@ Work и Analytics, фильтры Finance/Analytics используют те ж
 
 ---
 
+## PRODUCT ARCHITECTURE DOCS — ветка `architecture/product-foundation`
+
+Только документация, кода нет. Долгосрочная архитектура и roadmap
+зафиксированы, чтобы разработчики не строили несовместимые части:
+- [`docs/PRODUCT_ARCHITECTURE.md`](docs/PRODUCT_ARCHITECTURE.md) — целевая
+  модель (Business side / Client-Booking side), единый Availability
+  Engine, провайдер-независимые внешние календари
+  (`ExternalCalendarService` → `CalendarProvider`), Client Account vs
+  ClientRecord, future discovery, независимые оси Visibility/Financial
+  bucket, журнал решений AD-1…AD-12.
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — NOW / FOUNDATION ONLY / PLANNED /
+  FUTURE.
+
+**Порядок следующих этапов:**
+1. Product Architecture — сейчас зафиксировано.
+2. **Booking / Distribution Foundation — NEXT.** Начинается с **AUDIT**
+   существующего слоя (`/book/[workspaceSlug]`, embed, единый Availability
+   Engine) — нового booking engine не создаём. Проверяем: бизнес без
+   своего сайта, public booking URL, ссылки в Instagram/WhatsApp/Google
+   Business Profile/email/SMS, QR-код, кнопка «Book» на сайте, embed
+   widget, один Availability Engine для всех каналов. Код — только то,
+   чего аудит докажет отсутствие.
+3. External Calendar Foundation — AFTER THAT (provider-agnostic, без
+   реального Google).
+4. Реальная Google Calendar integration (OAuth/API) — отдельная
+   последующая задача/разработчик.
+
+Зафиксировано: сайт бизнеса, Client App и Client Account для guest
+booking НЕ обязательны; native Business App (тот же backend/API),
+Client App, city discovery/marketplace — FUTURE; Google Calendar
+API/OAuth сейчас НЕ реализуем.
+
+---
+
 ## ТЕКУЩАЯ ЗАДАЧА — Back navigation + Native mobile (Expo) foundation ✅ ЗАВЕРШЕНО
 
 Две части: (1) единый contextual Back pattern на secondary/flow экранах
