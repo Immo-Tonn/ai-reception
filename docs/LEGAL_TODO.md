@@ -9,14 +9,20 @@ All of this Needs legal review (not a substitute for a lawyer).
 - [ ] Write the full text (controller, data and purposes, legal bases, recipients/processors e.g. hosting, Supabase, e-mail provider, retention, rights, supervisory authority complaint). Only a heading skeleton + loud draft banner exists.
 - [ ] Set `datenschutzLastUpdated` and `datenschutzApproved = true` after approval.
 
-### Google Calendar section (`src/content/legal/googleCalendarPrivacy.ts`, DE/EN/UK/RU, drafted 2026-10-13)
-Text describes the implementation (docs/EXTERNAL_CALENDAR.md). NOT approved. Open points (also shown on the page):
-- [ ] Legal basis (consent / § 26 BDSG / legitimate interest) and voluntariness in employment
-- [ ] Controller vs processor roles (business as employer, ServiceOS operator); data processing agreements (Supabase, Vercel)
-- [ ] Production hosting location (Dev is Supabase eu-central-1 Frankfurt; production project not created yet)
-- [ ] Data exchange with Google / third-country transfer
-- [ ] Retention in backups and logs; retention period for connect-link records (currently not auto-deleted)
-- [ ] Wording of the Google API Services User Data Policy / Limited Use statement (required for Google OAuth verification)
+### Google Calendar section (`src/content/legal/googleCalendarPrivacy.ts`, DE/EN/UK/RU, updated 2026-10-13)
+Text describes the implementation (docs/EXTERNAL_CALENDAR.md, docs/DATA_RETENTION.md, docs/BACKUP_RECOVERY.md).
+NOT approved; `googleCalendarIntegrationLive = false` (page says the feature is not enabled in production yet).
+
+**Questions for the lawyer (Needs legal review):**
+- [ ] Legal basis for processing staff calendar busy time (consent / § 26 BDSG / legitimate interest) and voluntariness in employment
+- [ ] Roles: controller (business as employer and/or ServiceOS operator), joint controllership (Art. 26) or processing (Art. 28); which contracts are needed with businesses
+- [ ] Processors and locations: Supabase (eu-central-1 Frankfurt), Vercel (functions currently appear to run in **iad1, USA** per `x-vercel-id`) — third-country transfer, DPAs, or move functions to `fra1`
+- [ ] Google: role and possible third-country transfer during OAuth / API calls (Google Ireland / Google LLC)
+- [ ] Is the pseudonymised account id (HMAC of Google `sub`) still personal data — wording OK?
+- [ ] Provisional retention: busy cache 24 h, connect-link records 30 days after use/expiry, "access withdrawn" status kept until disconnect (no auto-delete, booking safety)
+- [ ] Backups: none automatic on the current plan; manual encrypted backups — retention period and how deletion requests are handled for data in backups
+- [ ] Art. 13 information to staff before connecting (connect page text sufficient?), record of processing activities, need for a DPIA
+- [ ] Google API Services User Data Policy / Limited Use statement wording (required for Google OAuth verification)
 
 ## Impressum (all fields are `TODO` in `src/content/legal/impressum.ts`)
 - [ ] Provider name / company; owner / authorised representative

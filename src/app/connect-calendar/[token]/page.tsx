@@ -82,6 +82,7 @@ export default async function ConnectCalendarPage({
               <ul className={styles.points}>
                 <li>{m.permissionFreeBusy}</li>
                 <li>{m.permissionCalendarList}</li>
+                <li>{m.permissionOpenId}</li>
               </ul>
             </section>
 
@@ -92,6 +93,7 @@ export default async function ConnectCalendarPage({
                 <li>{m.stored2}</li>
                 <li>{m.stored3}</li>
                 <li>{m.stored4}</li>
+                <li>{m.stored5}</li>
               </ul>
               <p className={styles.hint}>{m.purpose}</p>
               <p className={styles.hint}>{m.disconnectInfo}</p>

@@ -5,6 +5,7 @@ import { datenschutzApproved, datenschutzLastUpdated, datenschutzSections } from
 import {
   GOOGLE_API_USER_DATA_POLICY_URL,
   GOOGLE_CALENDAR_SECTION_ID,
+  googleCalendarIntegrationLive,
   googleCalendarPrivacy,
 } from "@/content/legal/googleCalendarPrivacy";
 import { getMessages } from "@/lib/i18n";
@@ -78,6 +79,7 @@ export default async function DatenschutzPage() {
           {gcal.title}
         </h2>
         <p className={styles.todo}>{gcal.draftNote}</p>
+        {!googleCalendarIntegrationLive && <p className={styles.text}><strong>{gcal.notLiveNote}</strong></p>}
         {gcal.blocks.map((block) => (
           <div key={block.heading}>
             <h3 className={styles.subTitle}>{block.heading}</h3>
