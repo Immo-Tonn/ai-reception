@@ -549,8 +549,3 @@
   color: var(--color-ink);
 }
 
-/* German compounds: hyphenate instead of overflowing the screen. */
-:global(html[lang="de"]) .stepTitle {
-  hyphens: auto;
-  overflow-wrap: anywhere;
-}

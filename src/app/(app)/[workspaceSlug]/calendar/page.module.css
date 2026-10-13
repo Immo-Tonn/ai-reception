@@ -406,6 +406,18 @@
   max-width: 40%;
 }
 
+/* Very narrow phones (320px class): time + initials + status left ~40px for
+   the client name, so names broke mid-word. The initials circle is
+   decorative (the name follows right after), so it gives way first. */
+@media (max-width: 359px) {
+  .row {
+    gap: var(--space-2);
+  }
+  .rowAvatar {
+    display: none;
+  }
+}
+
 .rowDuration {
   font-size: 11px;
   color: var(--color-muted);

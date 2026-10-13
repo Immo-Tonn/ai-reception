@@ -1151,7 +1151,7 @@ export const de: Messages = {
     noShowLabel: "Nicht erschienen",
     newClientsLabel: "Neue Kunden",
     returningClientsLabel: "Wiederkehrende Kunden",
-    averageTicketLabel: "Durchschnittlicher Bon",
+    averageTicketLabel: "Durch\u00ADschnittlicher Bon",
     popularServicesTitle: "Beliebte Leistungen",
     staffUtilizationTitle: "Mitarbeiterauslastung",
     outstandingInvoicesTitle: "Offene Rechnungen",
