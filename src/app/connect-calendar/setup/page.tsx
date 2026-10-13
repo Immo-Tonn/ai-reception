@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { GOOGLE_CALENDAR_SECTION_ID } from "@/content/legal/googleCalendarPrivacy";
 import { cookies } from "next/headers";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
@@ -9,7 +11,7 @@ import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
 import { getExternalCalendarDeps } from "@/server/externalCalendar/deps";
 import { SETUP_COOKIE, getCalendarChoices } from "@/server/externalCalendar/service";
 import { parseConnectError, toConnectError, type ConnectPageError } from "@/server/externalCalendar/http";
-import { saveCalendarsAction } from "../actions";
+import { disconnectFromSetupAction, saveCalendarsAction } from "../actions";
 import { connectErrorText } from "../errors";
 import styles from "../connect.module.css";
 
@@ -25,8 +27,8 @@ export const metadata: Metadata = {
  * here (sealed 30-minute setup cookie set by the OAuth callback). Calendar
  * names are read live from Google for this page and never stored.
  */
-export default async function CalendarSetupPage({ searchParams }: { searchParams: Promise<{ error?: string | string[]; saved?: string }> }) {
-  const [{ error, saved }, locale, store] = await Promise.all([searchParams, getRequestLocale(), cookies()]);
+export default async function CalendarSetupPage({ searchParams }: { searchParams: Promise<{ error?: string | string[]; saved?: string; disconnected?: string }> }) {
+  const [{ error, saved, disconnected }, locale, store] = await Promise.all([searchParams, getRequestLocale(), cookies()]);
   const { connectCalendar: m, calendarIntegration: ci } = getMessages(locale);
 
   const queryError = parseConnectError(error);
@@ -52,6 +54,11 @@ export default async function CalendarSetupPage({ searchParams }: { searchParams
         {queryError && (
           <p className={`${styles.notice} ${styles.error}`} role="alert">
             {connectErrorText(queryError, m)}
+          </p>
+        )}
+        {disconnected === "1" && !queryError && (
+          <p className={`${styles.notice} ${styles.success}`} role="status">
+            {m.disconnected}
           </p>
         )}
         {saved === "1" && !queryError && (
@@ -85,10 +92,17 @@ export default async function CalendarSetupPage({ searchParams }: { searchParams
                 <li>{ci.privacy2}</li>
                 <li>{ci.privacy3}</li>
               </ul>
+              <p className={styles.hint}>{m.purpose}</p>
+              <p className={styles.hint}>
+                <Link href={`/datenschutz#${GOOGLE_CALENDAR_SECTION_ID}`} className={styles.link}>{m.privacyLink}</Link>
+              </p>
             </section>
+            <form suppressHydrationWarning action={disconnectFromSetupAction} className={styles.form}>
+              <Button type="submit" variant="secondary" fullWidth>{m.disconnectButton}</Button>
+            </form>
           </>
         ) : (
-          !queryError && <p className={styles.notice}>{loadError ? connectErrorText(loadError, m) : m.sessionExpired}</p>
+          !queryError && disconnected !== "1" && <p className={styles.notice}>{loadError ? connectErrorText(loadError, m) : m.sessionExpired}</p>
         )}
         <p className={styles.hint}>{m.revokeHint}</p>
       </div>

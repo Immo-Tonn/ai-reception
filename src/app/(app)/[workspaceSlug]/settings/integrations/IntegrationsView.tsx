@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { GOOGLE_CALENDAR_SECTION_ID } from "@/content/legal/googleCalendarPrivacy";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui";
 import type { Locale, Messages } from "@/lib/i18n";
@@ -153,6 +155,10 @@ export function IntegrationsView({
           <li>{m.privacy3}</li>
           <li>{m.privacy4}</li>
         </ul>
+        <p className={styles.hint}>{m.privacyPurpose}</p>
+        <p className={styles.hint}>
+          <Link href={`/datenschutz#${GOOGLE_CALENDAR_SECTION_ID}`} className={own.link}>{m.privacyLink}</Link>
+        </p>
       </section>
 
       {demo && <p className={styles.notice}>{m.demoNote}</p>}
@@ -225,7 +231,7 @@ export function IntegrationsView({
                     )}
 
                     {link && (
-                      <div className={own.link}>
+                      <div className={own.linkBox}>
                         <p className={styles.confirmTitle}>{m.linkTitle.replace("{name}", s.name)}</p>
                         <input suppressHydrationWarning className={own.linkField} readOnly value={link.url} aria-label={m.linkTitle.replace("{name}", s.name)} onFocus={(e) => e.currentTarget.select()} />
                         <div className={styles.actions}>

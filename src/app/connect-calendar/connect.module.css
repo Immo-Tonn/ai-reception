@@ -124,3 +124,9 @@
   font-size: var(--font-size-small);
   color: var(--color-muted);
 }
+
+.link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  color: var(--color-ink);
+}

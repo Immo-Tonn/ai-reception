@@ -4,7 +4,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { clientIpFromHeaders } from "@/server/ratelimit/rateLimiter";
 import { getExternalCalendarDeps, googleRedirectUri } from "@/server/externalCalendar/deps";
-import { FLOW_COOKIE, SETUP_COOKIE, saveCalendarChoices, startAuthorization } from "@/server/externalCalendar/service";
+import { FLOW_COOKIE, SETUP_COOKIE, disconnectFromSetup, saveCalendarChoices, startAuthorization } from "@/server/externalCalendar/service";
 import { cookieOptions, limitConnectAttempts, RateLimitedError, toConnectError, type ConnectPageError } from "@/server/externalCalendar/http";
 import { TOKEN_RE } from "@/server/externalCalendar/crypto";
 
@@ -39,6 +39,18 @@ export async function saveCalendarsAction(formData: FormData): Promise<void> {
   try {
     const store = await cookies();
     await saveCalendarChoices(getExternalCalendarDeps(), store.get(SETUP_COOKIE)?.value, ids);
+  } catch (error) {
+    target = `/connect-calendar/setup?error=${toConnectError(error)}`;
+  }
+  redirect(target);
+}
+
+export async function disconnectFromSetupAction(): Promise<void> {
+  let target = "/connect-calendar/setup?disconnected=1";
+  try {
+    const store = await cookies();
+    await disconnectFromSetup(getExternalCalendarDeps(), store.get(SETUP_COOKIE)?.value);
+    store.delete({ name: SETUP_COOKIE, path: "/connect-calendar" });
   } catch (error) {
     target = `/connect-calendar/setup?error=${toConnectError(error)}`;
   }

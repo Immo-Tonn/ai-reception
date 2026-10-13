@@ -345,6 +345,20 @@ describe("connect links and OAuth safety", () => {
   });
 });
 
+describe("the connecting person can disconnect from the calendar picker", () => {
+  it("deletes the connection (token, calendar ids, cache) and revokes at Google; a forged cookie cannot", async () => {
+    const { b, masters, cut } = await salon();
+    const { setupCookie } = await connect(b, masters[0], "self-off", [{ start: berlin(D.mon, "14:00"), end: berlin(D.mon, "15:00") }]);
+    expect(await times(b, cut, masters[0], D.mon)).not.toContain("14:00");
+    await expect(svc.disconnectFromSetup(deps, "v1.forged.x.y")).rejects.toMatchObject({ code: "expired_link" });
+    await svc.disconnectFromSetup(deps, setupCookie);
+    expect(await w.q("select 1 from external_calendar_connections where staff_id=$1", [masters[0]])).toHaveLength(0);
+    expect(google.revoked).toContain("self-off");
+    expect(await times(b, cut, masters[0], D.mon)).toContain("14:00");
+    await expect(svc.disconnectFromSetup(deps, setupCookie)).rejects.toMatchObject({ code: "expired_link" });
+  });
+});
+
 describe("business calendar: the same rule on create / move / edit", () => {
   it("creating or moving an appointment into Google busy time is refused; editing an existing conflicting appointment is not blocked", async () => {
     const { b, masters, cut } = await salon();

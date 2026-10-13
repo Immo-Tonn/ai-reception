@@ -9,6 +9,15 @@ All of this Needs legal review (not a substitute for a lawyer).
 - [ ] Write the full text (controller, data and purposes, legal bases, recipients/processors e.g. hosting, Supabase, e-mail provider, retention, rights, supervisory authority complaint). Only a heading skeleton + loud draft banner exists.
 - [ ] Set `datenschutzLastUpdated` and `datenschutzApproved = true` after approval.
 
+### Google Calendar section (`src/content/legal/googleCalendarPrivacy.ts`, DE/EN/UK/RU, drafted 2026-10-13)
+Text describes the implementation (docs/EXTERNAL_CALENDAR.md). NOT approved. Open points (also shown on the page):
+- [ ] Legal basis (consent / § 26 BDSG / legitimate interest) and voluntariness in employment
+- [ ] Controller vs processor roles (business as employer, ServiceOS operator); data processing agreements (Supabase, Vercel)
+- [ ] Production hosting location (Dev is Supabase eu-central-1 Frankfurt; production project not created yet)
+- [ ] Data exchange with Google / third-country transfer
+- [ ] Retention in backups and logs; retention period for connect-link records (currently not auto-deleted)
+- [ ] Wording of the Google API Services User Data Policy / Limited Use statement (required for Google OAuth verification)
+
 ## Impressum (all fields are `TODO` in `src/content/legal/impressum.ts`)
 - [ ] Provider name / company; owner / authorised representative
 - [ ] Street, postal code + city, country

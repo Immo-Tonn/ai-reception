@@ -469,3 +469,24 @@ export async function saveCalendarChoices(deps: ExternalCalendarDeps, setupCooki
   const now = nowOf(deps);
   await loadExternalBusy(deps, { workspaceId: conn.workspaceId, staffIds: [conn.staffId], mode: "commit", from: now, until: new Date(now.getTime() + 60_000) }).catch(() => undefined);
 }
+
+/**
+ * The connecting person disconnects from the calendar picker (sealed setup
+ * cookie, 30 min) — staff without a ServiceOS login can stop the integration
+ * themselves. Same effect as the business-side disconnect.
+ */
+export async function disconnectFromSetup(deps: ExternalCalendarDeps, setupCookie: string | undefined): Promise<void> {
+  if (!isConfigured(deps)) throw new ExternalCalendarError("not_configured");
+  const setup = unseal<SetupCookie>(deps.cookies, SETUP_COOKIE, setupCookie, nowOf(deps));
+  if (!setup) throw new ExternalCalendarError("expired_link");
+  const conn = await deps.store.getConnection(setup.workspaceId, setup.staffId);
+  if (!conn || conn.id !== setup.connectionId) throw new ExternalCalendarError("expired_link");
+  const removed = await deps.store.deleteConnection(setup.workspaceId, setup.staffId);
+  if (removed?.refreshTokenCiphertext) {
+    try {
+      await deps.provider.revoke(deps.tokens.decrypt(removed.refreshTokenCiphertext, tokenContext(removed.workspaceId, removed.staffId)));
+    } catch {
+      // best effort
+    }
+  }
+}

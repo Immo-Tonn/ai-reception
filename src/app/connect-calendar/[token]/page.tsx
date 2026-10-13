@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { GOOGLE_CALENDAR_SECTION_ID } from "@/content/legal/googleCalendarPrivacy";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -73,6 +75,29 @@ export default async function ConnectCalendarPage({
                 <li>{ci.privacy3}</li>
                 <li>{ci.privacy4}</li>
               </ul>
+            </section>
+
+            <section className={styles.card} aria-labelledby="permissions-title">
+              <h2 id="permissions-title" className={styles.cardTitle}>{m.permissionsTitle}</h2>
+              <ul className={styles.points}>
+                <li>{m.permissionFreeBusy}</li>
+                <li>{m.permissionCalendarList}</li>
+              </ul>
+            </section>
+
+            <section className={styles.card} aria-labelledby="stored-title">
+              <h2 id="stored-title" className={styles.cardTitle}>{m.storedTitle}</h2>
+              <ul className={styles.points}>
+                <li>{m.stored1}</li>
+                <li>{m.stored2}</li>
+                <li>{m.stored3}</li>
+                <li>{m.stored4}</li>
+              </ul>
+              <p className={styles.hint}>{m.purpose}</p>
+              <p className={styles.hint}>{m.disconnectInfo}</p>
+              <p className={styles.hint}>
+                <Link href={`/datenschutz#${GOOGLE_CALENDAR_SECTION_ID}`} className={styles.link}>{m.privacyLink}</Link>
+              </p>
             </section>
 
             {errorCode && (

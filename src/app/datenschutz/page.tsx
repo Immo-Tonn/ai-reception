@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import { LegalPage } from "@/components/legal/LegalPage/LegalPage";
 import styles from "@/components/legal/LegalPage/LegalPage.module.css";
 import { datenschutzApproved, datenschutzLastUpdated, datenschutzSections } from "@/content/legal/datenschutz";
+import {
+  GOOGLE_API_USER_DATA_POLICY_URL,
+  GOOGLE_CALENDAR_SECTION_ID,
+  googleCalendarPrivacy,
+} from "@/content/legal/googleCalendarPrivacy";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 
@@ -21,7 +26,9 @@ export async function generateMetadata(): Promise<Metadata> {
  * check `npm run check:legal` fails until real, reviewed text replaces it.
  */
 export default async function DatenschutzPage() {
-  const { legal } = getMessages(await getRequestLocale());
+  const locale = await getRequestLocale();
+  const { legal } = getMessages(locale);
+  const gcal = googleCalendarPrivacy[locale];
 
   return (
     <LegalPage title={legal.datenschutzTitle}>
@@ -48,6 +55,11 @@ export default async function DatenschutzPage() {
               </a>
             </li>
           ))}
+          <li>
+            <a href={`#${GOOGLE_CALENDAR_SECTION_ID}`} className={styles.tocLink}>
+              {gcal.title}
+            </a>
+          </li>
         </ol>
       </nav>
 
@@ -59,6 +71,45 @@ export default async function DatenschutzPage() {
           <p className={styles.pending}>{legal.sectionPending}</p>
         </section>
       ))}
+
+      {/* Drafted from the implementation; NOT legally approved (see googleCalendarPrivacy.ts). */}
+      <section id={GOOGLE_CALENDAR_SECTION_ID} className={styles.section} aria-labelledby={`h-${GOOGLE_CALENDAR_SECTION_ID}`}>
+        <h2 id={`h-${GOOGLE_CALENDAR_SECTION_ID}`} className={styles.sectionTitle}>
+          {gcal.title}
+        </h2>
+        <p className={styles.todo}>{gcal.draftNote}</p>
+        {gcal.blocks.map((block) => (
+          <div key={block.heading}>
+            <h3 className={styles.subTitle}>{block.heading}</h3>
+            {block.paragraphs?.map((t) => (
+              <p key={t} className={styles.text}>{t}</p>
+            ))}
+            {block.items && (
+              <ul className={styles.list}>
+                {block.items.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+            )}
+            {block.after?.map((t) => (
+              <p key={t} className={styles.text}>{t}</p>
+            ))}
+          </div>
+        ))}
+        <p className={styles.text}>
+          <a href={GOOGLE_API_USER_DATA_POLICY_URL} className={styles.link} target="_blank" rel="noopener noreferrer">
+            {gcal.policyLinkLabel}
+          </a>
+        </p>
+        <div className={styles.review} role="note">
+          <h3 className={styles.subTitle}>{gcal.reviewTitle}</h3>
+          <ul className={styles.list}>
+            {gcal.reviewNotes.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+        </div>
+      </section>
     </LegalPage>
   );
 }
