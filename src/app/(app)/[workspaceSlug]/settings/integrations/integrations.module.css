@@ -1,0 +1,68 @@
+.points {
+  margin: 0;
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: var(--font-size-small);
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--color-border);
+  min-width: 0;
+}
+
+.itemHead {
+  min-width: 0;
+}
+
+.name {
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.ok {
+  color: var(--panel-status-positive-text, #1f7a52);
+  border-color: currentColor;
+}
+
+.bad {
+  color: var(--panel-status-negative-text, #b42318);
+  border-color: currentColor;
+}
+
+.warn {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-small);
+  color: var(--panel-status-negative-text, #b42318);
+  overflow-wrap: break-word;
+}
+
+.link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  min-width: 0;
+}
+
+.linkField {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-paper);
+  color: inherit;
+  font: inherit;
+  font-size: var(--font-size-small);
+  text-overflow: ellipsis;
+}

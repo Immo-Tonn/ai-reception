@@ -4,6 +4,18 @@
 > This file is the running log of what each stage changed. Older sections below (e.g. "Audit status (2026-10-04)") are HISTORICAL and may be outdated: trust ROADMAP.md and the newest stage sections.
 > Latest stage commit: `ddaa140` (Business Operations foundation, branch `feature/business-operations-foundation`).
 
+## STAGE (in progress, 2026-10-13): Google Calendar FreeBusy, branch `feature/google-calendar-freebusy` (from team/main `d431188`)
+
+NOT committed, NOT pushed, migration 0025 NOT applied anywhere. Design: [docs/EXTERNAL_CALENDAR.md](docs/EXTERNAL_CALENDAR.md);
+owner setup (RU): [docs/GOOGLE_CALENDAR_SETUP_RU.md](docs/GOOGLE_CALENDAR_SETUP_RU.md).
+- One way Google -> ServiceOS: each staff member's own Google account, chosen calendars, busy start/end only; ONE engine
+  (`externalBusy` / `externalUnavailableStaffIds` inputs of `availability.ts`); public slots/dates/booking, client reschedule
+  and business create/update/move all consult it (writes with a fresh "commit" check). Fail-closed per person, never for others.
+- OAuth 2.0 code + PKCE via single-use connect links (staff accounts don't exist yet); tokens AES-256-GCM encrypted; tables
+  service-role only. Settings -> Google Calendar (DE/EN/UK/RU), public `/connect-calendar/*`, callback `/api/integrations/google-calendar/callback`.
+- Verified only with MockCalendarProvider + fake HTTP. Real Google needs owner credentials (ENV) + migration 0025 (separate permission).
+- Same branch, separate concern: global word-break policy (no auto-hyphenation, no mid-word splits; app/legal header rows wrap).
+
 ## TARGET: real vs demo separation, editable settings (decided after manual E2E)
 
 ### Target behaviour

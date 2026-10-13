@@ -27,7 +27,7 @@ export class ClientAccountError extends Error {
   }
 }
 
-export type ClientAccountDeps = Pick<PublicBookingDeps, "admin" | "rateLimiter" | "now">;
+export type ClientAccountDeps = Pick<PublicBookingDeps, "admin" | "rateLimiter" | "now" | "externalBusy">;
 
 interface MyBookingRow {
   out_appointment_id: string;
@@ -221,7 +221,7 @@ export async function rescheduleMyBooking(
     await enforce(deps, [{ scope: "client_reschedule_user", limit: 20, windowSeconds: 3600, subject: userId }]);
     const ctx = await rescheduleContext(deps, userId, appointmentId);
 
-    const slots = await computeSlots(deps, ctx.catalog, ctx.own.serviceId!, staffId, date, ctx.ignore);
+    const slots = await computeSlots(deps, ctx.catalog, ctx.own.serviceId!, staffId, date, ctx.ignore, "commit");
     const slot = pickSlot(slots, time, staffId);
     if (!slot) throw new ClientAccountError("slot_unavailable");
 
