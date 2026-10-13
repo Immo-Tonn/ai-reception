@@ -6,15 +6,17 @@
 
 ## STAGE (in progress, 2026-10-13): Google Calendar FreeBusy, branch `feature/google-calendar-freebusy` (from team/main `d431188`)
 
-NOT committed, NOT pushed, migration 0025 NOT applied anywhere. Design: [docs/EXTERNAL_CALENDAR.md](docs/EXTERNAL_CALENDAR.md);
-owner setup (RU): [docs/GOOGLE_CALENDAR_SETUP_RU.md](docs/GOOGLE_CALENDAR_SETUP_RU.md).
-- One way Google -> ServiceOS: each staff member's own Google account, chosen calendars, busy start/end only; ONE engine
-  (`externalBusy` / `externalUnavailableStaffIds` inputs of `availability.ts`); public slots/dates/booking, client reschedule
-  and business create/update/move all consult it (writes with a fresh "commit" check). Fail-closed per person, never for others.
-- OAuth 2.0 code + PKCE via single-use connect links (staff accounts don't exist yet); tokens AES-256-GCM encrypted; tables
-  service-role only. Settings -> Google Calendar (DE/EN/UK/RU), public `/connect-calendar/*`, callback `/api/integrations/google-calendar/callback`.
-- Verified only with MockCalendarProvider + fake HTTP. Real Google needs owner credentials (ENV) + migration 0025 (separate permission).
-- Same branch, separate concern: global word-break policy (no auto-hyphenation, no mid-word splits; app/legal header rows wrap).
+Local commits only (not pushed). Migration **0025 applied to production** (backup + verification), **0026 pending
+approval**. Read first: [docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md](docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md) (incl. Team
+Lead Handover Summary), then [docs/EXTERNAL_CALENDAR.md](docs/EXTERNAL_CALENDAR.md),
+[docs/DATA_RETENTION.md](docs/DATA_RETENTION.md), [docs/BACKUP_RECOVERY.md](docs/BACKUP_RECOVERY.md).
+- One way Google -> ServiceOS per staff member; ONE availability engine; fail-closed per person.
+- OAuth code + PKCE + OIDC ID-token verification (JWKS); identity = HMAC of `sub`; manage page for self-service
+  disconnect; Google revokes account-wide -> `releaseGrant` revokes only the last connection of an account.
+- Daily Vercel Cron cleanup (CRON_SECRET); staff deactivation removes the connection; "revoked" status never
+  auto-deleted. Datenschutz draft (4 languages) = Needs legal review.
+- Same branch, separate commit: global word-break policy (mobile).
+- Verified only with a mock provider / signed test tokens. Real Google needs the team lead's Google Cloud setup.
 
 ## TARGET: real vs demo separation, editable settings (decided after manual E2E)
 

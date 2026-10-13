@@ -9,7 +9,7 @@ numbered file.
 
 ## Order
 
-Run in filename order (`0001` → `0025`); each depends on tables created
+Run in filename order (`0001` → `0026`); each depends on tables created
 by the ones before it.
 
 | File | Tables |
@@ -36,7 +36,8 @@ by the ones before it.
 | `0022_finance_invoices.sql` | Finance: atomic per-workspace invoice numbering (`invoice_counters`, `next_invoice_number`), line items, payments with void, derived overdue, total always = sum of items, bucket + visibility RLS, `create_invoice` / `record_payment` / `cancel_invoice` etc. **Applied to Dev** |
 | `0023_waiting_list_and_inbox.sql` | Waiting list columns + guards; `inbox_events` (trigger-produced booking events with dedupe key, generic text for private appointments), `record_inbox_event`. **Applied to Dev** |
 | `0024_analytics.sql` | `analytics_overview` (SECURITY INVOKER: RLS applies to every row it reads; revenue only with finance.view; workspace-local days). **Applied to Dev** |
-| `0025_external_calendars.sql` | Google Calendar FreeBusy: `external_calendar_connections` (encrypted refresh token, selected calendar ids, busy cache start/end only), `external_calendar_invites` (hashed single-use connect links), same-workspace guard, `claim_external_calendar_refresh` / `issue_external_calendar_invite` / `consume_external_calendar_invite`. Service role only (RLS on, no policies). **NOT applied anywhere yet** (docs/EXTERNAL_CALENDAR.md) |
+| `0025_external_calendars.sql` | Google Calendar FreeBusy: `external_calendar_connections` (encrypted refresh token, selected calendar ids, busy cache start/end only), `external_calendar_invites` (hashed single-use connect links), same-workspace guard, `claim_external_calendar_refresh` / `issue_external_calendar_invite` / `consume_external_calendar_invite`. Service role only (RLS on, no policies). **Applied to production 2026-10-13** (docs/EXTERNAL_CALENDAR.md) |
+| `0026_external_calendar_subject.sql` | `external_calendar_connections.google_subject_hash` (HMAC of the verified Google account id) + partial index; additive. **NOT applied — needs approval; apply before deploying the code that uses it** |
 | `0015_service_role_default_privileges.sql` | Default privileges for the service role on future tables/sequences (service role only; no change to anon/authenticated or RLS) |
 | `0014_rate_limits.sql` | `rate_limits` table + `rate_limit_hit()` (PostgreSQL rate limiting, hashed subjects, service role only) |
 

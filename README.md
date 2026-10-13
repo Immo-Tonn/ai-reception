@@ -26,3 +26,20 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 Other scripts: `npm run typecheck`, `npm run test`, `npm run build`.
+
+## Documentation
+
+Start here: [HANDOFF_GRAPH.md](HANDOFF_GRAPH.md) (running log) and [docs/ROADMAP.md](docs/ROADMAP.md) (stage order).
+
+| Topic | Document |
+|---|---|
+| Production deployment checklist + Team Lead Handover + Custom Domain TODO | [docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md](docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md) |
+| Google Calendar integration (architecture, security, setup) | [docs/EXTERNAL_CALENDAR.md](docs/EXTERNAL_CALENDAR.md) |
+| Google Cloud setup guide (RU, for the owner) | [docs/GOOGLE_CALENDAR_SETUP_RU.md](docs/GOOGLE_CALENDAR_SETUP_RU.md) |
+| Data retention & cleanup | [docs/DATA_RETENTION.md](docs/DATA_RETENTION.md) |
+| Backups & disaster recovery | [docs/BACKUP_RECOVERY.md](docs/BACKUP_RECOVERY.md) |
+| Legal open points (Datenschutz, Impressum) | [docs/LEGAL_TODO.md](docs/LEGAL_TODO.md) |
+| Staging / team testing | [docs/STAGING.md](docs/STAGING.md) |
+| Product architecture | [docs/PRODUCT_ARCHITECTURE.md](docs/PRODUCT_ARCHITECTURE.md) |
+| Database migrations | [supabase/migrations/README.md](supabase/migrations/README.md) |
+

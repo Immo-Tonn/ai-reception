@@ -1,109 +1,147 @@
-# External calendars: Google Calendar FreeBusy (one direction)
+# Google Calendar Integration (FreeBusy, one direction)
 
-Status: **implemented and tested with a mock provider and fake HTTP responses; NOT yet verified against a real Google
-account.** Migration `0025` is written but NOT applied to any shared database. Setup guide for the owner (Russian):
-[GOOGLE_CALENDAR_SETUP_RU.md](GOOGLE_CALENDAR_SETUP_RU.md).
+**Status (2026-10-13):** implemented on branch `feature/google-calendar-freebusy`, tested with a mock provider,
+fake HTTP responses and signed test ID tokens. **Not yet verified against a real Google account and not deployed.**
+Migration `0025` is applied to the production database (ServiceOS Dev = production); migration `0026` is prepared
+and tested locally only (needs separate approval). Datenschutz text: Needs legal review.
 
-## What it does
-- Each staff member can connect **their own** Google account and choose which calendars count (1-10).
-- Busy time in those calendars is removed from **that person's** bookable slots. Other staff are unaffected.
-- One direction only: Google -> ServiceOS availability. ServiceOS never writes to Google, Google never changes
+Related: [Data retention](DATA_RETENTION.md) · [Backups & recovery](BACKUP_RECOVERY.md) ·
+[Production checklist](PRODUCTION_DEPLOYMENT_CHECKLIST.md) · owner setup guide (RU) [GOOGLE_CALENDAR_SETUP_RU.md](GOOGLE_CALENDAR_SETUP_RU.md).
+
+## 1. What it does
+- Each staff member connects **their own** Google account and chooses which calendars count (1-10).
+- Busy time in those calendars is removed from **that person's** bookable slots; other staff are unaffected.
+- One direction only: Google -> ServiceOS availability. ServiceOS never writes to Google and Google never changes
   ServiceOS appointments. ServiceOS stays the source of truth for bookings.
-- Only start/end of busy blocks are read (FreeBusy API). No titles, descriptions, attendees, locations.
-- Clients only ever see "this time is not available".
+- Only the start/end of busy blocks is read (FreeBusy API). Clients only see "not available".
 
-## Architecture (docs/PRODUCT_ARCHITECTURE.md §4.3)
+## 2. Architecture
 ```
-public booking / dates / client reschedule / business create-update-move
-        │ (ExternalBusyLoader: workspaceId, [from, until), mode browse|commit, staffIds?)
+public slots / dates / booking · client reschedule · business create/update/move
+        │  ExternalBusyLoader(workspaceId, [from, until), mode browse|commit, staffIds?)
         ▼
-ExternalCalendarService  (src/server/externalCalendar/service.ts)  — cache policy, fail-closed, OAuth flow
-        │                                   │
-CalendarProvider (provider.ts)       ExternalCalendarStore (store.ts, service role, migration 0025)
-   ├─ GoogleCalendarProvider (googleProvider.ts, REST + fetch, no SDK)
-   └─ MockCalendarProvider   (mockProvider.ts, tests)
+ExternalCalendarService (src/server/externalCalendar/service.ts)
+  cache policy · fail-closed · OAuth flows · manage page · releaseGrant · cleanup
+        │                                  │
+CalendarProvider (provider.ts)       ExternalCalendarStore (store.ts, service role)
+  ├─ GoogleCalendarProvider (googleProvider.ts, REST + fetch, no SDK)
+  │    └─ idToken.ts (OIDC ID-token verification, Google JWKS)
+  └─ MockCalendarProvider (mockProvider.ts, tests)
         ▼
-externalBusyForEngine (engineInput.ts) -> busyRangesToAppointments -> THE availability engine
-   computeSlotsFor / computeAvailableSlots / checkSlotAvailable (externalBusy, externalUnavailableStaffIds)
+externalBusyForEngine (engineInput.ts) -> THE availability engine (features/appointments/availability.ts:
+  externalBusy / externalUnavailableStaffIds; reasons externalBusy / externalUnconfirmed)
 ```
-No second slot engine: external busy time is one more input of `src/features/appointments/availability.ts`
-(reasons `externalBusy` / `externalUnconfirmed`). It blocks only the person, never a resource; the candidate
-service's own buffers still apply.
+No second slot engine. External busy time blocks the **person**, never a resource; the service's own buffers apply.
 
-### Every path that offers or writes a time
-| Path | Where | Mode |
+| Path | Where | Freshness |
 |---|---|---|
-| Public slots | `computeSlots` (publicBooking.service.ts) | browse |
-| Public available dates | `computeAvailableDatesForCatalog` | browse |
-| Public booking (final check before `create_public_booking`) | `createPublicBooking` | **commit** |
-| Client reschedule slot list | `getRescheduleSlots` -> `computeSlots` | browse |
-| Client reschedule (final check before `reschedule_my_booking`) | `rescheduleMyBooking` | **commit** |
-| Business create / update / move | `checkBusinessRules` (appointments.service.ts) | **commit** |
+| Public slots, available dates | `publicBooking.service.ts` | browse (5 min) |
+| Public booking final check | `createPublicBooking` | commit (60 s) |
+| Client reschedule list / final check | `clientAccount.service.ts` | browse / commit |
+| Business create / update / move | `appointments.service.ts` (`checkBusinessRules`) | commit; update/move only when the slot changes |
 
-Business update/move checks Google only when the slot itself changes (date, time, person, duration, service,
-re-activation). Editing notes/status of an appointment that now overlaps a Google event stays possible.
-Pinned by `externalCalendarWiring.static.test.ts`.
+## 3. Database (Supabase, service role only)
+| Migration | Object | Purpose |
+|---|---|---|
+| 0025 (**applied**) | `external_calendar_connections` | one row per staff member: encrypted refresh token, selected calendar ids, busy cache (start/end only), status, last success/error |
+| 0025 | `external_calendar_invites` | single-use connect links: SHA-256 hash only, expiry, used_at |
+| 0025 | `guard_external_calendar_refs()` (trigger) | staff must belong to the same workspace |
+| 0025 | `claim_external_calendar_refresh()` | one refresh at a time per connection + back-off |
+| 0025 | `issue_external_calendar_invite()` / `consume_external_calendar_invite()` | new link expires older unused ones; atomic single use |
+| 0026 (**prepared, not applied**) | `external_calendar_connections.google_subject_hash` + partial index | HMAC of the verified Google account id (`sub`) |
 
-## Policy (src/features/externalCalendar/policy.ts)
-| Rule | Value |
+RLS is on with **no policies**; every privilege is revoked from `anon` / `authenticated`. Only server code with the
+service role (`src/server/externalCalendar/deps.ts`, on the whitelist test) reads them, always after its own
+authorization. Note: 0025 contains 4 functions (3 callable + 1 trigger function).
+
+## 4. OAuth scopes
+| Scope | Why | Sensitivity (Google) |
+|---|---|---|
+| `https://www.googleapis.com/auth/calendar.freebusy` | busy intervals only | Calendar scope (sensitive) |
+| `https://www.googleapis.com/auth/calendar.calendarlist.readonly` | calendar picker (names shown live, never stored) | Calendar scope (sensitive) |
+| `openid` | signed ID token with the stable account id `sub` | non-sensitive |
+
+No `email`, no `profile`, nothing that writes. The manage page signs in with `openid` **only** (`access_type=online`,
+no refresh token). Google's docs say a scope list "must begin with openid"; whether an `openid`-only request is
+accepted must be confirmed in the first real test (fallback would need `email`, which requires a new decision).
+
+## 5. Connecting
+1. Owner/admin (`staff.manage`) or the person linked to the staff profile creates a **connect link** (72 h, single use).
+2. `/connect-calendar/<token>` shows permissions, stored data, purpose, how to stop (no-referrer, noindex, no-store).
+3. Server Action -> sealed httpOnly flow cookie (10 min): `state` (CSRF), PKCE verifier, OIDC `nonce`.
+4. Google consent: code + PKCE S256, `access_type=offline`, `prompt=consent`, `include_granted_scopes=false`.
+5. `/api/integrations/google-calendar/callback`: timing-safe state check; code exchange; all calendar scopes required;
+   **ID token verified locally**: RS256 signature with Google's JWKS (discovery document, cached by `max-age`, one
+   forced refresh on an unknown `kid`), `iss`, `aud`, `azp`, `exp`, `iat`, `nonce`; `sub` -> HMAC; link consumed
+   atomically; refresh token encrypted (AES-256-GCM, AAD = workspace + staff). Primary calendar preselected.
+6. `/connect-calendar/setup` (sealed 30-min cookie): choose calendars (only ids the account really has) or disconnect.
+
+## 6. Disconnecting (any time)
+| Who | Where | Effect |
+|---|---|---|
+| Owner/admin, or linked person | Settings -> Google Calendar | connection row deleted |
+| Connecting person (30 min after connect) | `/connect-calendar/setup` | connection row deleted |
+| Connecting person, **any time** | `/connect-calendar/manage`: "Sign in with Google" (openid) -> all connections of THAT account across businesses -> disconnect one / all (15-min sealed session, rate limited) | rows deleted |
+| Staff deactivated | `setStaffActive(false)` + daily cleanup | row deleted |
+| Revoked at Google by the person | detected on next refresh (`invalid_grant`) | token, calendar ids, busy cache wiped; minimal status kept |
+
+**Shared Google grant.** Google's revocation removes all scopes and invalidates every token of that Google account
+for our project at once. A person may be connected in several businesses with one account. `releaseGrant()` is the
+only place that calls Google's revoke endpoint, and only when **no other** connection with the same subject hash
+remains. Same account reconnecting: no revoke (it would kill the new token). Rows without a subject hash (made before
+0026): not revoked (cannot attribute the grant) — the person can remove access in their Google account. The UI and
+Datenschutz explain this.
+
+Identity is never decided by e-mail or calendar id — only by the HMAC of the signature-verified `sub`.
+
+## 7. Behaviour of availability per state
+| State | Booking behaviour |
 |---|---|
-| Cached window per connection | now - 1 day ... now + 183 days (covers the max 180-day horizon) |
-| Browse freshness | 5 min |
-| Commit freshness (right before writing) | 60 s |
-| Stale cache still trusted when Google fails | up to 15 min |
-| After that | person is **unconfirmed**: no slots, business cannot book them; everyone else bookable |
-| Back-off after a failed refresh (browse only) | 60 s |
-| Parallel refreshes | one per connection (DB claim, 30 s) |
-| Provider request size | chunks of <= 60 days, <= 10 calendars, 6 s timeout per call |
-| Revoked access (`invalid_grant`, 401) | status `revoked`, token wiped, person unconfirmed until reconnect or disconnect |
-| Google not configured / key missing | connected people unconfirmed (never silently free) |
-| Undecryptable token (key changed) | status `error` / `not_configured`, row kept (never wiped by a config mistake) |
-| Outside the cached window (business books > 6 months ahead) | direct uncached request; failure = unconfirmed |
-| Migration 0025 not applied yet | "no connections" (nothing can be connected without the table), booking unchanged |
+| Never connected / explicitly disconnected | normal working schedule |
+| Connected, busy confirmed (cache <= 5 min browse / <= 60 s commit) | schedule minus Google busy time |
+| Google unreachable: cache <= 15 min old | last known busy time used |
+| Google unreachable > 15 min, not configured, key missing, outside cached window and request fails | person **unconfirmed**: no slots, business cannot book them; others unaffected |
+| `revoked` (access withdrawn at Google) | person blocked until reconnect or an explicit disconnect (never auto-deleted) |
+| Cache cleared by cleanup (> 24 h untouched) | next request asks Google; failure -> unconfirmed |
 
-No answer from Google is never read as "free". Concurrency: the database exclusion constraints only know
-ServiceOS appointments; the commit re-check narrows the window in which a just-created Google event could be
-missed to seconds. Double booking WITHIN ServiceOS stays impossible (unchanged).
+No answer from Google is never read as "free". Conflicts (existing ServiceOS appointments overlapping new Google
+busy time) are listed for owner/admin and never acted upon.
 
-Conflicts (a ServiceOS appointment overlapping new Google busy time) are listed in Settings -> Google Calendar
-for owner/admin (private appointments without service details). ServiceOS never cancels or moves them.
+## 8. Cache and errors
+Window now-1 day .. now+183 days (booking horizon 180 + edges), chunks <= 60 days, <= 10 calendars, 6 s timeout,
+one refresh per connection (DB claim 30 s), 60 s back-off after a failure (browse). Error codes: `revoked`,
+`unavailable`, `rate_limited`, `calendar_not_found`, `invalid_response`, `not_configured`. Undecryptable token (key
+changed) -> `not_configured`, row kept. Migration 0025 missing -> "no connections".
 
-## Connecting (staff accounts do not exist yet)
-1. Owner/admin (`staff.manage`), or the person whose staff profile is linked to the signed-in user
-   (`staff_profiles.profile_id`, e.g. the owner's own profile), creates a **single-use connect link** (72 h).
-   Only the SHA-256 hash is stored; a new link expires older unused ones.
-2. The person opens `/connect-calendar/<token>` (noindex, no-referrer, no-store), reads what is accessed and
-   continues to Google. Server Action -> sealed httpOnly cookie with OAuth `state` + PKCE verifier (10 min).
-3. Google consent (authorization code + PKCE S256, `access_type=offline`, `prompt=consent`). Scopes:
-   `calendar.freebusy` + `calendar.calendarlist.readonly` only. No `openid/email/profile`, nothing that writes.
-4. `/api/integrations/google-calendar/callback`: state check (timing-safe), code exchange, both scopes required
-   (granular consent), link consumed atomically, refresh token encrypted (AES-256-GCM, AAD = workspace+staff),
-   previous grant revoked. Primary calendar selected by default.
-5. `/connect-calendar/setup` (sealed 30-min cookie, only in that browser): choose calendars; names come live
-   from Google and are never stored; only ids of calendars the account really has are accepted.
+## 9. Isolation between businesses
+Every store call is scoped by `workspace_id`; the same-workspace trigger refuses foreign staff ids; a business only
+sees its own connections; the manage page lists only connections whose subject hash equals the verified account;
+connection ids of other accounts answer "not found". Tested with several businesses, the same staff names and the
+same Google account in two businesses.
 
-The owner never sees a token, calendar id or calendar name — only status, number of calendars, last successful
-check, error code. Disconnect deletes the row (busy cache included) and revokes the grant at Google.
+## 10. Setup (Google Cloud + Vercel)
+See [GOOGLE_CALENDAR_SETUP_RU.md](GOOGLE_CALENDAR_SETUP_RU.md) and [PRODUCTION_DEPLOYMENT_CHECKLIST.md](PRODUCTION_DEPLOYMENT_CHECKLIST.md).
+Redirect URI (both flows): `<NEXT_PUBLIC_APP_URL>/api/integrations/google-calendar/callback`.
 
-## Storage (migration 0025)
-`external_calendar_connections` (one per staff member; encrypted refresh token, calendar ids, busy cache as
-`[{start,end}]`, status, last success / error) and `external_calendar_invites` (token hash, expiry, used).
-RLS on with **no policies**, all privileges revoked from anon/authenticated: service role only, callers authorize
-first (`src/server/externalCalendar/deps.ts` is on the service-role whitelist). Same-workspace guard trigger.
-Functions: `claim_external_calendar_refresh`, `issue_external_calendar_invite`, `consume_external_calendar_invite`.
+ENV (server-only, names only): `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`,
+`EXTERNAL_CALENDAR_ENCRYPTION_KEY` (32 bytes base64; changing it disconnects everyone and changes all subject
+hashes), `CRON_SECRET` (daily cleanup), plus the existing `NEXT_PUBLIC_APP_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 
-## ENV (server-only)
-`GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`, `EXTERNAL_CALENDAR_ENCRYPTION_KEY` (32 bytes base64).
-Redirect URI = `<public base URL>/api/integrations/google-calendar/callback` (base URL from `NEXT_PUBLIC_APP_URL`;
-Vercel preview URLs change per deployment and therefore cannot be registered — use a fixed staging domain).
+## 11. Tests
+`src/server/externalCalendar/__tests__/` — engine/domain, crypto, Google adapter (signed ID tokens, 11 rejection
+cases, tampering, JWKS), PGlite integration (salon example, refresh, fail-closed, cache, privacy, OAuth CSRF/replay,
+manage page, two businesses one account, reconnect, revoke, isolation, cleanup, deactivation), cron auth, wiring
+static test; `src/server/db/__tests__/migration0025.test.ts`, `migration0026.test.ts`.
 
-## Known limitations
-- Not verified with real Google yet; Google "Testing" mode refresh tokens expire after 7 days (shows as
-  "Access withdrawn"); production needs Google OAuth verification (sensitive scopes).
-- Calendar UI suggestions (`findNextAvailableSlot`, browser-side) do not know Google busy time; the server refuses
-  such a time with a generic conflict message.
-- Business error codes `external_calendar_busy` / `external_calendar_unconfirmed` reach the UI as the generic
-  "conflict" text.
-- No push notifications from Google (webhooks); freshness comes from the 5-min / 60-s policy.
-- All-day "free" events (transparency) and declined events are handled by Google's FreeBusy semantics.
-- GDPR: staff busy time is personal data of employees. Needs legal review (Datenschutz text, employee consent).
+## 12. Limitations of this version
+- Not verified with real Google; Google "Testing" mode tokens expire after 7 days; production needs OAuth verification.
+- Calendar UI suggestions (browser-side) do not know Google busy time; the server refuses with a generic conflict.
+- No Google push notifications (webhooks); freshness from the 5 min / 60 s policy.
+- `openid`-only manage sign-in to be confirmed with real Google (see §4).
+- Vercel functions currently appear to run in `iad1` (USA): DSGVO question (docs/LEGAL_TODO.md).
+
+## 13. Future: two-way sync (plan only, NOT implemented)
+Writing ServiceOS appointments into Google (Direction 2 of PRODUCT_ARCHITECTURE.md §4.3) would need: a write scope
+(`calendar.events` or app-created calendars `calendar.app.created`), a mapping table appointment <-> event id, update/
+delete propagation, conflict rules (ServiceOS stays the source of truth), Google push channels for change
+notifications, new Datenschutz text and a new Google verification. Separate stage; requires owner approval.

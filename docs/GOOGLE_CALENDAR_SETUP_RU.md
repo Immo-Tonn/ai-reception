@@ -48,11 +48,12 @@ Billing-аккаунт (карта) для Calendar API **не нужен**.
    - User type: **External** (сотрудники заходят личными Google-аккаунтами);
    - Publishing status: пока **Testing**;
    - **Test users**: добавьте почты тех, кто будет тестировать (до 100 человек).
-3. **Data access** → **Add or remove scopes** → добавьте вручную ровно два:
+3. **Data access** → **Add or remove scopes** → добавьте ровно три:
+   - `openid` — подтверждение, какой это Google-аккаунт (для страницы самостоятельного отключения; не sensitive);
    - `https://www.googleapis.com/auth/calendar.freebusy`
    - `https://www.googleapis.com/auth/calendar.calendarlist.readonly`
 
-   Больше ничего не добавляйте: ServiceOS не нужен доступ к событиям, почте или профилю.
+   Больше ничего не добавляйте: ServiceOS не нужен доступ к событиям, почте (`email`) или профилю (`profile`).
 
 ⚠️ В режиме **Testing** Google выдаёт доступ только на **7 дней**. Через неделю подключение в ServiceOS
 станет «Доступ отозван», и сотруднику нужно будет переподключиться. Для постоянной работы нужна публикация + верификация (п. 9).
@@ -74,7 +75,10 @@ Billing-аккаунт (карта) для Calendar API **не нужен**.
 |---|---|
 | Локально | `http://localhost:3000/api/integrations/google-calendar/callback` |
 | Staging | `https://<ваш-фиксированный-staging-домен>/api/integrations/google-calendar/callback` |
-| Production (позже) | `https://<production-домен>/api/integrations/google-calendar/callback` |
+| Production (сейчас, временно) | `https://ai-reception-two.vercel.app/api/integrations/google-calendar/callback` — домен должен подтвердить тимлид в Vercel → Domains |
+| Production (после выбора своего домена) | `https://<новый-домен>/api/integrations/google-calendar/callback` — см. TODO в [PRODUCTION_DEPLOYMENT_CHECKLIST.md](PRODUCTION_DEPLOYMENT_CHECKLIST.md) |
+
+Один и тот же Redirect URI используется и для подключения календаря, и для страницы `/connect-calendar/manage` (вход «только подтвердить аккаунт»).
 
 Важно:
 - Адрес строится из `NEXT_PUBLIC_APP_URL`. На staging он должен быть задан.
@@ -88,6 +92,7 @@ Billing-аккаунт (карта) для Calendar API **не нужен**.
 | `GOOGLE_CALENDAR_CLIENT_ID` | Client ID из п. 5 | `.env.local` и Vercel |
 | `GOOGLE_CALENDAR_CLIENT_SECRET` | Client Secret из п. 5 | `.env.local` и Vercel (Sensitive) |
 | `EXTERNAL_CALENDAR_ENCRYPTION_KEY` | 32 случайных байта в base64 | `.env.local` и Vercel (Sensitive) |
+| `CRON_SECRET` | ≥ 16 случайных символов (`openssl rand -hex 32`) — защита ежедневной очистки | только Vercel (Sensitive) |
 | `NEXT_PUBLIC_APP_URL` | уже существует, публичный адрес приложения | staging/production |
 
 Ключ шифрования сгенерируйте сами в терминале и скопируйте результат прямо в файл (не в чат):
@@ -112,7 +117,7 @@ openssl rand -base64 32
 
 Шаги 1 и 4 требуют вашего отдельного разрешения.
 
-1. **Применить миграцию `0025_external_calendars.sql`** к тестовой базе (ServiceOS Dev):
+1. **Миграции:** `0025` уже применена (2026-10-13). **`0026_external_calendar_subject.sql` — нужна отдельная команда/разрешение** (одна новая колонка). Порядок такой же:
    - сначала проверить, что `supabase/.temp/project-ref` совпадает с проектом в `.env.local`;
    - затем выполнить `supabase db push --dry-run`.
 
