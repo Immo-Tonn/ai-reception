@@ -91,8 +91,9 @@ export class ExternalCalendarStoreError extends Error {
   }
 }
 
-const COLUMNS =
-  "id, workspace_id, staff_id, provider, status, refresh_token_ciphertext, calendar_ids, busy_intervals, busy_window_from, busy_window_until, busy_fetched_at, last_success_at, last_error_code, last_error_at, created_at, google_subject_hash";
+const COLUMNS_BASE =
+  "id, workspace_id, staff_id, provider, status, refresh_token_ciphertext, calendar_ids, busy_intervals, busy_window_from, busy_window_until, busy_fetched_at, last_success_at, last_error_code, last_error_at, created_at";
+const COLUMNS: string = `${COLUMNS_BASE}, google_subject_hash`;
 
 type Raw = Record<string, unknown>;
 const date = (v: unknown) => (typeof v === "string" && v ? new Date(v) : v instanceof Date ? v : null);
@@ -124,6 +125,15 @@ function isMissingRelation(error: unknown): boolean {
   return code === "42P01" || code === "PGRST205";
 }
 
+/** PostgreSQL "undefined column" / PostgREST "column not found" — code deployed before migration 0026. */
+function isMissingColumn(error: unknown): boolean {
+  const code = (error as { code?: unknown })?.code;
+  return code === "42703" || code === "PGRST204";
+}
+
+/** The column list before migration 0026 (no google_subject_hash). */
+const LEGACY_COLUMNS: string = COLUMNS_BASE;
+
 function check<T>(result: { data: T; error: unknown }): T {
   if (result.error) throw new ExternalCalendarStoreError();
   return result.data;
@@ -140,15 +150,21 @@ const CACHE_RESET = {
 export function createSupabaseExternalCalendarStore(admin: SupabaseClient): ExternalCalendarStore {
   const connections = () => admin.from("external_calendar_connections");
   const getConnection = async (workspaceId: string, staffId: string) => {
-    const row = check(await connections().select(COLUMNS).eq("workspace_id", workspaceId).eq("staff_id", staffId).maybeSingle()) as Raw | null;
+    let result = await connections().select(COLUMNS).eq("workspace_id", workspaceId).eq("staff_id", staffId).maybeSingle();
+    if (result.error && isMissingColumn(result.error)) {
+      result = await connections().select(LEGACY_COLUMNS).eq("workspace_id", workspaceId).eq("staff_id", staffId).maybeSingle();
+    }
+    const row = check(result) as Raw | null;
     return row ? toConnection(row) : null;
   };
 
   return {
     async listConnections(workspaceId) {
-      const result = await connections().select(COLUMNS).eq("workspace_id", workspaceId);
+      let result = await connections().select(COLUMNS).eq("workspace_id", workspaceId);
       // Code deployed before migration 0025: without the table no calendar can be connected, so "none" is exact.
       if (result.error && isMissingRelation(result.error)) return [];
+      // Before migration 0026: read without the subject hash (booking keeps working; connections stay usable).
+      if (result.error && isMissingColumn(result.error)) result = await connections().select(LEGACY_COLUMNS).eq("workspace_id", workspaceId);
       return ((check(result) as Raw[] | null) ?? []).map(toConnection);
     },
 
@@ -280,8 +296,9 @@ export function createSupabaseExternalCalendarStore(admin: SupabaseClient): Exte
 
     async listConnectionsBySubject(subjectHash) {
       if (!/^[0-9a-f]{64}$/.test(subjectHash)) return [];
-      const rows = check(await connections().select(COLUMNS).eq("google_subject_hash", subjectHash)) as Raw[] | null;
-      return (rows ?? []).map(toConnection);
+      const result = await connections().select(COLUMNS).eq("google_subject_hash", subjectHash);
+      if (result.error && isMissingColumn(result.error)) return []; // before 0026 nothing carries a subject hash
+      return ((check(result) as Raw[] | null) ?? []).map(toConnection);
     },
 
     async clearStaleBusyCaches(fetchedBefore) {

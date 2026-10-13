@@ -241,4 +241,25 @@ describe("store before migration 0025 is applied", () => {
     await expect(createSupabaseExternalCalendarStore(fake("PGRST205")).listConnections("ws")).resolves.toEqual([]);
     await expect(createSupabaseExternalCalendarStore(fake("57014")).listConnections("ws")).rejects.toThrow();
   });
+
+  it("before migration 0026 (no google_subject_hash column) reads fall back to the old column list", async () => {
+    const { createSupabaseExternalCalendarStore } = await import("../store");
+    const selected: string[] = [];
+    const row = { id: "c1", workspace_id: "ws", staff_id: "s1", provider: "google", status: "connected", calendar_ids: ["a"], busy_intervals: [], created_at: "2026-10-13T00:00:00Z" };
+    const fake = {
+      from: () => ({
+        select: (cols: string) => {
+          selected.push(cols);
+          const missing = cols.includes("google_subject_hash");
+          return { eq: async () => (missing ? { data: null, error: { code: "42703", message: "x" } } : { data: [row], error: null }) };
+        },
+      }),
+    } as never;
+    const store = createSupabaseExternalCalendarStore(fake);
+    const list = await store.listConnections("ws");
+    expect(list).toHaveLength(1);
+    expect(list[0].subjectHash).toBeNull();
+    expect(selected[1]).not.toContain("google_subject_hash");
+    expect(await store.listConnectionsBySubject("a".repeat(64))).toEqual([]);
+  });
 });
