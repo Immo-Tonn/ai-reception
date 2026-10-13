@@ -30,6 +30,29 @@ body {
   line-height: var(--line-height-normal);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* Word breaking, all locales (DE/EN/UK/RU): text wraps only at spaces and
+     real hyphens. No automatic hyphenation (it cut words like "Administrator"
+     or "администратор" mid-word). A soft hyphen (U+00AD) in a locale string
+     marks the one allowed break inside a long German compound. `break-word`
+     is only a last-resort safety net for a single word wider than its box
+     (URLs, e-mail addresses, ids) — it never affects layout otherwise.
+     Long user data in flex/grid cells keeps its own `overflow-wrap: anywhere`. */
+  overflow-wrap: break-word;
+  hyphens: manual;
+}
+
+/* Headings: balanced lines instead of one lonely word on the last line. */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+/* Running text: avoid a single short word (or letter) alone on the last line. */
+p,
+li,
+dd {
+  text-wrap: pretty;
 }
 
 h1,

@@ -178,6 +178,7 @@ describe("service-role and secret hygiene", () => {
       "src/server/auth/supabaseBusinessAuth.ts", // roll back a half-made sign-up
       "src/server/booking/deps.ts", // guest booking (3 whitelisted DB functions) + client directory listing (0017)
       "src/server/booking/pageData.ts", // public catalog for the booking page (same function)
+      "src/server/externalCalendar/deps.ts", // external calendar tables (0025: no RLS policies, service role only; callers authorize first)
       "src/server/ratelimit/index.ts", // PostgreSQL rate limiter
       "src/server/services/provisioning.service.ts", // provision_workspace
     ]);

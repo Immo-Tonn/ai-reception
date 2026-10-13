@@ -516,9 +516,3 @@
   text-align: center;
 }
 
-/* German compounds are the one case where hyphenation is wanted. */
-:global(html[lang="de"]) .introTitle,
-:global(html[lang="de"]) .introSubtitle {
-  hyphens: auto;
-  overflow-wrap: anywhere;
-}

@@ -38,11 +38,12 @@ function isBeforeNotBefore(date: string, minutes: number, notBefore: Date): bool
  * assign a specific person). UI that offers "any specialist" must collapse
  * those with `uniqueSlotTimes` and resolve the assignee with `pickSlot`.
  *
- * Extension point for External Calendar sync: busy intervals from an
- * external provider are just one more "is this staff/time taken" input —
- * add an optional `externalBusyIntervals` param here and check it next to
- * `findConflicts` inside the per-slot loop. Callers (both wrappers) would
- * supply it; BookingWizard does not change.
+ * External calendars (Google FreeBusy, docs/EXTERNAL_CALENDAR.md) are one
+ * more "is this person taken" input: `externalBusy` holds their busy time as
+ * engine appointments (staffId set, no resource, no service -> no extra
+ * buffers), checked next to `findConflicts`; `externalUnavailableStaffIds`
+ * are people whose external busy time could NOT be confirmed (provider down,
+ * access revoked, stale cache) — they get no slots, everyone else is unaffected.
  */
 export function computeAvailableSlots(params: {
   service: ServiceDefinition;
@@ -62,7 +63,7 @@ export function computeAvailableSlots(params: {
   notBefore?: Date;
   /** Granularity of start times in minutes (booking rule, default 15). Start times lie on the clock grid; NOT the service duration. */
   slotIntervalMinutes?: number;
-}): AvailableSlot[] {
+} & ExternalBusyInput): AvailableSlot[] {
   const {
     service,
     eligibleStaff,
@@ -72,13 +73,16 @@ export function computeAvailableSlots(params: {
     workingHours,
     date,
     notBefore,
+    externalBusy,
   } = params;
+  const unconfirmed = new Set(params.externalUnavailableStaffIds ?? []);
 
   const step = params.slotIntervalMinutes ?? SLOT_INTERVAL_DEFAULT;
   const slots: AvailableSlot[] = [];
 
   for (const staff of eligibleStaff) {
     if (staff.active === false) continue;
+    if (unconfirmed.has(staff.id)) continue;
     // Effective hours (business INTERSECT staff, minus breaks / time off) of this person that day.
     const day = resolveDay(staff.id, date, workingHours, staff.name);
     // No schedule known at all (profile-less callers only; real workspaces are default-deny): a neutral daytime window.
@@ -89,7 +93,7 @@ export function computeAvailableSlots(params: {
         const time = fromMinutes(minutes);
 
         const check = (resourceId: string | null) =>
-          checkSlotConflicts({ service, staff, resourceId, date, time, existingAppointments, allServices });
+          checkSlotConflicts({ service, staff, resourceId, date, time, existingAppointments, allServices, externalBusy });
 
         let resourceId: string | null = null;
         if (service.requiredResourceType) {
@@ -110,7 +114,22 @@ export function computeAvailableSlots(params: {
 
 export interface SlotCheck {
   available: boolean;
-  reason?: "dayOff" | "outsideHours" | "onBreak" | "timeOff" | "blocked" | "staffConflict" | "resourceConflict";
+  reason?:
+    | "dayOff"
+    | "outsideHours"
+    | "onBreak"
+    | "timeOff"
+    | "blocked"
+    | "staffConflict"
+    | "resourceConflict"
+    | "externalBusy"
+    | "externalUnconfirmed";
+}
+
+/** Busy time from connected external calendars (see `computeAvailableSlots`). Both optional: no calendars = no change. */
+export interface ExternalBusyInput {
+  externalBusy?: Appointment[];
+  externalUnavailableStaffIds?: readonly string[];
 }
 
 /**
@@ -133,12 +152,23 @@ export function checkSlotAvailable(params: {
   allServices: ServiceDefinition[];
   workingHours: WorkingHoursProfile[];
   ignoreAppointmentId?: string;
-}): SlotCheck {
+} & ExternalBusyInput): SlotCheck {
   const { service, staff, resourceId, date, time, existingAppointments, allServices, workingHours } = params;
 
   const hours = checkAvailability(staff.id, date, time, service.durationMinutes, workingHours, staff.name);
   if (!hours.available) return { available: false, reason: hours.reason };
-  return checkSlotConflicts({ service, staff, resourceId, date, time, existingAppointments, allServices, ignoreAppointmentId: params.ignoreAppointmentId });
+  if (params.externalUnavailableStaffIds?.includes(staff.id)) return { available: false, reason: "externalUnconfirmed" };
+  return checkSlotConflicts({
+    service,
+    staff,
+    resourceId,
+    date,
+    time,
+    existingAppointments,
+    allServices,
+    ignoreAppointmentId: params.ignoreAppointmentId,
+    externalBusy: params.externalBusy,
+  });
 }
 
 /** Collisions only (staff and resource, buffers included) — the second half of `checkSlotAvailable`. */
@@ -151,25 +181,27 @@ function checkSlotConflicts(params: {
   existingAppointments: Appointment[];
   allServices: ServiceDefinition[];
   ignoreAppointmentId?: string;
+  externalBusy?: Appointment[];
 }): SlotCheck {
   const { service, staff, resourceId, date, time, existingAppointments, allServices } = params;
-  const conflict = findConflicts(
-    {
-      id: params.ignoreAppointmentId ?? "candidate",
-      staff: staff.name,
-      staffId: staff.id,
-      resourceId,
-      date,
-      time,
-      durationMinutes: service.durationMinutes,
-      service: service.name,
-      serviceId: service.id,
-    },
-    existingAppointments,
-    allServices,
-  );
+  const candidate = {
+    id: params.ignoreAppointmentId ?? "candidate",
+    staff: staff.name,
+    staffId: staff.id,
+    resourceId,
+    date,
+    time,
+    durationMinutes: service.durationMinutes,
+    service: service.name,
+    serviceId: service.id,
+  };
+  const conflict = findConflicts(candidate, existingAppointments, allServices);
   if (conflict.staffConflict) return { available: false, reason: "staffConflict" };
   if (conflict.resourceConflict) return { available: false, reason: "resourceConflict" };
+  // External busy blocks only the PERSON (never a resource); the candidate's own buffers still apply.
+  if (params.externalBusy?.length && findConflicts({ ...candidate, resourceId: null }, params.externalBusy, allServices).staffConflict) {
+    return { available: false, reason: "externalBusy" };
+  }
   return { available: true };
 }
 
@@ -191,7 +223,7 @@ export function computeSlotsFor(params: {
   date: string;
   notBefore?: Date;
   slotIntervalMinutes?: number;
-}): AvailableSlot[] {
+} & ExternalBusyInput): AvailableSlot[] {
   const { serviceId, staffId, services, staff: allStaff, resources } = params;
   const service = services.find((s) => s.id === serviceId);
   if (!service) return [];
@@ -216,6 +248,8 @@ export function computeSlotsFor(params: {
     date: params.date,
     notBefore: params.notBefore,
     slotIntervalMinutes: params.slotIntervalMinutes,
+    externalBusy: params.externalBusy,
+    externalUnavailableStaffIds: params.externalUnavailableStaffIds,
   });
 }
 
