@@ -33,6 +33,7 @@ Start here: [HANDOFF_GRAPH.md](HANDOFF_GRAPH.md) (running log) and [docs/ROADMAP
 
 | Topic | Document |
 |---|---|
+| **Передача проекта тимлиду: Google Calendar (RU, полная инструкция)** | [docs/TEAM_LEAD_HANDOVER_GOOGLE_CALENDAR_RU.md](docs/TEAM_LEAD_HANDOVER_GOOGLE_CALENDAR_RU.md) |
 | Production deployment checklist + Team Lead Handover + Custom Domain TODO | [docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md](docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md) |
 | Google Calendar integration (architecture, security, setup) | [docs/EXTERNAL_CALENDAR.md](docs/EXTERNAL_CALENDAR.md) |
 | Google Cloud setup guide (RU, for the owner) | [docs/GOOGLE_CALENDAR_SETUP_RU.md](docs/GOOGLE_CALENDAR_SETUP_RU.md) |

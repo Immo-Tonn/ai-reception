@@ -37,7 +37,7 @@ by the ones before it.
 | `0023_waiting_list_and_inbox.sql` | Waiting list columns + guards; `inbox_events` (trigger-produced booking events with dedupe key, generic text for private appointments), `record_inbox_event`. **Applied to Dev** |
 | `0024_analytics.sql` | `analytics_overview` (SECURITY INVOKER: RLS applies to every row it reads; revenue only with finance.view; workspace-local days). **Applied to Dev** |
 | `0025_external_calendars.sql` | Google Calendar FreeBusy: `external_calendar_connections` (encrypted refresh token, selected calendar ids, busy cache start/end only), `external_calendar_invites` (hashed single-use connect links), same-workspace guard, `claim_external_calendar_refresh` / `issue_external_calendar_invite` / `consume_external_calendar_invite`. Service role only (RLS on, no policies). **Applied to production 2026-10-13** (docs/EXTERNAL_CALENDAR.md) |
-| `0026_external_calendar_subject.sql` | `external_calendar_connections.google_subject_hash` (HMAC of the verified Google account id) + partial index; additive. **NOT applied — needs approval; apply before deploying the code that uses it** |
+| `0026_external_calendar_subject.sql` | `external_calendar_connections.google_subject_hash` (HMAC of the verified Google account id) + partial index; additive. **Applied to production 2026-10-13** (after a fresh backup, an isolated restore + apply test; content of all public tables unchanged) |
 | `0015_service_role_default_privileges.sql` | Default privileges for the service role on future tables/sequences (service role only; no change to anon/authenticated or RLS) |
 | `0014_rate_limits.sql` | `rate_limits` table + `rate_limit_hit()` (PostgreSQL rate limiting, hashed subjects, service role only) |
 

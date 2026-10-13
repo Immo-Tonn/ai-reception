@@ -9,10 +9,10 @@ and pricing), checked 2026-10-13 — re-check before deciding.
 | Production database | Supabase project **ServiceOS Dev** (only database; serves production), region eu-central-1 |
 | Supabase automatic backups | **none** (`supabase backups list`: empty, PITR disabled) — consistent with the Free plan; team lead to confirm the plan in Dashboard -> Billing |
 | Free-plan risk | Free projects are **paused after 1 week of inactivity** (pricing page) |
-| Manual backup | one full logical dump (roles, schema, data incl. Supabase Auth) taken 2026-10-13 before migration 0025, plus one after |
-| Where | operator's MacBook only: AES-256 encrypted disk image `~/ServiceOS-Backups-Encrypted/serviceos-supabase-2026-10-13.dmg` (+ the unencrypted originals in `~/ServiceOS-Backups/`, kept until the owner approves deleting them) |
-| Password | generated randomly, stored in the macOS login Keychain (item "ServiceOS Supabase Backup", account `serviceos-backup-2026-10-13`); never written to the repo, logs or chat |
-| Restore test | **passed** (see §3): encrypted image -> isolated local Supabase stack -> all 57 `public` + `auth` tables identical row counts, Supabase Auth (GoTrue v2.197.0) lists all restored users |
+| Manual backups | full logical dumps (roles, schema, data incl. Supabase Auth): before/after migration 0025 and before/after migration 0026 (all 2026-10-13) |
+| Where | operator's MacBook only: AES-256 encrypted disk images in `~/ServiceOS-Backups-Encrypted/` (`serviceos-supabase-2026-10-13.dmg` = before/after 0025, `serviceos-supabase-2026-10-13-before-0026.dmg`) + the unencrypted originals in `~/ServiceOS-Backups/` (kept until the owner approves deleting them) |
+| Password | one random password per image, stored in the macOS login Keychain (items "ServiceOS Supabase Backup", accounts `serviceos-backup-2026-10-13` and `serviceos-backup-2026-10-13-before-0026`); never written to the repo, logs or chat |
+| Restore tests | **passed** (see §3). 0025 backup: all 57 `public` + `auth` tables identical, Supabase Auth (GoTrue v2.197.0) lists all restored users. 0026 backup: all 59 tables identical, GoTrue lists 12/12 users, 0026 applied on the restored copy without changing any row (md5 of every `public` table equal) |
 
 ### Risks
 1. Single copy on one laptop. The login Keychain is **not** synced to iCloud: if the MacBook is lost, the image and
@@ -35,12 +35,21 @@ password stored in a password manager, and delete the plaintext files once the i
 
 ## 3. Restore procedure
 **Test / verification (never against production):**
+
+> ⚠️ `supabase start` publishes its ports on **all interfaces** (`0.0.0.0:54321/54322`) with well-known demo
+> credentials. The first restore test (2026-10-13, ~10 minutes) ran that way, so the restored copy was reachable from
+> the local network during that time. Since then restore tests use an **internal Docker network without published
+> ports** (procedure below). Assess whether the first test needs follow-up (e.g. signing out all users).
+
 1. Mount the image with its password (read-only).
-2. Start an isolated local stack: `supabase start` (binds to 127.0.0.1 only; applies migrations 0001-…).
-3. Filter out `supabase_migrations`, `storage`, `realtime`, `vault` from `data.sql`; in one transaction:
-   `SET session_replication_role = replica`, truncate `public` tables, load `data.sql`.
+2. Isolated environment: `docker network create --internal sos-iso`; run `public.ecr.aws/supabase/postgres:<version>`
+   and `public.ecr.aws/supabase/gotrue:<version>` on that network **without `-p`** (set the `supabase_auth_admin`
+   password, `GOTRUE_JWT_AUD=authenticated`); GoTrue creates the current `auth` schema.
+   (Alternative: `supabase start` only on a machine/network where 0.0.0.0 exposure is acceptable.)
+3. Filter out `supabase_migrations`, `storage`, `realtime`, `vault` from `data.sql`; in one transaction load
+   `roles.sql`, `schema.sql`, `SET session_replication_role = replica`, `data.sql`.
 4. Compare row counts per table with the counts recorded at dump time; check Auth (`/auth/v1/admin/users`).
-5. `supabase stop --no-backup` (deletes the local volumes and the restored copy).
+5. Remove containers, network and volumes (`docker rm -f`, `docker network rm`, `docker volume prune`).
 
 **Real disaster (new or emptied Supabase project; needs team lead decision):**
 1. Create/choose the target project (same region), link it, keep the old one untouched if it still exists.

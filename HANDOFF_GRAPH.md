@@ -6,8 +6,7 @@
 
 ## STAGE (in progress, 2026-10-13): Google Calendar FreeBusy, branch `feature/google-calendar-freebusy` (from team/main `d431188`)
 
-Local commits only (not pushed). Migration **0025 applied to production** (backup + verification), **0026 pending
-approval**. Read first: [docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md](docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md) (incl. Team
+Migrations **0025 and 0026 applied to production** (2026-10-13, each after a backup + verification). Read first: [docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md](docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md) (incl. Team
 Lead Handover Summary), then [docs/EXTERNAL_CALENDAR.md](docs/EXTERNAL_CALENDAR.md),
 [docs/DATA_RETENTION.md](docs/DATA_RETENTION.md), [docs/BACKUP_RECOVERY.md](docs/BACKUP_RECOVERY.md).
 - One way Google -> ServiceOS per staff member; ONE availability engine; fail-closed per person.

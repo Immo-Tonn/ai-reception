@@ -5,6 +5,8 @@ no deploy**). Production = Vercel project on the team repo `Immo-Tonn/ai-recepti
 **ServiceOS Dev** (the only database; it serves production).
 
 ## Team Lead Handover Summary
+Full Russian step-by-step handover (Google Cloud, Vercel, Supabase, costs, tests, instructions for the team lead's Claude): [TEAM_LEAD_HANDOVER_GOOGLE_CALENDAR_RU.md](TEAM_LEAD_HANDOVER_GOOGLE_CALENDAR_RU.md).
+
 **Done (local, tested):**
 - Google Calendar FreeBusy integration (one direction, per staff member, own Google account): engine integration,
   OAuth + PKCE + OIDC ID-token verification, encrypted tokens, fail-closed policy, settings UI, connect / setup /
@@ -16,7 +18,7 @@ no deploy**). Production = Vercel project on the team repo `Immo-Tonn/ai-recepti
 
 **Needed from the team lead:** confirm the production domain; Google Cloud project + OAuth client + consent screen;
 Vercel ENV (`GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`, `EXTERNAL_CALENDAR_ENCRYPTION_KEY`,
-`CRON_SECRET`, `NEXT_PUBLIC_APP_URL`); approval for migration 0026; decision on Supabase backups (plan) and on the
+`CRON_SECRET`, `NEXT_PUBLIC_APP_URL`); decision on Supabase backups (plan) and on the
 Vercel function region; legal review; review and merge of the branch.
 
 **Risks:** no automatic database backups on the current Supabase plan (and Free projects pause after 1 week of
@@ -29,13 +31,13 @@ Datenschutz/Impressum not legally approved; Google "Testing" tokens expire after
 ## 1. Already done
 - [x] Code: integration + cleanup + manage page + word-break fixes, local commits (see `git log` on the branch)
 - [x] Migration **0025** applied to production (2026-10-13), backup taken before, row counts and content verified
+- [x] Migration **0026** applied to production (2026-10-13): fresh encrypted backup, isolated restore test incl. Supabase Auth (12/12 users), 0026 tested on the restored copy, then applied; column/index/constraint verified, content of all 33 `public` tables unchanged, production pages 200
 - [x] Local encrypted backup (AES-256 disk image) — see [BACKUP_RECOVERY.md](BACKUP_RECOVERY.md)
 - [x] Docs: [EXTERNAL_CALENDAR.md](EXTERNAL_CALENDAR.md), [DATA_RETENTION.md](DATA_RETENTION.md),
       [BACKUP_RECOVERY.md](BACKUP_RECOVERY.md), [GOOGLE_CALENDAR_SETUP_RU.md](GOOGLE_CALENDAR_SETUP_RU.md), [LEGAL_TODO.md](LEGAL_TODO.md)
 
 ## 2. Not done yet
 - [ ] Push / PR / review / merge to `main` (needs owner approval)
-- [ ] Migration **0026** on production (needs approval; additive: 1 nullable column + index)
 - [ ] Google Cloud setup and first real end-to-end test
 - [ ] Vercel ENV variables and redeploy
 - [ ] Legal review of Datenschutz (Google section) and Impressum
@@ -46,11 +48,10 @@ Datenschutz/Impressum not legally approved; Google "Testing" tokens expire after
 |---|---|---|
 | 0001-0024 | applied (before 2026-10-13) | |
 | 0025 external calendars | **applied 2026-10-13** | 2 tables, 4 functions, service role only |
-| 0026 subject hash | **pending approval** | apply **before** enabling Google credentials in production |
+| 0026 subject hash | **applied 2026-10-13** | 1 nullable column + format check + partial index |
 
-Order: backup -> `supabase db push --dry-run` (only 0026 listed) -> `supabase db push` -> verify -> deploy code.
-If the code is deployed before 0026: reads fall back to the pre-0026 columns, so booking keeps working, but
-**connecting a calendar fails** (the new row needs `google_subject_hash`) and the manage page finds nothing.
+All migrations of this branch are applied; `supabase db push --dry-run` reports "up to date". (The code would also
+tolerate a database without 0026 for reads, see `store.ts`.)
 
 ## 4. ENV (names only; values in Vercel -> Settings -> Environment Variables, mark Sensitive)
 | Name | Scope |

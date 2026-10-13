@@ -2,8 +2,7 @@
 
 **Status (2026-10-13):** implemented on branch `feature/google-calendar-freebusy`, tested with a mock provider,
 fake HTTP responses and signed test ID tokens. **Not yet verified against a real Google account and not deployed.**
-Migration `0025` is applied to the production database (ServiceOS Dev = production); migration `0026` is prepared
-and tested locally only (needs separate approval). Datenschutz text: Needs legal review.
+Migrations `0025` and `0026` are applied to the production database (ServiceOS Dev = production), 2026-10-13. Datenschutz text: Needs legal review.
 
 Related: [Data retention](DATA_RETENTION.md) · [Backups & recovery](BACKUP_RECOVERY.md) ·
 [Production checklist](PRODUCTION_DEPLOYMENT_CHECKLIST.md) · owner setup guide (RU) [GOOGLE_CALENDAR_SETUP_RU.md](GOOGLE_CALENDAR_SETUP_RU.md).
@@ -48,7 +47,7 @@ No second slot engine. External busy time blocks the **person**, never a resourc
 | 0025 | `guard_external_calendar_refs()` (trigger) | staff must belong to the same workspace |
 | 0025 | `claim_external_calendar_refresh()` | one refresh at a time per connection + back-off |
 | 0025 | `issue_external_calendar_invite()` / `consume_external_calendar_invite()` | new link expires older unused ones; atomic single use |
-| 0026 (**prepared, not applied**) | `external_calendar_connections.google_subject_hash` + partial index | HMAC of the verified Google account id (`sub`) |
+| 0026 (**applied 2026-10-13**) | `external_calendar_connections.google_subject_hash` + partial index | HMAC of the verified Google account id (`sub`) |
 
 RLS is on with **no policies**; every privilege is revoked from `anon` / `authenticated`. Only server code with the
 service role (`src/server/externalCalendar/deps.ts`, on the whitelist test) reads them, always after its own
