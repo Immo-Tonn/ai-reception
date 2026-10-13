@@ -46,6 +46,8 @@ export interface ExternalCalendarDeps {
   tokens: SecretBox | null;
   /** Seals the OAuth state / PKCE / setup cookies. */
   cookies: SecretBox | null;
+  /** HMAC of the verified Google account id (`sub`); null when the encryption key is missing. */
+  subjects: ((subject: string) => string) | null;
   now?: () => Date;
 }
 
@@ -73,10 +75,18 @@ export const OAUTH_FLOW_TTL_MS = 10 * 60_000;
 export const SETUP_SESSION_TTL_MS = 30 * 60_000;
 export const FLOW_COOKIE = "serviceos_gcal_flow";
 export const SETUP_COOKIE = "serviceos_gcal_setup";
+export const MANAGE_COOKIE = "serviceos_gcal_manage";
+export const MANAGE_SESSION_TTL_MS = 15 * 60_000;
 
 const nowOf = (deps: Pick<ExternalCalendarDeps, "now">) => (deps.now ?? (() => new Date()))();
-const isConfigured = (deps: ExternalCalendarDeps): deps is ExternalCalendarDeps & { provider: CalendarProvider; tokens: SecretBox; cookies: SecretBox } =>
-  Boolean(deps.provider && deps.tokens && deps.cookies);
+type ConfiguredDeps = ExternalCalendarDeps & {
+  provider: CalendarProvider;
+  tokens: SecretBox;
+  cookies: SecretBox;
+  subjects: (subject: string) => string;
+};
+const isConfigured = (deps: ExternalCalendarDeps): deps is ConfiguredDeps =>
+  Boolean(deps.provider && deps.tokens && deps.cookies && deps.subjects);
 
 export function isExternalCalendarConfigured(deps: ExternalCalendarDeps): boolean {
   return isConfigured(deps);
@@ -287,17 +297,64 @@ export async function refreshConnectionNow(deps: ExternalCalendarDeps, session: 
   return summarize(conn);
 }
 
-/** Removes the connection and its cached busy time; revokes the grant at the provider (best effort). */
+// ---------------------------------------------------------------------------
+// Removing a connection — the ONE place that decides about revoking at Google
+// ---------------------------------------------------------------------------
+
+/**
+ * Google revokes the WHOLE grant of a Google account for our project when any
+ * of its tokens is revoked (all scopes, every token, every client of the
+ * project). So a token is revoked only when no other ServiceOS connection of
+ * the same Google account (same subject hash) remains — otherwise removing one
+ * business's connection would silently break the others. Connections made
+ * before migration 0026 have no subject hash: the grant cannot be attributed,
+ * so it is NOT revoked (ServiceOS deletes its copy of the token; the person can
+ * remove the access in their Google account).
+ */
+async function releaseGrant(deps: ExternalCalendarDeps, subjectHash: string | null, refreshToken: string | null): Promise<"revoked" | "kept_shared" | "kept_unknown" | "none"> {
+  if (!refreshToken || !deps.provider) return "none";
+  if (!subjectHash) return "kept_unknown";
+  const others = await deps.store.listConnectionsBySubject(subjectHash);
+  if (others.some((c) => c.status !== "revoked")) return "kept_shared";
+  await deps.provider.revoke(refreshToken); // never throws
+  return "revoked";
+}
+
+function decryptOrNull(deps: ExternalCalendarDeps, conn: ConnectionRow): string | null {
+  if (!conn.refreshTokenCiphertext || !deps.tokens) return null;
+  try {
+    return deps.tokens.decrypt(conn.refreshTokenCiphertext, tokenContext(conn.workspaceId, conn.staffId));
+  } catch {
+    return null;
+  }
+}
+
+/** Deletes one connection (token, calendar ids, cache, status) and releases the Google grant if nothing else uses it. */
+async function removeConnection(deps: ExternalCalendarDeps, conn: ConnectionRow) {
+  const removed = await deps.store.deleteConnection(conn.workspaceId, conn.staffId);
+  if (!removed) return null;
+  const grant = await releaseGrant(deps, removed.subjectHash, decryptOrNull(deps, removed));
+  return { removed, grant };
+}
+
+/** Business side: removes the connection and its cached busy time. */
 export async function disconnectExternalCalendar(deps: ExternalCalendarDeps, session: Session, staffId: string): Promise<void> {
   await assertMayManage(deps, session, staffId);
-  const removed = await deps.store.deleteConnection(session.workspaceId, staffId);
-  if (!removed) throw new ExternalCalendarError("not_found");
-  if (removed.refreshTokenCiphertext && deps.provider && deps.tokens) {
-    try {
-      await deps.provider.revoke(deps.tokens.decrypt(removed.refreshTokenCiphertext, tokenContext(removed.workspaceId, removed.staffId)));
-    } catch {
-      // Revocation is best effort; the token is already gone from ServiceOS.
-    }
+  const conn = await deps.store.getConnection(session.workspaceId, staffId);
+  if (!conn || !(await removeConnection(deps, conn))) throw new ExternalCalendarError("not_found");
+}
+
+/**
+ * Staff deactivated: the integration is removed right away (an inactive person
+ * is never bookable, the data has no purpose). Never fails the deactivation:
+ * the daily cleanup retries anything left behind.
+ */
+export async function removeConnectionForInactiveStaff(deps: ExternalCalendarDeps, workspaceId: string, staffId: string): Promise<boolean> {
+  try {
+    const conn = await deps.store.getConnection(workspaceId, staffId);
+    return conn ? Boolean(await removeConnection(deps, conn)) : false;
+  } catch {
+    return false;
   }
 }
 
@@ -321,11 +378,10 @@ export async function describeConnectLink(deps: ExternalCalendarDeps, token: str
   return { state: "valid", workspaceName: display.workspaceName, staffName: display.staffName, alreadyConnected: Boolean(existing) };
 }
 
-interface FlowCookie {
-  state: string;
-  verifier: string;
-  inviteId: string;
-}
+/** Sealed OAuth flow cookie (10 min, single use): CSRF state, PKCE verifier, OIDC nonce. */
+type FlowCookie =
+  | { kind: "connect"; state: string; verifier: string; nonce: string; inviteId: string }
+  | { kind: "manage"; state: string; verifier: string; nonce: string };
 
 interface SetupCookie {
   workspaceId: string;
@@ -333,7 +389,24 @@ interface SetupCookie {
   connectionId: string;
 }
 
-/** Step 1: validates the link and returns the consent URL plus the sealed state/PKCE cookie. */
+interface ManageCookie {
+  subjectHash: string;
+}
+
+function newFlow(deps: ConfiguredDeps, redirectUri: string, purpose: "connect" | "identify", extra: { inviteId?: string }) {
+  const state = randomToken();
+  const nonce = randomToken();
+  const { verifier, challenge } = createPkcePair();
+  const flow: FlowCookie =
+    purpose === "connect" ? { kind: "connect", state, verifier, nonce, inviteId: extra.inviteId! } : { kind: "manage", state, verifier, nonce };
+  return {
+    authorizationUrl: deps.provider.buildAuthorizationUrl({ state, codeChallenge: challenge, redirectUri, nonce, purpose }),
+    flowCookie: seal(deps.cookies, FLOW_COOKIE, flow, new Date(nowOf(deps).getTime() + OAUTH_FLOW_TTL_MS)),
+    maxAgeSeconds: OAUTH_FLOW_TTL_MS / 1000,
+  };
+}
+
+/** Step 1: validates the link and returns the consent URL plus the sealed state/PKCE/nonce cookie. */
 export async function startAuthorization(
   deps: ExternalCalendarDeps,
   token: string,
@@ -343,37 +416,70 @@ export async function startAuthorization(
   const link = await describeConnectLink(deps, token);
   if (link.state !== "valid") throw new ExternalCalendarError(link.state === "expired" || link.state === "used" ? "expired_link" : "invalid_link");
   const invite = (await deps.store.findInviteByHash(sha256Hex(token)))!;
-
-  const state = randomToken();
-  const { verifier, challenge } = createPkcePair();
-  const flow: FlowCookie = { state, verifier, inviteId: invite.id };
-  return {
-    authorizationUrl: deps.provider.buildAuthorizationUrl({ state, codeChallenge: challenge, redirectUri }),
-    flowCookie: seal(deps.cookies, FLOW_COOKIE, flow, new Date(nowOf(deps).getTime() + OAUTH_FLOW_TTL_MS)),
-    maxAgeSeconds: OAUTH_FLOW_TTL_MS / 1000,
-  };
+  return newFlow(deps, redirectUri, "connect", { inviteId: invite.id });
 }
 
+/** Manage page: "Sign in with Google" (openid only) to prove which Google account is yours. */
+export async function startIdentification(
+  deps: ExternalCalendarDeps,
+  redirectUri: string,
+): Promise<{ authorizationUrl: string; flowCookie: string; maxAgeSeconds: number }> {
+  if (!isConfigured(deps)) throw new ExternalCalendarError("not_configured");
+  return newFlow(deps, redirectUri, "identify", {});
+}
+
+export type CallbackOutcome =
+  | { kind: "connect"; setupCookie: string; maxAgeSeconds: number }
+  | { kind: "manage"; manageCookie: string; maxAgeSeconds: number };
+
 /**
- * Step 2 (OAuth callback): state check (CSRF), code exchange with the PKCE
- * verifier, single-use consumption of the link, encrypted storage of the
- * refresh token. The primary calendar is selected by default so busy time
- * counts immediately; the person can change the selection next.
+ * The OAuth callback (one redirect URI for both flows): state check (CSRF,
+ * timing-safe), then the flow recorded in the sealed cookie decides what the
+ * code is exchanged for. The ID token of either flow is verified (signature,
+ * iss, aud, exp, nonce) inside the provider.
  */
+export async function completeOAuthCallback(
+  deps: ExternalCalendarDeps,
+  params: { flowCookie: string | undefined; state: string | null; code: string | null; error: string | null; redirectUri: string },
+): Promise<CallbackOutcome> {
+  if (!isConfigured(deps)) throw new ExternalCalendarError("not_configured");
+  const flow = unseal<FlowCookie>(deps.cookies, FLOW_COOKIE, params.flowCookie, nowOf(deps));
+  if (!flow || !params.state || !safeEqual(flow.state, params.state)) throw new ExternalCalendarError("state_mismatch");
+  if (params.error) throw new ExternalCalendarError("denied");
+  if (!params.code || params.code.length > 2048) throw new ExternalCalendarError("invalid_input");
+  if (flow.kind === "manage") return completeIdentification(deps, flow, params.code, params.redirectUri);
+  if (flow.kind !== "connect") throw new ExternalCalendarError("state_mismatch");
+  return { kind: "connect", ...(await completeConnect(deps, flow, params.code, params.redirectUri)) };
+}
+
+/** Kept for callers/tests of the connect flow. */
 export async function completeAuthorization(
   deps: ExternalCalendarDeps,
   params: { flowCookie: string | undefined; state: string | null; code: string | null; error: string | null; redirectUri: string },
 ): Promise<{ setupCookie: string; maxAgeSeconds: number }> {
-  if (!isConfigured(deps)) throw new ExternalCalendarError("not_configured");
-  const now = nowOf(deps);
-  const flow = unseal<FlowCookie>(deps.cookies, FLOW_COOKIE, params.flowCookie, now);
-  if (!flow || !params.state || !safeEqual(flow.state, params.state)) throw new ExternalCalendarError("state_mismatch");
-  if (params.error) throw new ExternalCalendarError("denied");
-  if (!params.code || params.code.length > 2048) throw new ExternalCalendarError("invalid_input");
+  const outcome = await completeOAuthCallback(deps, params);
+  if (outcome.kind !== "connect") throw new ExternalCalendarError("state_mismatch");
+  return outcome;
+}
 
+/**
+ * Connect flow: code exchange (PKCE + nonce), all scopes required, verified
+ * Google account id -> HMAC, single-use consumption of the link, encrypted
+ * storage of the refresh token. The primary calendar is selected by default.
+ */
+async function completeConnect(
+  deps: ConfiguredDeps,
+  flow: Extract<FlowCookie, { kind: "connect" }>,
+  code: string,
+  redirectUri: string,
+): Promise<{ setupCookie: string; maxAgeSeconds: number }> {
+  const now = nowOf(deps);
   let refreshToken: string;
+  let subjectHash: string;
   try {
-    ({ refreshToken } = await deps.provider.exchangeCode({ code: params.code, codeVerifier: flow.verifier, redirectUri: params.redirectUri }));
+    const result = await deps.provider.exchangeCode({ code, codeVerifier: flow.verifier, redirectUri, nonce: flow.nonce });
+    refreshToken = result.refreshToken;
+    subjectHash = deps.subjects(result.subject);
   } catch (error) {
     if (error instanceof CalendarProviderError && error.code === "insufficient_scope") throw new ExternalCalendarError("insufficient_scope");
     throw new ExternalCalendarError("provider_error");
@@ -384,13 +490,13 @@ export async function completeAuthorization(
     const calendars = await deps.provider.listCalendars(await deps.provider.getAccessToken(refreshToken));
     primaryId = calendars.find((c) => c.primary)?.id ?? null;
   } catch {
-    await deps.provider.revoke(refreshToken);
+    await releaseGrant(deps, subjectHash, refreshToken);
     throw new ExternalCalendarError("provider_error");
   }
 
   const consumed = await deps.store.consumeInvite(flow.inviteId);
   if (!consumed) {
-    await deps.provider.revoke(refreshToken);
+    await releaseGrant(deps, subjectHash, refreshToken);
     throw new ExternalCalendarError("expired_link");
   }
 
@@ -402,20 +508,38 @@ export async function completeAuthorization(
     refreshTokenCiphertext: deps.tokens.encrypt(refreshToken, tokenContext(consumed.workspaceId, consumed.staffId)),
     calendarIds: primaryId ? [primaryId] : [],
     createdBy: null,
+    subjectHash,
   });
-  if (previous?.refreshTokenCiphertext) {
-    try {
-      const old = deps.tokens.decrypt(previous.refreshTokenCiphertext, tokenContext(previous.workspaceId, previous.staffId));
-      if (old !== refreshToken) await deps.provider.revoke(old);
-    } catch {
-      // best effort
-    }
+  // Reconnect with a DIFFERENT Google account: the old account's grant goes only if nothing else uses it.
+  // Same account: it is the same grant at Google — revoking the old token would kill the new one.
+  if (previous && previous.subjectHash !== subjectHash) {
+    await releaseGrant(deps, previous.subjectHash, decryptOrNull(deps, previous));
   }
   // Fill the cache right away (best effort; the next booking request would do it too).
   await loadExternalBusy(deps, { workspaceId: conn.workspaceId, staffIds: [conn.staffId], mode: "commit", from: now, until: new Date(now.getTime() + 60_000) }).catch(() => undefined);
 
   const setup: SetupCookie = { workspaceId: conn.workspaceId, staffId: conn.staffId, connectionId: conn.id };
   return { setupCookie: seal(deps.cookies, SETUP_COOKIE, setup, new Date(now.getTime() + SETUP_SESSION_TTL_MS)), maxAgeSeconds: SETUP_SESSION_TTL_MS / 1000 };
+}
+
+async function completeIdentification(
+  deps: ConfiguredDeps,
+  flow: Extract<FlowCookie, { kind: "manage" }>,
+  code: string,
+  redirectUri: string,
+): Promise<CallbackOutcome> {
+  let subject: string;
+  try {
+    ({ subject } = await deps.provider.exchangeIdentity({ code, codeVerifier: flow.verifier, redirectUri, nonce: flow.nonce }));
+  } catch {
+    throw new ExternalCalendarError("provider_error");
+  }
+  const manage: ManageCookie = { subjectHash: deps.subjects(subject) };
+  return {
+    kind: "manage",
+    manageCookie: seal(deps.cookies, MANAGE_COOKIE, manage, new Date(nowOf(deps).getTime() + MANAGE_SESSION_TTL_MS)),
+    maxAgeSeconds: MANAGE_SESSION_TTL_MS / 1000,
+  };
 }
 
 async function setupContext(deps: ExternalCalendarDeps, setupCookie: string | undefined) {
@@ -470,23 +594,138 @@ export async function saveCalendarChoices(deps: ExternalCalendarDeps, setupCooki
   await loadExternalBusy(deps, { workspaceId: conn.workspaceId, staffIds: [conn.staffId], mode: "commit", from: now, until: new Date(now.getTime() + 60_000) }).catch(() => undefined);
 }
 
-/**
- * The connecting person disconnects from the calendar picker (sealed setup
- * cookie, 30 min) — staff without a ServiceOS login can stop the integration
- * themselves. Same effect as the business-side disconnect.
- */
+/** The connecting person disconnects from the calendar picker (sealed setup cookie, 30 min). */
 export async function disconnectFromSetup(deps: ExternalCalendarDeps, setupCookie: string | undefined): Promise<void> {
   if (!isConfigured(deps)) throw new ExternalCalendarError("not_configured");
   const setup = unseal<SetupCookie>(deps.cookies, SETUP_COOKIE, setupCookie, nowOf(deps));
   if (!setup) throw new ExternalCalendarError("expired_link");
   const conn = await deps.store.getConnection(setup.workspaceId, setup.staffId);
   if (!conn || conn.id !== setup.connectionId) throw new ExternalCalendarError("expired_link");
-  const removed = await deps.store.deleteConnection(setup.workspaceId, setup.staffId);
-  if (removed?.refreshTokenCiphertext) {
-    try {
-      await deps.provider.revoke(deps.tokens.decrypt(removed.refreshTokenCiphertext, tokenContext(removed.workspaceId, removed.staffId)));
-    } catch {
-      // best effort
-    }
+  await removeConnection(deps, conn);
+}
+
+// ---------------------------------------------------------------------------
+// Manage page: every connection of the signed-in Google account, any time
+// ---------------------------------------------------------------------------
+
+export interface ManagedConnection {
+  connectionId: string;
+  workspaceName: string;
+  staffName: string;
+  status: ExternalCalendarConnectionSummary["status"];
+  connectedAt: string;
+}
+
+function manageSession(deps: ExternalCalendarDeps, manageCookie: string | undefined): ManageCookie {
+  if (!isConfigured(deps)) throw new ExternalCalendarError("not_configured");
+  const session = unseal<ManageCookie>(deps.cookies, MANAGE_COOKIE, manageCookie, nowOf(deps));
+  if (!session || !/^[0-9a-f]{64}$/.test(session.subjectHash)) throw new ExternalCalendarError("expired_link");
+  return session;
+}
+
+/** Connections of the Google account proven by the manage session — across businesses, names only. */
+export async function listManagedConnections(deps: ExternalCalendarDeps, manageCookie: string | undefined): Promise<ManagedConnection[]> {
+  const { subjectHash } = manageSession(deps, manageCookie);
+  const rows = await deps.store.listConnectionsBySubject(subjectHash);
+  const out: ManagedConnection[] = [];
+  for (const row of rows) {
+    const display = await deps.store.getStaffDisplay(row.workspaceId, row.staffId);
+    out.push({
+      connectionId: row.id,
+      workspaceName: display?.workspaceName ?? "",
+      staffName: display?.staffName ?? "",
+      status: row.status,
+      connectedAt: row.createdAt.toISOString(),
+    });
   }
+  return out.sort((a, b) => a.workspaceName.localeCompare(b.workspaceName));
+}
+
+/**
+ * Disconnects ONE connection of the signed-in account (it must carry the same
+ * subject hash — another person's connection id is "not found"). The Google
+ * grant is revoked only when it was the account's last ServiceOS connection.
+ */
+export async function disconnectManagedConnection(
+  deps: ExternalCalendarDeps,
+  manageCookie: string | undefined,
+  connectionId: string,
+): Promise<"revoked" | "kept_shared" | "kept_unknown" | "none"> {
+  const { subjectHash } = manageSession(deps, manageCookie);
+  const conn = (await deps.store.listConnectionsBySubject(subjectHash)).find((c) => c.id === connectionId);
+  if (!conn) throw new ExternalCalendarError("not_found");
+  const result = await removeConnection(deps, conn);
+  if (!result) throw new ExternalCalendarError("not_found");
+  return result.grant;
+}
+
+/** Disconnects every connection of the signed-in account and then revokes the Google grant once. */
+export async function disconnectAllManagedConnections(deps: ExternalCalendarDeps, manageCookie: string | undefined): Promise<number> {
+  const { subjectHash } = manageSession(deps, manageCookie);
+  const rows = await deps.store.listConnectionsBySubject(subjectHash);
+  let token: string | null = null;
+  let removed = 0;
+  for (const row of rows) {
+    const gone = await deps.store.deleteConnection(row.workspaceId, row.staffId);
+    if (!gone) continue;
+    removed += 1;
+    token ??= decryptOrNull(deps, gone);
+  }
+  if (removed > 0) await releaseGrant(deps, subjectHash, token);
+  return removed;
+}
+
+// ---------------------------------------------------------------------------
+// Retention cleanup (docs/DATA_RETENTION.md) — daily Vercel Cron
+// ---------------------------------------------------------------------------
+
+export const RETENTION = {
+  /** A busy cache not refreshed for this long is cleared (it is never used after 15 min anyway). */
+  staleCacheMs: 24 * 60 * 60_000,
+  /** Used connect links are deleted this long after use. */
+  usedInviteMs: 30 * 24 * 60 * 60_000,
+  /** Unused connect links are deleted this long after they expired. */
+  expiredInviteMs: 30 * 24 * 60 * 60_000,
+} as const;
+
+export interface CleanupReport {
+  staleCachesCleared: number;
+  usedInvitesDeleted: number;
+  expiredInvitesDeleted: number;
+  inactiveStaffConnectionsRemoved: number;
+  /** Step names that failed (no data, no messages). */
+  failedSteps: string[];
+}
+
+/**
+ * Idempotent: running it twice deletes nothing more the second time. Every
+ * step is independent; a failing step is reported by name and the others run.
+ * "Access withdrawn" statuses are NEVER removed here (they keep the person
+ * blocked until a human decides) — see docs/DATA_RETENTION.md.
+ */
+export async function runExternalCalendarCleanup(deps: ExternalCalendarDeps): Promise<CleanupReport> {
+  const now = nowOf(deps).getTime();
+  const report: CleanupReport = { staleCachesCleared: 0, usedInvitesDeleted: 0, expiredInvitesDeleted: 0, inactiveStaffConnectionsRemoved: 0, failedSteps: [] };
+  const step = async (name: string, fn: () => Promise<void>) => {
+    try {
+      await fn();
+    } catch {
+      report.failedSteps.push(name);
+    }
+  };
+  await step("stale_cache", async () => {
+    report.staleCachesCleared = await deps.store.clearStaleBusyCaches(new Date(now - RETENTION.staleCacheMs));
+  });
+  await step("used_invites", async () => {
+    report.usedInvitesDeleted = await deps.store.deleteUsedInvites(new Date(now - RETENTION.usedInviteMs));
+  });
+  await step("expired_invites", async () => {
+    report.expiredInvitesDeleted = await deps.store.deleteExpiredUnusedInvites(new Date(now - RETENTION.expiredInviteMs));
+  });
+  await step("inactive_staff", async () => {
+    for (const conn of await deps.store.listConnectionsOfInactiveStaff()) {
+      if (await removeConnection(deps, conn)) report.inactiveStaffConnectionsRemoved += 1;
+    }
+  });
+  return report;
 }

@@ -6,7 +6,7 @@ import { createMigratedDb } from "@/server/db/__tests__/pg";
 import { createPgliteSupabaseClient } from "@/server/db/__tests__/supabasePglite";
 import { D, makeWorld, PINNED_NOW, type Biz, type World } from "@/server/booking/__tests__/schedulingHarness";
 import { MockCalendarProvider } from "../mockProvider";
-import { createSecretBox, sha256Hex, tokenContext } from "../crypto";
+import { createSecretBox, createSubjectHasher, sha256Hex, tokenContext } from "../crypto";
 import { createSupabaseExternalCalendarStore } from "../store";
 import type { ExternalBusyLoader } from "../engineInput";
 import type { ExternalCalendarDeps } from "../service";
@@ -17,7 +17,7 @@ let loader: ExternalBusyLoader | undefined;
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://supabase.test.invalid";
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon";
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => current }));
-vi.mock("@/server/externalCalendar/deps", () => ({ getExternalBusyLoader: () => loader }));
+vi.mock("@/server/externalCalendar/deps", () => ({ getExternalBusyLoader: () => loader, getExternalCalendarDeps: () => deps }));
 
 const svc = await import("../service");
 const appointments = await import("@/server/services/appointments.service");
@@ -56,6 +56,7 @@ beforeEach(() => {
     provider: google,
     tokens: createSecretBox(key, "tokens"),
     cookies: createSecretBox(key, "cookies"),
+    subjects: createSubjectHasher(key),
   };
   loader = (args) => svc.loadExternalBusy(deps, args);
 });
@@ -389,5 +390,210 @@ describe("business calendar: the same rule on create / move / edit", () => {
     google.accounts.get("biz1")!.failWith = "unavailable";
     later(20);
     await expect(appointments.createAppointment(session, input("12:00"))).rejects.toMatchObject({ code: "external_calendar_unconfirmed" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Option A: self-service manage page (verified Google account) + shared grants
+// ---------------------------------------------------------------------------
+
+/** Signs in on /connect-calendar/manage as the Google account with this `sub`. */
+async function signInManage(subject: string) {
+  const start = await svc.startIdentification(deps, REDIRECT);
+  const url = new URL(start.authorizationUrl);
+  expect(url.searchParams.get("purpose")).toBe("identify");
+  const code = `id-${subject}-${Math.random()}`;
+  google.identityCodes.set(code, subject);
+  const out = await svc.completeOAuthCallback(deps, { flowCookie: start.flowCookie, state: url.searchParams.get("state"), code, error: null, redirectUri: REDIRECT });
+  if (out.kind !== "manage") throw new Error("expected manage outcome");
+  return out.manageCookie;
+}
+
+/** Same Google account (one `sub`) connected for staff in two different businesses. */
+async function twoBusinessesOneAccount(sub: string) {
+  const a = await salon();
+  const b2 = await salon();
+  google.subjects.set(`${sub}-a`, sub);
+  google.subjects.set(`${sub}-b`, sub);
+  await connect(a.b, a.masters[0], `${sub}-a`, [{ start: berlin(D.mon, "14:00"), end: berlin(D.mon, "15:00") }]);
+  await connect(b2.b, b2.masters[0], `${sub}-b`, [{ start: berlin(D.mon, "10:00"), end: berlin(D.mon, "11:00") }]);
+  return { a, b2 };
+}
+
+describe("manage page: sign in with Google and disconnect any time", () => {
+  it("lists the account's connections in every business; disconnecting one keeps the Google grant for the other", async () => {
+    const { a, b2 } = await twoBusinessesOneAccount("sub-anna");
+    const cookie = await signInManage("sub-anna");
+    const list = await svc.listManagedConnections(deps, cookie);
+    expect(list).toHaveLength(2);
+    expect(JSON.stringify(list)).not.toMatch(/sub-anna|@primary|v1\./); // no ids of Google, no tokens
+
+    const inA = list.find((c) => c.staffName === "M1" && c.workspaceName.startsWith("salon"))!;
+    const first = (await w.q<{ id: string }>("select id from external_calendar_connections where staff_id=$1", [a.masters[0]]))[0].id;
+    expect(await svc.disconnectManagedConnection(deps, cookie, first)).toBe("kept_shared");
+    expect(google.revoked).toEqual([]); // revoking would have cut business B as well
+    expect(await w.q("select 1 from external_calendar_connections where staff_id=$1", [a.masters[0]])).toHaveLength(0);
+    // Business A: back to the normal working schedule. Business B: still checked against Google.
+    expect(await times(a.b, a.cut, a.masters[0], D.mon)).toContain("14:00");
+    later(6);
+    expect(await times(b2.b, b2.cut, b2.masters[0], D.mon)).not.toContain("10:00");
+    expect(await times(b2.b, b2.cut, b2.masters[0], D.mon)).toContain("12:00");
+
+    const second = (await svc.listManagedConnections(deps, cookie))[0];
+    expect(await svc.disconnectManagedConnection(deps, cookie, second.connectionId)).toBe("revoked");
+    expect(google.revoked).toEqual(["sub-anna-b"]);
+    expect(inA).toBeDefined();
+  });
+
+  it("'disconnect all' removes every connection of the account and revokes once", async () => {
+    await twoBusinessesOneAccount("sub-ben");
+    const cookie = await signInManage("sub-ben");
+    expect(await svc.disconnectAllManagedConnections(deps, cookie)).toBe(2);
+    expect(await svc.listManagedConnections(deps, cookie)).toEqual([]);
+    expect(google.revoked).toHaveLength(1);
+  });
+
+  it("isolation: another Google account sees nothing and cannot disconnect someone else's connection by id", async () => {
+    const { a } = await twoBusinessesOneAccount("sub-carla");
+    const victimId = (await w.q<{ id: string }>("select id from external_calendar_connections where staff_id=$1", [a.masters[0]]))[0].id;
+    const intruder = await signInManage("sub-mallory");
+    expect(await svc.listManagedConnections(deps, intruder)).toEqual([]);
+    await expect(svc.disconnectManagedConnection(deps, intruder, victimId)).rejects.toMatchObject({ code: "not_found" });
+    expect(await w.q("select 1 from external_calendar_connections where id=$1", [victimId])).toHaveLength(1);
+  });
+
+  it("e-mail or calendar id never identify a person: the match is the HMAC of the verified Google sub only", async () => {
+    const { b, masters } = await salon();
+    google.subjects.set("dora", "sub-dora");
+    await connect(b, masters[0], "dora");
+    const [row] = await w.q<{ google_subject_hash: string; calendar_ids: string[] }>("select google_subject_hash, calendar_ids from external_calendar_connections where staff_id=$1", [masters[0]]);
+    expect(row.google_subject_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(row.google_subject_hash).not.toContain("sub-dora");
+    expect(row.google_subject_hash).toBe(deps.subjects!("sub-dora"));
+    // Signing in as an account whose calendar id would "look like" Dora's does not help.
+    expect(await svc.listManagedConnections(deps, await signInManage("dora@primary"))).toEqual([]);
+  });
+
+  it("manage session: forged, expired (15 min) and replayed sign-ins are refused", async () => {
+    await expect(svc.listManagedConnections(deps, "v1.forged.cookie.x")).rejects.toMatchObject({ code: "expired_link" });
+    const cookie = await signInManage("sub-eve");
+    later(16);
+    await expect(svc.listManagedConnections(deps, cookie)).rejects.toMatchObject({ code: "expired_link" });
+    // A sealed SETUP cookie is not a manage cookie (purpose-bound).
+    const start = await svc.startIdentification(deps, REDIRECT);
+    const url = new URL(start.authorizationUrl);
+    google.identityCodes.set("once", "sub-eve");
+    const params = { flowCookie: start.flowCookie, state: url.searchParams.get("state"), code: "once", error: null, redirectUri: REDIRECT };
+    await svc.completeOAuthCallback(deps, params);
+    await expect(svc.completeOAuthCallback(deps, params)).rejects.toMatchObject({ code: "provider_error" }); // code is single use
+    await expect(svc.completeOAuthCallback(deps, { ...params, state: "0".repeat(64) })).rejects.toMatchObject({ code: "state_mismatch" });
+  });
+
+  it("a wrong nonce (token minted for another sign-in) is refused", async () => {
+    const start = await svc.startIdentification(deps, REDIRECT);
+    const url = new URL(start.authorizationUrl);
+    await svc.startIdentification(deps, REDIRECT); // another flow: the provider now expects a different nonce
+    google.identityCodes.set("x1", "sub-frank");
+    await expect(
+      svc.completeOAuthCallback(deps, { flowCookie: start.flowCookie, state: url.searchParams.get("state"), code: "x1", error: null, redirectUri: REDIRECT }),
+    ).rejects.toMatchObject({ code: "provider_error" });
+  });
+});
+
+describe("shared Google grant: connect / reconnect / revoke / business disconnect", () => {
+  it("reconnecting the SAME Google account does not revoke (it would kill the new token); busy time still counts", async () => {
+    const { b, masters, cut } = await salon();
+    google.subjects.set("g-1", "sub-gina");
+    google.subjects.set("g-2", "sub-gina");
+    await connect(b, masters[0], "g-1", [{ start: berlin(D.mon, "14:00"), end: berlin(D.mon, "15:00") }]);
+    await connect(b, masters[0], "g-2", [{ start: berlin(D.mon, "14:00"), end: berlin(D.mon, "15:00") }]);
+    expect(google.revoked).toEqual([]);
+    later(6);
+    expect(await times(b, cut, masters[0], D.mon)).not.toContain("14:00");
+    expect(await times(b, cut, masters[0], D.mon)).toContain("10:00"); // confirmed, not blocked
+  });
+
+  it("business-side disconnect of a shared account leaves the other business working", async () => {
+    const { a, b2 } = await twoBusinessesOneAccount("sub-hans");
+    await svc.disconnectExternalCalendar(deps, ownerSession(a.b), a.masters[0]);
+    expect(google.revoked).toEqual([]);
+    later(6);
+    expect(await times(b2.b, b2.cut, b2.masters[0], D.mon)).toContain("12:00");
+  });
+
+  it("revoked in Google: every business with that account sees 'revoked' (minimal status), the person can clear it on the manage page", async () => {
+    const { a, b2 } = await twoBusinessesOneAccount("sub-ida");
+    await google.revoke("sub-ida-a"); // the person removes ServiceOS in their Google account
+    later(6);
+    expect(await times(a.b, a.cut, a.masters[0], D.mon)).toEqual([]); // blocked, never "free"
+    expect(await times(b2.b, b2.cut, b2.masters[0], D.mon)).toEqual([]);
+    const rows = await w.q<Record<string, unknown>>("select status, refresh_token_ciphertext, calendar_ids, busy_intervals, google_subject_hash from external_calendar_connections where staff_id in ($1,$2)", [a.masters[0], b2.masters[0]]);
+    for (const r of rows) {
+      expect(r).toMatchObject({ status: "revoked", refresh_token_ciphertext: null, calendar_ids: [], busy_intervals: [] });
+      expect(r.google_subject_hash).toMatch(/^[0-9a-f]{64}$/); // kept: lets the person resolve it themselves
+    }
+    const cookie = await signInManage("sub-ida");
+    expect((await svc.listManagedConnections(deps, cookie)).map((c) => c.status)).toEqual(["revoked", "revoked"]);
+    await svc.disconnectAllManagedConnections(deps, cookie);
+    expect(await times(a.b, a.cut, a.masters[0], D.mon)).toContain("10:00"); // normal schedule again
+  });
+});
+
+describe("retention cleanup (daily cron) and staff deactivation", () => {
+  it("clears stale caches (>24 h), old invites (>30 days), connections of inactive staff — never 'revoked' statuses; idempotent", async () => {
+    const { b, masters } = await salon();
+    google.subjects.set("cl-1", "sub-cl1");
+    await connect(b, masters[0], "cl-1", [{ start: berlin(D.mon, "14:00"), end: berlin(D.mon, "15:00") }]);
+    await connect(b, masters[1], "cl-2");
+    await connect(b, masters[2], "cl-3");
+    await google.revoke("cl-3");
+    later(6);
+    await times(b, (await w.service(b, "Probe", 30)), masters[2], D.mon); // detects the revocation
+    await w.q("update staff_profiles set active=false where id=$1", [masters[1]]);
+    await w.q("update external_calendar_connections set busy_fetched_at = now() - interval '25 hours' where staff_id=$1", [masters[0]]);
+    await w.q("insert into external_calendar_invites (workspace_id, staff_id, token_hash, expires_at, used_at) values ($1,$2,$3, now() - interval '40 days', now() - interval '31 days'), ($1,$2,$4, now() - interval '31 days', null), ($1,$2,$5, now() + interval '1 day', null)", [b.ws, masters[3], "1".repeat(64), "2".repeat(64), "3".repeat(64)]);
+
+    const report = await svc.runExternalCalendarCleanup(deps);
+    expect(report).toMatchObject({ staleCachesCleared: 1, usedInvitesDeleted: expect.any(Number), expiredInvitesDeleted: 1, inactiveStaffConnectionsRemoved: 1, failedSteps: [] });
+    expect(report.usedInvitesDeleted).toBeGreaterThanOrEqual(1);
+    expect(await w.q("select 1 from external_calendar_invites where token_hash=$1", ["3".repeat(64)])).toHaveLength(1); // still valid link kept
+    expect(await w.q("select 1 from external_calendar_connections where staff_id=$1", [masters[1]])).toHaveLength(0);
+    expect((await w.q<{ status: string }>("select status from external_calendar_connections where staff_id=$1", [masters[2]]))[0].status).toBe("revoked");
+    const [m1] = await w.q<{ busy_intervals: unknown[]; busy_fetched_at: unknown; refresh_token_ciphertext: string | null }>("select busy_intervals, busy_fetched_at, refresh_token_ciphertext from external_calendar_connections where staff_id=$1", [masters[0]]);
+    expect(m1).toMatchObject({ busy_intervals: [], busy_fetched_at: null });
+    expect(m1.refresh_token_ciphertext).not.toBeNull(); // the connection itself stays
+
+    const again = await svc.runExternalCalendarCleanup(deps);
+    expect(again).toEqual({ staleCachesCleared: 0, usedInvitesDeleted: 0, expiredInvitesDeleted: 0, inactiveStaffConnectionsRemoved: 0, failedSteps: [] });
+  });
+
+  it("a cleared cache never opens busy time: the next request asks Google again, and if Google is down the person is blocked", async () => {
+    const { b, masters, cut } = await salon();
+    await connect(b, masters[0], "cc-1", [{ start: berlin(D.mon, "14:00"), end: berlin(D.mon, "15:00") }]);
+    await w.q("update external_calendar_connections set busy_fetched_at = now() - interval '25 hours' where staff_id=$1", [masters[0]]);
+    await svc.runExternalCalendarCleanup(deps);
+    google.accounts.get("cc-1")!.failWith = "unavailable";
+    expect(await times(b, cut, masters[0], D.mon)).toEqual([]);
+    delete google.accounts.get("cc-1")!.failWith;
+    later(2); // back-off over
+    const t = await times(b, cut, masters[0], D.mon);
+    expect(t).not.toContain("14:00");
+    expect(t).toContain("10:00");
+  });
+
+  it("a failing step is reported by name, the others still run", async () => {
+    const broken = { ...deps, store: { ...deps.store, clearStaleBusyCaches: async () => { throw new Error("db down"); } } };
+    const report = await svc.runExternalCalendarCleanup(broken);
+    expect(report.failedSteps).toEqual(["stale_cache"]);
+  });
+
+  it("deactivating a staff member removes the Google connection immediately (business side)", async () => {
+    const { b, masters } = await salon();
+    await connect(b, masters[0], "deact-1");
+    current = createPgliteSupabaseClient(db, { kind: "user", id: b.owner });
+    const { setStaffActive } = await import("@/server/services/staffAdmin.service");
+    await setStaffActive(await getSession(b.slug), masters[0], false);
+    expect(await w.q("select 1 from external_calendar_connections where staff_id=$1", [masters[0]])).toHaveLength(0);
+    expect(google.revoked).toContain("deact-1");
   });
 });

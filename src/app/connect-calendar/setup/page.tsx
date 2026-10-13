@@ -97,6 +97,9 @@ export default async function CalendarSetupPage({ searchParams }: { searchParams
                 <Link href={`/datenschutz#${GOOGLE_CALENDAR_SECTION_ID}`} className={styles.link}>{m.privacyLink}</Link>
               </p>
             </section>
+            <p className={styles.hint}>
+              <Link href="/connect-calendar/manage" className={styles.link}>{m.manageLink}</Link>
+            </p>
             <form suppressHydrationWarning action={disconnectFromSetupAction} className={styles.form}>
               <Button type="submit" variant="secondary" fullWidth>{m.disconnectButton}</Button>
             </form>

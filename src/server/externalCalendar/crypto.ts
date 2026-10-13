@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, randomBytes, timingSafeEqual } from "node:crypto";
 
 /**
  * Server-only secrets for external calendars.
@@ -47,6 +47,16 @@ export interface SecretBox {
 
 function deriveKey(master: Buffer, purpose: string): Buffer {
   return Buffer.from(hkdfSync("sha256", master, Buffer.alloc(0), `serviceos:external-calendar:${purpose}`, 32));
+}
+
+/**
+ * Pseudonymous, stable key for a Google account: HMAC-SHA256 of the OIDC `sub` with a key derived
+ * from the master key. The raw `sub` is never stored. Changing the master key changes every hash
+ * (people then have to reconnect before the manage page finds them).
+ */
+export function createSubjectHasher(master: Buffer): (subject: string) => string {
+  const key = deriveKey(master, "google-subject");
+  return (subject) => createHmac("sha256", key).update(`google:${subject}`, "utf8").digest("hex");
 }
 
 export function createSecretBox(master: Buffer, purpose: "tokens" | "cookies"): SecretBox {

@@ -1,7 +1,8 @@
-import { randomBytes } from "node:crypto";
+import { generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { createPkcePair, createSecretBox, DecryptionError, parseMasterKey, seal, tokenContext, unseal } from "../crypto";
-import { GOOGLE_SCOPES, GoogleCalendarProvider } from "../googleProvider";
+import { GOOGLE_CALENDAR_SCOPES, GOOGLE_SCOPES, GoogleCalendarProvider } from "../googleProvider";
+import { GOOGLE_DISCOVERY_URL, createGoogleJwksSource, verifyGoogleIdToken } from "../idToken";
 import { CalendarProviderError } from "../provider";
 
 const key = randomBytes(32);
@@ -69,9 +70,72 @@ function fakeFetch(handler: (url: string, init?: RequestInit) => { status: numbe
 
 const config = { clientId: "client-id.apps.googleusercontent.com", clientSecret: "test-secret" };
 
+// ---- Signed ID tokens with a test key standing in for Google's ----
+const { publicKey: testPub, privateKey: testPriv } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const testJwk = { ...(testPub.export({ format: "jwk" }) as object), kid: "test-kid", alg: "RS256", use: "sig" };
+const jwks = async () => [testJwk as never];
+const NOW = new Date("2026-10-13T12:00:00Z");
+function idToken(claims: Record<string, unknown>, opts: { kid?: string; key?: typeof testPriv; alg?: string } = {}) {
+  const header = Buffer.from(JSON.stringify({ alg: opts.alg ?? "RS256", kid: opts.kid ?? "test-kid", typ: "JWT" })).toString("base64url");
+  const body = Buffer.from(JSON.stringify({
+    iss: "https://accounts.google.com", aud: config.clientId, sub: "1234567890", nonce: "n-1",
+    iat: Math.floor(NOW.getTime() / 1000) - 10, exp: Math.floor(NOW.getTime() / 1000) + 3600, ...claims,
+  })).toString("base64url");
+  const sig = sign("RSA-SHA256", Buffer.from(`${header}.${body}`), opts.key ?? testPriv).toString("base64url");
+  return `${header}.${body}.${sig}`;
+}
+const verifyAt = (token: string, nonce = "n-1") => verifyGoogleIdToken(token, { clientId: config.clientId, nonce, now: NOW, jwks });
+
+describe("Google ID token verification (OpenID Connect)", () => {
+  it("accepts a correctly signed token and returns only the stable account id", async () => {
+    await expect(verifyAt(idToken({ email: "x@example.com" }))).resolves.toEqual({ subject: "1234567890" });
+  });
+
+  it.each([
+    ["signature by another key", () => idToken({}, { key: generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey }), "signature"],
+    ["unknown key id", () => idToken({}, { kid: "other" }), "unknown_key"],
+    ["alg none / HS256", () => idToken({}, { alg: "HS256" }), "alg"],
+    ["wrong issuer", () => idToken({ iss: "https://evil.example" }), "iss"],
+    ["wrong audience (token for another app)", () => idToken({ aud: "other-client" }), "aud"],
+    ["wrong azp", () => idToken({ azp: "other-client" }), "azp"],
+    ["expired", () => idToken({ exp: Math.floor(NOW.getTime() / 1000) - 120 }), "exp"],
+    ["issued in the future", () => idToken({ iat: Math.floor(NOW.getTime() / 1000) + 600 }), "iat"],
+    ["wrong nonce (replay of another flow)", () => idToken({ nonce: "n-2" }), "nonce"],
+    ["missing nonce", () => idToken({ nonce: undefined }), "nonce"],
+    ["missing sub", () => idToken({ sub: undefined }), "sub"],
+  ])("rejects %s", async (_label, make, reason) => {
+    await expect(verifyAt(make())).rejects.toMatchObject({ name: "IdTokenError", reason });
+  });
+
+  it("rejects a tampered payload", async () => {
+    const [h, , sig] = idToken({}).split(".");
+    const forged = Buffer.from(JSON.stringify({ iss: "https://accounts.google.com", aud: config.clientId, sub: "attacker", nonce: "n-1", exp: 9e9 })).toString("base64url");
+    await expect(verifyAt(`${h}.${forged}.${sig}`)).rejects.toMatchObject({ reason: "signature" });
+  });
+
+  it("JWKS: read from Google's discovery document, cached, refreshed on demand", async () => {
+    const urls: string[] = [];
+    const src = createGoogleJwksSource(async (u) => {
+      urls.push(u);
+      if (u === GOOGLE_DISCOVERY_URL) return new Response(JSON.stringify({ jwks_uri: "https://www.googleapis.com/oauth2/v3/certs" }));
+      return new Response(JSON.stringify({ keys: [testJwk] }), { headers: { "cache-control": "public, max-age=3600" } });
+    });
+    await src();
+    await src();
+    expect(urls).toEqual([GOOGLE_DISCOVERY_URL, "https://www.googleapis.com/oauth2/v3/certs"]);
+    src.forceNext();
+    await src();
+    expect(urls).toHaveLength(4);
+    const evil = createGoogleJwksSource(async () => new Response(JSON.stringify({ jwks_uri: "https://evil.example/keys" })));
+    await expect(evil()).rejects.toMatchObject({ reason: "jwks_unavailable" });
+  });
+});
+
 describe("GoogleCalendarProvider", () => {
-  it("authorization URL: code flow, PKCE S256, offline access, consent, ONLY the two read-only scopes", () => {
-    const url = new URL(new GoogleCalendarProvider(config).buildAuthorizationUrl({ state: "st", codeChallenge: "ch", redirectUri: "https://app.test/cb" }));
+  const provider = (impl: Parameters<typeof fakeFetch>[0]) => new GoogleCalendarProvider(config, fakeFetch(impl).impl, jwks, () => NOW);
+
+  it("connect URL: code flow, PKCE S256, nonce, offline, consent; scopes = openid + the two read-only calendar scopes", () => {
+    const url = new URL(new GoogleCalendarProvider(config).buildAuthorizationUrl({ state: "st", codeChallenge: "ch", redirectUri: "https://app.test/cb", nonce: "n-1", purpose: "connect" }));
     expect(url.origin + url.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
     const p = url.searchParams;
     expect(p.get("response_type")).toBe("code");
@@ -79,30 +143,45 @@ describe("GoogleCalendarProvider", () => {
     expect(p.get("access_type")).toBe("offline");
     expect(p.get("prompt")).toBe("consent");
     expect(p.get("state")).toBe("st");
+    expect(p.get("nonce")).toBe("n-1");
     expect(p.get("redirect_uri")).toBe("https://app.test/cb");
     expect(p.get("scope")!.split(" ").sort()).toEqual([...GOOGLE_SCOPES].sort());
-    expect(p.get("scope")).not.toMatch(/openid|email|profile|calendar\.events|auth\/calendar(\s|$)/);
+    expect(p.get("scope")).not.toMatch(/email|profile|calendar\.events|auth\/calendar(\s|$)/);
     expect(url.toString()).not.toContain("test-secret");
   });
 
-  it("code exchange: refuses a grant without the required scopes and revokes it", async () => {
-    const { impl, calls } = fakeFetch((url) =>
-      url.includes("/token")
-        ? { status: 200, body: { access_token: "a", refresh_token: "r", scope: GOOGLE_SCOPES[1] } }
-        : { status: 200, body: {} },
-    );
-    const p = new GoogleCalendarProvider(config, impl);
-    await expect(p.exchangeCode({ code: "c", codeVerifier: "v", redirectUri: "https://app.test/cb" })).rejects.toMatchObject({ code: "insufficient_scope" });
-    expect(calls.some((c) => c.url.includes("/revoke"))).toBe(true);
-    // The verifier and the secret go in the POST body, never in a URL.
-    const body = String(calls[0].init?.body);
-    expect(body).toContain("code_verifier=v");
-    expect(calls[0].url).not.toContain("secret");
+  it("identify URL (manage page): openid ONLY, online access (no refresh token), account chooser", () => {
+    const p = new URL(new GoogleCalendarProvider(config).buildAuthorizationUrl({ state: "st", codeChallenge: "ch", redirectUri: "x", nonce: "n", purpose: "identify" })).searchParams;
+    expect(p.get("scope")).toBe("openid");
+    expect(p.get("access_type")).toBe("online");
+    expect(p.get("prompt")).toBe("select_account");
   });
 
-  it("code exchange: returns the refresh token when both scopes were granted", async () => {
-    const { impl } = fakeFetch(() => ({ status: 200, body: { access_token: "a", refresh_token: "r-1", scope: GOOGLE_SCOPES.join(" ") } }));
-    await expect(new GoogleCalendarProvider(config, impl).exchangeCode({ code: "c", codeVerifier: "v", redirectUri: "x" })).resolves.toEqual({ refreshToken: "r-1" });
+  it("code exchange: refuses a grant without the calendar scopes and does NOT revoke (that would cut other connections)", async () => {
+    const calls: string[] = [];
+    const p = provider((url) => {
+      calls.push(url);
+      return { status: 200, body: { access_token: "a", refresh_token: "r", id_token: idToken({}), scope: "openid " + GOOGLE_CALENDAR_SCOPES[1] } };
+    });
+    await expect(p.exchangeCode({ code: "c", codeVerifier: "v", redirectUri: "https://app.test/cb", nonce: "n-1" })).rejects.toMatchObject({ code: "insufficient_scope" });
+    expect(calls.some((c) => c.includes("/revoke"))).toBe(false);
+  });
+
+  it("code exchange: returns refresh token + VERIFIED subject; a bad ID token fails the whole connect", async () => {
+    const ok = provider(() => ({ status: 200, body: { access_token: "a", refresh_token: "r-1", id_token: idToken({}), scope: GOOGLE_SCOPES.join(" ") } }));
+    await expect(ok.exchangeCode({ code: "c", codeVerifier: "v", redirectUri: "x", nonce: "n-1" })).resolves.toEqual({ refreshToken: "r-1", subject: "1234567890" });
+    await expect(ok.exchangeCode({ code: "c", codeVerifier: "v", redirectUri: "x", nonce: "other" })).rejects.toMatchObject({ code: "identity_invalid" });
+    const noId = provider(() => ({ status: 200, body: { access_token: "a", refresh_token: "r-1", scope: GOOGLE_SCOPES.join(" ") } }));
+    await expect(noId.exchangeCode({ code: "c", codeVerifier: "v", redirectUri: "x", nonce: "n-1" })).rejects.toMatchObject({ code: "identity_invalid" });
+  });
+
+  it("identify exchange: subject only, verifier sent in the POST body", async () => {
+    const f = fakeFetch(() => ({ status: 200, body: { access_token: "a", id_token: idToken({}), scope: "openid" } }));
+    const p = new GoogleCalendarProvider(config, f.impl, jwks, () => NOW);
+    await expect(p.exchangeIdentity({ code: "c", codeVerifier: "v", redirectUri: "x", nonce: "n-1" })).resolves.toEqual({ subject: "1234567890" });
+    expect(String(f.calls[0].init?.body)).toContain("code_verifier=v");
+    expect(f.calls[0].url).not.toContain("secret");
+    expect(f.calls.some((c) => c.url.includes("/revoke"))).toBe(false);
   });
 
   it("refresh: invalid_grant means revoked; invalid_client means misconfigured; 5xx/network means unavailable", async () => {

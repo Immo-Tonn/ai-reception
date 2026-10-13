@@ -36,12 +36,23 @@ describe("external calendar wiring", () => {
     expect(s).toMatch(/mode: "commit"/);
   });
 
-  it("no scope that could write to Google is ever requested", () => {
-    const g = read("src/server/externalCalendar/googleProvider.ts");
-    const scopes = g.slice(g.indexOf("GOOGLE_SCOPES = ["), g.indexOf("] as const"));
-    expect(scopes).toMatch(/calendar\.freebusy/);
-    expect(scopes).toMatch(/calendar\.calendarlist\.readonly/);
-    expect(scopes).not.toMatch(/calendar\.events|auth\/calendar"|calendar\.app\.created|openid|email|profile/);
+  it("only read-only calendar scopes + openid are ever requested (nothing that writes, no email/profile)", async () => {
+    const { GOOGLE_SCOPES, GOOGLE_IDENTIFY_SCOPES } = await import("../googleProvider");
+    expect([...GOOGLE_SCOPES].sort()).toEqual([
+      "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+      "https://www.googleapis.com/auth/calendar.freebusy",
+      "openid",
+    ]);
+    expect([...GOOGLE_IDENTIFY_SCOPES]).toEqual(["openid"]);
+  });
+
+  it("the only code paths that revoke at Google go through releaseGrant (shared-grant check)", () => {
+    const service = read("src/server/externalCalendar/service.ts");
+    expect(service.match(/provider\.revoke\(/g)).toHaveLength(1);
+    expect(service).toMatch(/async function releaseGrant[\s\S]*?listConnectionsBySubject[\s\S]*?provider\.revoke\(/);
+    for (const f of ["src/app/connect-calendar/actions.ts", "src/server/actions/externalCalendar.actions.ts", "src/server/services/staffAdmin.service.ts"]) {
+      expect(read(f)).not.toMatch(/\.revoke\(/);
+    }
   });
 
   it("Google secrets are server-only env names (never NEXT_PUBLIC_) and only read in deps.ts", () => {

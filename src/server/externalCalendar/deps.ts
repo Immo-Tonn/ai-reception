@@ -2,7 +2,7 @@ import "server-only";
 import { createSupabaseAdminClient, SupabaseAdminNotConfiguredError } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getPublicBaseUrl } from "@/lib/config/publicBaseUrl";
-import { createSecretBox, parseMasterKey } from "./crypto";
+import { createSecretBox, createSubjectHasher, parseMasterKey } from "./crypto";
 import { GoogleCalendarProvider } from "./googleProvider";
 import { createSupabaseExternalCalendarStore } from "./store";
 import { loadExternalBusy, type ExternalCalendarDeps } from "./service";
@@ -29,6 +29,7 @@ export function getExternalCalendarDeps(): ExternalCalendarDeps {
     provider: clientId && clientSecret ? new GoogleCalendarProvider({ clientId, clientSecret }) : null,
     tokens: key ? createSecretBox(key, "tokens") : null,
     cookies: key ? createSecretBox(key, "cookies") : null,
+    subjects: key ? createSubjectHasher(key) : null,
   };
 }
 

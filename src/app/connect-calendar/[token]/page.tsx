@@ -96,6 +96,9 @@ export default async function ConnectCalendarPage({
               <p className={styles.hint}>{m.purpose}</p>
               <p className={styles.hint}>{m.disconnectInfo}</p>
               <p className={styles.hint}>
+                <Link href="/connect-calendar/manage" className={styles.link}>{m.manageLink}</Link>
+              </p>
+              <p className={styles.hint}>
                 <Link href={`/datenschutz#${GOOGLE_CALENDAR_SECTION_ID}`} className={styles.link}>{m.privacyLink}</Link>
               </p>
             </section>

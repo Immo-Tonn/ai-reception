@@ -31,6 +31,8 @@ export interface ConnectionRow {
   lastErrorCode: ExternalCalendarErrorCode | null;
   lastErrorAt: Date | null;
   createdAt: Date;
+  /** HMAC of the verified Google account id (migration 0026); null for connections made before it. */
+  subjectHash: string | null;
 }
 
 export interface InviteRow {
@@ -52,6 +54,7 @@ export interface ExternalCalendarStore {
     refreshTokenCiphertext: string;
     calendarIds: string[];
     createdBy: string | null;
+    subjectHash: string;
   }): Promise<ConnectionRow>;
   /** New calendar selection; the cache is invalidated (it described other calendars). */
   setCalendars(workspaceId: string, connectionId: string, calendarIds: string[]): Promise<void>;
@@ -69,6 +72,16 @@ export interface ExternalCalendarStore {
   getStaffDisplay(workspaceId: string, staffId: string): Promise<{ staffName: string; workspaceName: string; active: boolean } | null>;
   /** The staff profile linked to a signed-in user in this workspace (owner's own profile, future staff accounts). */
   getLinkedStaffId(workspaceId: string, profileId: string): Promise<string | null>;
+
+  /** Every connection of one Google account, across ALL workspaces (manage page, shared-grant check). */
+  listConnectionsBySubject(subjectHash: string): Promise<ConnectionRow[]>;
+
+  // Retention / cleanup (docs/DATA_RETENTION.md). Each returns how many rows it touched.
+  clearStaleBusyCaches(fetchedBefore: Date): Promise<number>;
+  deleteUsedInvites(usedBefore: Date): Promise<number>;
+  deleteExpiredUnusedInvites(expiredBefore: Date): Promise<number>;
+  /** Connections whose staff profile is deactivated (any workspace). */
+  listConnectionsOfInactiveStaff(): Promise<ConnectionRow[]>;
 }
 
 export class ExternalCalendarStoreError extends Error {
@@ -79,7 +92,7 @@ export class ExternalCalendarStoreError extends Error {
 }
 
 const COLUMNS =
-  "id, workspace_id, staff_id, provider, status, refresh_token_ciphertext, calendar_ids, busy_intervals, busy_window_from, busy_window_until, busy_fetched_at, last_success_at, last_error_code, last_error_at, created_at";
+  "id, workspace_id, staff_id, provider, status, refresh_token_ciphertext, calendar_ids, busy_intervals, busy_window_from, busy_window_until, busy_fetched_at, last_success_at, last_error_code, last_error_at, created_at, google_subject_hash";
 
 type Raw = Record<string, unknown>;
 const date = (v: unknown) => (typeof v === "string" && v ? new Date(v) : v instanceof Date ? v : null);
@@ -101,6 +114,7 @@ function toConnection(r: Raw): ConnectionRow {
     lastErrorCode: (r.last_error_code as ExternalCalendarErrorCode | null) ?? null,
     lastErrorAt: date(r.last_error_at),
     createdAt: date(r.created_at) ?? new Date(0),
+    subjectHash: (r.google_subject_hash as string | null) ?? null,
   };
 }
 
@@ -150,6 +164,7 @@ export function createSupabaseExternalCalendarStore(admin: SupabaseClient): Exte
         last_error_code: null,
         last_error_at: null,
         created_by: input.createdBy,
+        google_subject_hash: input.subjectHash,
         ...CACHE_RESET,
       };
       const existing = await getConnection(input.workspaceId, input.staffId);
@@ -261,6 +276,41 @@ export function createSupabaseExternalCalendarStore(admin: SupabaseClient): Exte
       const ws = check(await admin.from("workspaces").select("name").eq("id", workspaceId).maybeSingle()) as Raw | null;
       if (!ws) return null;
       return { staffName: staff.name as string, workspaceName: ws.name as string, active: staff.active !== false };
+    },
+
+    async listConnectionsBySubject(subjectHash) {
+      if (!/^[0-9a-f]{64}$/.test(subjectHash)) return [];
+      const rows = check(await connections().select(COLUMNS).eq("google_subject_hash", subjectHash)) as Raw[] | null;
+      return (rows ?? []).map(toConnection);
+    },
+
+    async clearStaleBusyCaches(fetchedBefore) {
+      const rows = check(
+        await connections().update(CACHE_RESET).lt("busy_fetched_at", fetchedBefore.toISOString()).select("id"),
+      ) as Raw[] | null;
+      return rows?.length ?? 0;
+    },
+
+    async deleteUsedInvites(usedBefore) {
+      const rows = check(
+        await admin.from("external_calendar_invites").delete().lt("used_at", usedBefore.toISOString()).select("id"),
+      ) as Raw[] | null;
+      return rows?.length ?? 0;
+    },
+
+    async deleteExpiredUnusedInvites(expiredBefore) {
+      const rows = check(
+        await admin.from("external_calendar_invites").delete().is("used_at", null).lt("expires_at", expiredBefore.toISOString()).select("id"),
+      ) as Raw[] | null;
+      return rows?.length ?? 0;
+    },
+
+    async listConnectionsOfInactiveStaff() {
+      const staff = check(await admin.from("staff_profiles").select("id").eq("active", false)) as Raw[] | null;
+      const ids = (staff ?? []).map((r) => r.id as string);
+      if (ids.length === 0) return [];
+      const rows = check(await connections().select(COLUMNS).in("staff_id", ids)) as Raw[] | null;
+      return (rows ?? []).map(toConnection);
     },
 
     async getLinkedStaffId(workspaceId, profileId) {

@@ -1,5 +1,6 @@
 import { EXTERNAL_BUSY_POLICY } from "@/features/externalCalendar/policy";
 import { CalendarProviderError, type CalendarProvider, type ProviderCalendar } from "./provider";
+import { IdTokenError, createGoogleJwksSource, verifyGoogleIdToken, type JwksSource } from "./idToken";
 
 /**
  * Google Calendar adapter — official REST endpoints (OAuth 2.0 + Calendar API
@@ -8,13 +9,17 @@ import { CalendarProviderError, type CalendarProvider, type ProviderCalendar } f
  * Scopes (minimal, read-only):
  *   - calendar.freebusy               -> busy intervals only (no event details)
  *   - calendar.calendarlist.readonly  -> the list of calendars to choose from
- * No `openid`/`email`/`profile`: ServiceOS does not learn who the Google user is.
+ *   - openid                          -> a signed ID token with the stable account id `sub`
+ *                                        (stored only as an HMAC). No `email`/`profile`.
  * No scope that can create, change or delete events.
  */
-export const GOOGLE_SCOPES = [
+export const GOOGLE_CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/calendar.freebusy",
   "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
 ] as const;
+export const GOOGLE_SCOPES = ["openid", ...GOOGLE_CALENDAR_SCOPES] as const;
+/** Proving "this is my Google account" on the manage page: nothing else. */
+export const GOOGLE_IDENTIFY_SCOPES = ["openid"] as const;
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -33,10 +38,43 @@ type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 export class GoogleCalendarProvider implements CalendarProvider {
   readonly id = "google" as const;
 
+  private jwks: JwksSource & { forceNext?: () => void };
+
   constructor(
     private config: GoogleOAuthConfig,
     private fetchImpl: FetchLike = (input, init) => fetch(input, init),
-  ) {}
+    jwks?: JwksSource,
+    private now: () => Date = () => new Date(),
+  ) {
+    this.jwks = jwks ?? createGoogleJwksSource(fetchImpl);
+  }
+
+  /** Verifies the ID token of a token response; one JWKS refresh on an unknown key (rotation). */
+  private async verifiedSubject(idToken: unknown, nonce: string): Promise<string> {
+    const verifyOnce = () => verifyGoogleIdToken(idToken, { clientId: this.config.clientId, nonce, now: this.now(), jwks: this.jwks });
+    try {
+      return (await verifyOnce()).subject;
+    } catch (error) {
+      if (error instanceof IdTokenError && error.reason === "unknown_key" && this.jwks.forceNext) {
+        this.jwks.forceNext();
+        try {
+          return (await verifyOnce()).subject;
+        } catch {
+          throw new CalendarProviderError("identity_invalid");
+        }
+      }
+      throw new CalendarProviderError(error instanceof IdTokenError && error.reason === "jwks_unavailable" ? "unavailable" : "identity_invalid");
+    }
+  }
+
+  private async tokenRequest(params: Record<string, string>) {
+    const res = await this.call(TOKEN_URL, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: this.config.clientId, client_secret: this.config.clientSecret, ...params }).toString(),
+    });
+    return { res, body: await GoogleCalendarProvider.json(res) };
+  }
 
   private async call(url: string, init: RequestInit): Promise<Response> {
     try {
@@ -63,61 +101,64 @@ export class GoogleCalendarProvider implements CalendarProvider {
     return new CalendarProviderError("unavailable");
   }
 
-  buildAuthorizationUrl({ state, codeChallenge, redirectUri }: { state: string; codeChallenge: string; redirectUri: string }): string {
+  buildAuthorizationUrl({
+    state,
+    codeChallenge,
+    redirectUri,
+    nonce,
+    purpose,
+  }: {
+    state: string;
+    codeChallenge: string;
+    redirectUri: string;
+    nonce: string;
+    purpose: "connect" | "identify";
+  }): string {
     const url = new URL(AUTH_URL);
     url.searchParams.set("client_id", this.config.clientId);
     url.searchParams.set("redirect_uri", redirectUri);
     url.searchParams.set("response_type", "code");
-    url.searchParams.set("scope", GOOGLE_SCOPES.join(" "));
-    url.searchParams.set("access_type", "offline");
-    // Always show consent so Google issues a refresh token even on a reconnect.
-    url.searchParams.set("prompt", "consent");
+    if (purpose === "connect") {
+      url.searchParams.set("scope", GOOGLE_SCOPES.join(" "));
+      url.searchParams.set("access_type", "offline");
+      // Always show consent so Google issues a refresh token even on a reconnect.
+      url.searchParams.set("prompt", "consent");
+    } else {
+      url.searchParams.set("scope", GOOGLE_IDENTIFY_SCOPES.join(" "));
+      url.searchParams.set("access_type", "online"); // no refresh token for a sign-in check
+      url.searchParams.set("prompt", "select_account");
+    }
     url.searchParams.set("include_granted_scopes", "false");
+    url.searchParams.set("nonce", nonce);
     url.searchParams.set("state", state);
     url.searchParams.set("code_challenge", codeChallenge);
     url.searchParams.set("code_challenge_method", "S256");
     return url.toString();
   }
 
-  async exchangeCode({ code, codeVerifier, redirectUri }: { code: string; codeVerifier: string; redirectUri: string }) {
-    const res = await this.call(TOKEN_URL, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        code,
-        code_verifier: codeVerifier,
-        client_id: this.config.clientId,
-        client_secret: this.config.clientSecret,
-        redirect_uri: redirectUri,
-        grant_type: "authorization_code",
-      }).toString(),
-    });
-    const body = await GoogleCalendarProvider.json(res);
+  async exchangeCode({ code, codeVerifier, redirectUri, nonce }: { code: string; codeVerifier: string; redirectUri: string; nonce: string }) {
+    const { res, body } = await this.tokenRequest({ code, code_verifier: codeVerifier, redirect_uri: redirectUri, grant_type: "authorization_code" });
     if (!res.ok) {
       throw new CalendarProviderError(body.error === "invalid_grant" ? "invalid_grant_code" : "unavailable");
     }
-    // Granular consent: the person may untick a permission. Both are required.
+    // Granular consent: the person may untick a permission. All are required.
+    // (No revoke here: revoking would also cut other ServiceOS connections of this Google account.)
     const granted = typeof body.scope === "string" ? body.scope.split(" ") : [];
-    if (!GOOGLE_SCOPES.every((s) => granted.includes(s))) {
-      if (typeof body.refresh_token === "string") await this.revoke(body.refresh_token);
-      throw new CalendarProviderError("insufficient_scope");
-    }
+    if (!GOOGLE_CALENDAR_SCOPES.every((s) => granted.includes(s))) throw new CalendarProviderError("insufficient_scope");
     if (typeof body.refresh_token !== "string" || !body.refresh_token) throw new CalendarProviderError("no_refresh_token");
-    return { refreshToken: body.refresh_token };
+    const subject = await this.verifiedSubject(body.id_token, nonce);
+    return { refreshToken: body.refresh_token, subject };
+  }
+
+  async exchangeIdentity({ code, codeVerifier, redirectUri, nonce }: { code: string; codeVerifier: string; redirectUri: string; nonce: string }) {
+    const { res, body } = await this.tokenRequest({ code, code_verifier: codeVerifier, redirect_uri: redirectUri, grant_type: "authorization_code" });
+    if (!res.ok) throw new CalendarProviderError(body.error === "invalid_grant" ? "invalid_grant_code" : "unavailable");
+    // The short-lived access token of this sign-in is simply dropped (revoking it would revoke the whole grant).
+    return { subject: await this.verifiedSubject(body.id_token, nonce) };
   }
 
   async getAccessToken(refreshToken: string) {
-    const res = await this.call(TOKEN_URL, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        refresh_token: refreshToken,
-        client_id: this.config.clientId,
-        client_secret: this.config.clientSecret,
-        grant_type: "refresh_token",
-      }).toString(),
-    });
-    const body = await GoogleCalendarProvider.json(res);
+    const { res, body } = await this.tokenRequest({ refresh_token: refreshToken, grant_type: "refresh_token" });
     if (!res.ok) {
       // invalid_grant = revoked by the user, password change, expired (7 days in "Testing" mode), ...
       if (body.error === "invalid_grant") throw new CalendarProviderError("revoked");

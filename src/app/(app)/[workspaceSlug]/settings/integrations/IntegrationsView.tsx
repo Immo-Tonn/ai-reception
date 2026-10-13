@@ -156,6 +156,7 @@ export function IntegrationsView({
           <li>{m.privacy4}</li>
         </ul>
         <p className={styles.hint}>{m.privacyPurpose}</p>
+        <p className={styles.hint}>{m.manageHint}</p>
         <p className={styles.hint}>
           <Link href={`/datenschutz#${GOOGLE_CALENDAR_SECTION_ID}`} className={own.link}>{m.privacyLink}</Link>
         </p>
