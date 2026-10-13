@@ -201,7 +201,11 @@ export function createSupabaseExternalCalendarStore(admin: SupabaseClient): Exte
       check(
         await connections()
           .update({
-            ...(input.code === "revoked" ? { status: "revoked", refresh_token_ciphertext: null, ...CACHE_RESET } : { status: "error" }),
+            // Revoked at Google: nothing but the status is needed any more (data minimisation) —
+            // token, calendar ids (usually the e-mail address) and the busy cache go.
+            ...(input.code === "revoked"
+              ? { status: "revoked", refresh_token_ciphertext: null, calendar_ids: [], ...CACHE_RESET }
+              : { status: "error" }),
             last_error_code: input.code,
             last_error_at: input.at.toISOString(),
             refresh_claimed_at: null,

@@ -203,8 +203,12 @@ describe("safety policy when Google cannot answer", () => {
     google.accounts.delete("rv1"); // the person removed ServiceOS in their Google account
     later(6);
     expect(await times(b, cut, masters[0], D.mon)).toEqual([]);
-    const [row] = await w.q<{ status: string; refresh_token_ciphertext: string | null }>("select status, refresh_token_ciphertext from external_calendar_connections where staff_id=$1", [masters[0]]);
-    expect(row).toEqual({ status: "revoked", refresh_token_ciphertext: null });
+    const [row] = await w.q<{ status: string; refresh_token_ciphertext: string | null; calendar_ids: string[]; busy_intervals: unknown[] }>(
+      "select status, refresh_token_ciphertext, calendar_ids, busy_intervals from external_calendar_connections where staff_id=$1",
+      [masters[0]],
+    );
+    // Only the status survives: token, calendar ids (e-mail-like) and busy cache are wiped.
+    expect(row).toEqual({ status: "revoked", refresh_token_ciphertext: null, calendar_ids: [], busy_intervals: [] });
 
     await svc.disconnectExternalCalendar(deps, ownerSession(b), masters[0]);
     expect(await times(b, cut, masters[0], D.mon)).toContain("10:00");

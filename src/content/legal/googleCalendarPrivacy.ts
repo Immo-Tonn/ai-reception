@@ -102,7 +102,7 @@ const de: GoogleCalendarPrivacyText = {
       heading: "Trennen der Verbindung und Löschung",
       items: [
         "Trennen in ServiceOS: Inhaber oder Administratoren des Unternehmens (bzw. die Person selbst, wenn ihr Benutzerkonto mit dem Mitarbeiterprofil verknüpft ist) können die Verbindung unter Einstellungen → Google Kalender trennen. Die verbindende Person kann die Verbindung außerdem direkt nach der Kalenderauswahl auf derselben Seite trennen (innerhalb von 30 Minuten). Beim Trennen werden der Verbindungsdatensatz mit verschlüsseltem Token, Kalenderkennungen, Status und Zwischenspeicher sofort aus der Datenbank gelöscht, und ServiceOS fordert Google auf, die Berechtigung zu widerrufen.",
-        "Widerruf bei Google: Die Person kann den Zugriff jederzeit in ihrem Google-Konto widerrufen (Sicherheit → Verbindungen zu Drittanbieter-Apps und -Diensten). ServiceOS erkennt dies bei der nächsten Abfrage, löscht dann Token und Zwischenspeicher und zeigt den Status „Zugriff entzogen“. Status und Kalenderkennungen bleiben bis zum Trennen in ServiceOS gespeichert.",
+        "Widerruf bei Google: Die Person kann den Zugriff jederzeit in ihrem Google-Konto widerrufen (Sicherheit → Verbindungen zu Drittanbieter-Apps und -Diensten). ServiceOS erkennt dies bei der nächsten Abfrage und löscht dann Token, Kalenderkennungen und Zwischenspeicher. Gespeichert bleibt nur der Status „Zugriff entzogen“ mit Zeitpunkt, bis die Verbindung in ServiceOS getrennt wird.",
         "Löschen des Mitarbeiterprofils oder des Unternehmens in ServiceOS löscht die zugehörige Verbindung automatisch. Das bloße Deaktivieren eines Mitarbeiterprofils löscht sie nicht.",
         "Datensätze zu Verbindungslinks werden derzeit nicht automatisch gelöscht; abgelaufene Links sind nicht mehr verwendbar (Löschfrist: Needs legal review).",
       ],
@@ -189,7 +189,7 @@ const en: GoogleCalendarPrivacyText = {
       heading: "Disconnecting and deletion",
       items: [
         "Disconnecting in ServiceOS: owners or administrators of the business (or the person themselves, if their user account is linked to the staff profile) can disconnect under Settings → Google Calendar. The connecting person can also disconnect right after choosing calendars on the same page (within 30 minutes). Disconnecting immediately deletes the connection record with the encrypted token, calendar IDs, status and cache from the database, and ServiceOS asks Google to revoke the permission.",
-        "Revoking at Google: the person can withdraw access at any time in their Google account (Security → Third-party apps and services). ServiceOS notices this at the next request, then deletes the token and the cache and shows “access withdrawn”. Status and calendar IDs remain stored until disconnected in ServiceOS.",
+        "Revoking at Google: the person can withdraw access at any time in their Google account (Security → Third-party apps and services). ServiceOS notices this at the next request and then deletes the token, the calendar IDs and the cache. Only the status “access withdrawn” with its time remains until disconnected in ServiceOS.",
         "Deleting the staff profile or the business in ServiceOS deletes the connection automatically. Merely deactivating a staff profile does not.",
         "Connect-link records are currently not deleted automatically; expired links can no longer be used (retention period: Needs legal review).",
       ],
@@ -276,7 +276,7 @@ const uk: GoogleCalendarPrivacyText = {
       heading: "Відключення та видалення",
       items: [
         "Відключення в ServiceOS: власники чи адміністратори бізнесу (або сама людина, якщо її обліковий запис пов’язаний із профілем співробітника) можуть відключити інтеграцію в розділі Налаштування → Google Календар. Людина, яка підключається, також може відключити її одразу після вибору календарів на тій самій сторінці (протягом 30 хвилин). Під час відключення запис підключення із зашифрованим токеном, ідентифікаторами календарів, статусом і кешем одразу видаляється з бази даних, а ServiceOS просить Google відкликати дозвіл.",
-        "Відкликання в Google: людина будь-коли може відкликати доступ у своєму обліковому записі Google (Безпека → Сторонні застосунки та сервіси). ServiceOS помічає це під час наступного запиту, видаляє токен і кеш та показує статус «доступ відкликано». Статус та ідентифікатори календарів зберігаються до відключення в ServiceOS.",
+        "Відкликання в Google: людина будь-коли може відкликати доступ у своєму обліковому записі Google (Безпека → Сторонні застосунки та сервіси). ServiceOS помічає це під час наступного запиту й видаляє токен, ідентифікатори календарів і кеш. Зберігається лише статус «доступ відкликано» з часом — до відключення в ServiceOS.",
         "Видалення профілю співробітника або бізнесу в ServiceOS автоматично видаляє підключення. Просте деактивування профілю співробітника його не видаляє.",
         "Записи про посилання на підключення наразі не видаляються автоматично; прострочені посилання більше не працюють (строк зберігання: Needs legal review).",
       ],
@@ -363,7 +363,7 @@ const ru: GoogleCalendarPrivacyText = {
       heading: "Отключение и удаление",
       items: [
         "Отключение в ServiceOS: владельцы или администраторы бизнеса (или сам человек, если его аккаунт связан с профилем сотрудника) могут отключить интеграцию в разделе Настройки → Google Календарь. Подключающийся человек также может отключить её сразу после выбора календарей на той же странице (в течение 30 минут). При отключении запись подключения с зашифрованным токеном, идентификаторами календарей, статусом и кешем сразу удаляется из базы данных, а ServiceOS просит Google отозвать разрешение.",
-        "Отзыв в Google: человек в любой момент может отозвать доступ в своём аккаунте Google (Безопасность → Сторонние приложения и сервисы). ServiceOS замечает это при следующем запросе, удаляет токен и кеш и показывает статус «доступ отозван». Статус и идентификаторы календарей хранятся до отключения в ServiceOS.",
+        "Отзыв в Google: человек в любой момент может отозвать доступ в своём аккаунте Google (Безопасность → Сторонние приложения и сервисы). ServiceOS замечает это при следующем запросе и удаляет токен, идентификаторы календарей и кеш. Хранится только статус «доступ отозван» со временем — до отключения в ServiceOS.",
         "Удаление профиля сотрудника или бизнеса в ServiceOS автоматически удаляет подключение. Простая деактивация профиля сотрудника его не удаляет.",
         "Записи о ссылках на подключение сейчас не удаляются автоматически; просроченные ссылки больше не работают (срок хранения: Needs legal review).",
       ],
