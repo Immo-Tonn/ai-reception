@@ -202,7 +202,7 @@ export async function updateAppointment(
   // The occupied slot changes when the time / person / length / service changes, or a
   // non-active appointment becomes active again. A pure outcome change (completed,
   // no-show, cancelled) or a notes/paid edit frees or keeps the slot and needs no check.
-  const slotChanged =
+  const occupiesNewSlot =
     merged.date !== before.date ||
     merged.time !== before.time ||
     merged.durationMinutes !== before.durationMinutes ||
@@ -210,7 +210,7 @@ export async function updateAppointment(
     (merged.serviceId ?? merged.service) !== (before.serviceId ?? before.service) ||
     merged.resourceId !== before.resourceId ||
     (activeStatuses.has(merged.status) && !activeStatuses.has(before.status));
-  if (slotChanged && activeStatuses.has(merged.status)) await checkBusinessRules(session, {
+  if (occupiesNewSlot && activeStatuses.has(merged.status)) await checkBusinessRules(session, {
     id,
     staff: merged.staff,
     staffId: merged.staffId,
