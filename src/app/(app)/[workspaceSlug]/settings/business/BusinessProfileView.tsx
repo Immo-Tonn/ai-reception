@@ -18,6 +18,8 @@ const codeToKey = {
   invalid_input: "invalidInput",
   not_found: "notFound",
   conflict: "conflict",
+  invalid_status: "invalidStatus",
+  delete_blocked: "deleteBlocked",
   unknown: "generic",
 } as const;
 

@@ -12,7 +12,7 @@ import type {
   RecurrenceFrequency,
   Visibility,
 } from "@/features/appointments/types";
-import { statusOrder } from "@/features/appointments/statusMeta";
+import { SELECTABLE_STATUSES, canTransition, checkInitialStatus, isHistoryCorrection, wallNow, type DeleteBlocker } from "@/features/appointments/statusRules";
 import { financialBucketChoices, visibilityChoices } from "@/features/appointments/simpleOptions";
 import { findConflicts, findNextAvailableSlot } from "@/features/appointments/conflicts";
 import { expandRecurrenceDates } from "@/features/appointments/recurrence";
@@ -42,6 +42,12 @@ interface AppointmentSheetProps {
    * on a save that never actually persisted. */
   onSave: (result: AppointmentSaveResult) => void | Promise<void>;
   onDelete?: () => void;
+  /** Why this appointment may not be physically deleted; `[]` = may be deleted, `null` = still checking. */
+  deleteBlockers?: DeleteBlocker[] | null;
+  /** Workspace time zone (null: demo / this machine) — decides which statuses are possible yet. */
+  timeZone?: string | null;
+  /** May this person correct a recorded outcome (owner / admin / manager)? The server checks it too. */
+  canCorrect?: boolean;
   locale: Locale;
   messages: Messages["appointment"];
   statusMessages: Messages["appointmentStatus"];
@@ -70,11 +76,22 @@ function todayIso() {
   return localIsoDate(new Date());
 }
 
+const DELETE_BLOCKER_TEXT = {
+  has_history: "deleteBlockedHasHistory",
+  online_booking: "deleteBlockedOnline",
+  invoice: "deleteBlockedInvoice",
+  waiting_list: "deleteBlockedWaitingList",
+  not_permitted: "deleteBlockedNotPermitted",
+} as const;
+
 export function AppointmentSheet({
   open,
   onClose,
   onSave,
   onDelete,
+  deleteBlockers = null,
+  timeZone = null,
+  canCorrect = false,
   locale,
   messages,
   statusMessages,
@@ -98,6 +115,7 @@ export function AppointmentSheet({
   today,
 }: AppointmentSheetProps) {
   const isEditing = Boolean(initialValue);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const isSeries = Boolean(initialValue?.seriesId);
 
   const [client, setClient] = useState(initialValue?.client ?? prefillClient ?? "");
@@ -595,17 +613,30 @@ export function AppointmentSheet({
         <div className={styles.section}>
           <span className={styles.sectionLabel}>{messages.statusLabel}</span>
           <div className={styles.statusRow}>
-            {statusOrder.map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={`${styles.statusChip} ${status === value ? styles.statusChipActive : ""}`}
-                onClick={() => setStatus(value)}
-              >
-                {statusMessages[value]}
-              </button>
-            ))}
+            {[...SELECTABLE_STATUSES, ...(SELECTABLE_STATUSES.includes(status) ? [] : [status])].map((value) => {
+              // Same rules as the server: completed / no-show only once the appointment has started, etc.
+              const now = wallNow(timeZone);
+              const allowed =
+                value === status ||
+                (isEditing && initialValue
+                  ? canTransition(initialValue, value, now) && (canCorrect || !isHistoryCorrection(initialValue.status, value))
+                  : checkInitialStatus({ date, time }, value, now));
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={!allowed}
+                  aria-disabled={!allowed}
+                  title={allowed ? undefined : messages.statusNotPossibleHint}
+                  className={`${styles.statusChip} ${status === value ? styles.statusChipActive : ""} ${allowed ? "" : styles.statusChipDisabled}`}
+                  onClick={() => setStatus(value)}
+                >
+                  {statusMessages[value]}
+                </button>
+              );
+            })}
           </div>
+          <span className={styles.sectionHint}>{messages.statusRulesHint}</span>
         </div>
 
         <div className={styles.section}>
@@ -663,10 +694,38 @@ export function AppointmentSheet({
           </div>
         )}
 
+        {isEditing && onDelete && deleteBlockers && deleteBlockers.length > 0 ? (
+          <div className={styles.deleteInfo} role="note">
+            <span className={styles.deleteInfoTitle}>{messages.deleteBlockedTitle}</span>
+            <ul className={styles.deleteInfoList}>
+              {deleteBlockers.map((b) => (
+                <li key={b}>{messages[DELETE_BLOCKER_TEXT[b]]}</li>
+              ))}
+            </ul>
+            {/* Only when cancelling is actually possible (a past outcome stays as it is). */}
+            {initialValue && canTransition(initialValue, "cancelled", wallNow(timeZone)) && (canCorrect || !isHistoryCorrection(initialValue.status, "cancelled")) ? <span>{messages.deleteCancelInstead}</span> : null}
+          </div>
+        ) : null}
+
+        {confirmingDelete && onDelete ? (
+          <div className={styles.warningCard} role="alertdialog" aria-label={messages.deleteConfirmTitle}>
+            <span className={styles.warningTitle}>{messages.deleteConfirmTitle}</span>
+            <span>{messages.deleteConfirmText}</span>
+            <div className={styles.actions}>
+              <Button variant="destructive" onClick={() => { setConfirmingDelete(false); onDelete(); }}>
+                {messages.deleteConfirm}
+              </Button>
+              <Button variant="secondary" onClick={() => setConfirmingDelete(false)}>
+                {messages.deleteKeep}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         <div className={styles.actions}>
-          {isEditing && onDelete ? (
-            <Button variant="secondary" className={styles.deleteButton} onClick={onDelete}>
-              {messages.delete}
+          {isEditing && onDelete && deleteBlockers && deleteBlockers.length === 0 && !confirmingDelete ? (
+            <Button variant="secondary" className={styles.deleteButton} onClick={() => setConfirmingDelete(true)}>
+              {messages.deleteMistake}
             </Button>
           ) : null}
           <Button fullWidth onClick={handleSave} disabled={saving}>

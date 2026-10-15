@@ -2,6 +2,7 @@ import { Icon, type IconName } from "@/components/ui";
 import { getWorkspaceConfig } from "@/features/workspace/registry";
 import { getMessages, type Messages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
+import { getFeatureFlags } from "@/lib/config/features";
 import { BackButton } from "./BackButton";
 import styles from "./page.module.css";
 
@@ -24,7 +25,13 @@ export default async function MorePage({
   const locale = await getRequestLocale();
   const { nav, more, common } = getMessages(locale);
   const workspace = getWorkspaceConfig(workspaceSlug);
-  const visibleItems = items.filter((item) => item.key !== "work" || workspace.workEnabled !== false);
+  const features = getFeatureFlags();
+  const visibleItems = items.filter(
+    (item) =>
+      (item.key !== "work" || workspace.workEnabled !== false) &&
+      (item.key !== "finance" || features.finance) &&
+      (item.key !== "analytics" || features.analytics),
+  );
 
   return (
     <main className={styles.page}>

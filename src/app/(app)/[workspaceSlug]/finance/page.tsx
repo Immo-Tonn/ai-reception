@@ -3,6 +3,7 @@ import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { getSession } from "@/server/auth/session";
+import { isFeatureEnabled } from "@/lib/config/features";
 import { getWorkspaceCurrency } from "@/server/services/finance.service";
 import { FinanceView } from "./FinanceView";
 
@@ -12,6 +13,7 @@ export default async function FinancePage({
   params: Promise<{ workspaceSlug: string }>;
 }) {
   const { workspaceSlug } = await params;
+  if (!isFeatureEnabled("finance")) notFound();
   const locale = await getRequestLocale();
   const { finance, appointment, repositoryErrors, common } = getMessages(locale);
 
