@@ -699,6 +699,7 @@ export const de: Messages = {
     rescheduled: "Verschoben",
   },
   quickActions: {
+    correctionManagerOnly: "Ein erfasstes Ergebnis können nur Manager, Admin oder Inhaber korrigieren.",
     title: "Termin",
     edit: "Bearbeiten",
     move: "Verschieben / umplanen",

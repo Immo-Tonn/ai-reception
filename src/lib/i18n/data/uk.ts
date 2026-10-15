@@ -699,6 +699,7 @@ export const uk: Messages = {
     rescheduled: "Перенесено",
   },
   quickActions: {
+    correctionManagerOnly: "Виправити записаний результат може лише менеджер, адміністратор або власник.",
     title: "Запис",
     edit: "Редагувати",
     move: "Перенести",

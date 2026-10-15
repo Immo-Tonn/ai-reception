@@ -723,6 +723,7 @@ export const en = {
     rescheduled: "Rescheduled",
   },
   quickActions: {
+    correctionManagerOnly: "Only a manager, admin or owner can correct a recorded result.",
     title: "Appointment",
     edit: "Edit",
     move: "Move / reschedule",

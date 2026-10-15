@@ -16,6 +16,7 @@ const { PermissionDeniedError } = await import("@/server/permissions/roles");
 
 const OWNER = "aaaaaaaa-0000-4000-8000-0000000000f1";
 const MANAGER = "cccccccc-0000-4000-8000-0000000000f3";
+const STAFF = "dddddddd-0000-4000-8000-0000000000f4";
 
 let db: PGlite;
 let slug: string;
@@ -60,12 +61,12 @@ async function pastAppointment(status = "confirmed", source = "user") {
 
 beforeAll(async () => {
   db = await createMigratedDb();
-  await db.exec(`insert into auth.users (id,email) values ('${OWNER}','o@test.invalid'),('${MANAGER}','m@test.invalid')`);
+  await db.exec(`insert into auth.users (id,email) values ('${OWNER}','o@test.invalid'),('${MANAGER}','m@test.invalid'),('${STAFF}','s@test.invalid')`);
   const r = (await service().rpc("provision_workspace", { p_user_id: OWNER, p_email: "o@test.invalid", p_full_name: "", p_business_name: "Biz", p_base_slug: "status-rules", p_locale: "en" })).data as { out_workspace_id: string; out_slug: string }[];
   wsId = r[0].out_workspace_id;
   slug = r[0].out_slug;
-  await db.exec(`insert into profiles (id,email) values ('${MANAGER}','m@test.invalid');
-    insert into workspace_members (workspace_id,profile_id,role) values ('${wsId}','${MANAGER}','manager')`);
+  await db.exec(`insert into profiles (id,email) values ('${MANAGER}','m@test.invalid'),('${STAFF}','s@test.invalid');
+    insert into workspace_members (workspace_id,profile_id,role) values ('${wsId}','${MANAGER}','manager'),('${wsId}','${STAFF}','staff')`);
   staffId = (await q<{ id: string }>("select id from staff_profiles where workspace_id=$1", [wsId]))[0].id;
   svcId = (await q<{ id: string }>("insert into services (workspace_id,name,duration_minutes,price) values ($1,'Haircut',30,40) returning id", [wsId]))[0].id;
   await q("insert into clients (workspace_id,name,email) values ($1,'Walk-in','walkin@test.invalid')", [wsId]);
@@ -114,6 +115,22 @@ describe("status rules (server)", () => {
     // A started, still confirmed appointment cannot be cancelled either (it happened or it was a no-show).
     const other = await pastAppointment();
     await expect(svc.cancelAppointment(s, other)).rejects.toMatchObject({ code: "invalid_status_transition" });
+  });
+});
+
+describe("corrections of a recorded outcome: owner / admin / manager only", () => {
+  it("staff sets the first outcome but cannot change it; a manager corrects it (audited)", async () => {
+    const id = await pastAppointment();
+    as(STAFF);
+    const st = await getSession(slug);
+    expect((await svc.updateAppointment(st, id, { status: "noShow" }))?.status).toBe("noShow");
+    await expect(svc.updateAppointment(st, id, { status: "completed" })).rejects.toBeInstanceOf(PermissionDeniedError);
+    await expect(svc.updateAppointment(st, id, { status: "confirmed" })).rejects.toBeInstanceOf(PermissionDeniedError);
+    as(MANAGER);
+    const m = await getSession(slug);
+    expect((await svc.updateAppointment(m, id, { status: "completed" }))?.status).toBe("completed");
+    const [{ summary }] = await q<{ summary: string }>("select summary from audit_logs where entity_id=$1 order by created_at desc, id desc limit 1", [id]);
+    expect(summary).toMatch(/noShow → completed \(correction\)/);
   });
 });
 

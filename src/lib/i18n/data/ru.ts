@@ -699,6 +699,7 @@ export const ru: Messages = {
     rescheduled: "Перенесено",
   },
   quickActions: {
+    correctionManagerOnly: "Исправить записанный результат может только менеджер, администратор или владелец.",
     title: "Запись",
     edit: "Редактировать",
     move: "Перенести",

@@ -88,6 +88,14 @@ export function checkInitialStatus(appt: Pick<Appointment, "date" | "time">, sta
   return status === "cancelled";
 }
 
+/**
+ * Changing a RECORDED outcome (completed / no-show / cancelled, incl. restoring a
+ * cancelled appointment) is a correction of history: owner / admin / manager only
+ * (`appointments.correct`), always audited. Staff may set the FIRST outcome.
+ */
+export const CORRECTION_SOURCES: ReadonlySet<AppointmentStatus> = new Set(["completed", "noShow", "cancelled"]);
+export const isHistoryCorrection = (from: AppointmentStatus, to: AppointmentStatus) => from !== to && CORRECTION_SOURCES.has(from);
+
 /** Statuses that are a real past outcome and must stay in history (never physically deleted). */
 export const HISTORY_STATUSES: ReadonlySet<AppointmentStatus> = new Set(["completed", "noShow", "checkedIn", "inProgress"]);
 

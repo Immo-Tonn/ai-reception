@@ -19,7 +19,7 @@ import {
 } from "@/server/validation/appointment.schema";
 import { checkSlotAvailable } from "@/features/appointments/availability";
 import { activeStatuses } from "@/features/appointments/statusMeta";
-import { checkInitialStatus, checkStatusTransition, HISTORY_STATUSES, wallNow, type DeleteBlocker, type WallNow } from "@/features/appointments/statusRules";
+import { checkInitialStatus, checkStatusTransition, HISTORY_STATUSES, wallNow, type DeleteBlocker, type WallNow, isHistoryCorrection } from "@/features/appointments/statusRules";
 import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspaceTimeZone } from "./finance.service";
@@ -121,6 +121,8 @@ async function workspaceNow(session: Session): Promise<WallNow> {
 
 /** Server-side status rules (the UI shows only allowed actions, this is the authority). */
 async function assertStatusChange(session: Session, before: Appointment, to: Appointment["status"]) {
+  // Correcting a recorded outcome is not for every role (staff could otherwise rewrite history).
+  if (isHistoryCorrection(before.status, to)) assertCan(session.role, "appointments.correct");
   const verdict = checkStatusTransition(before, to, await workspaceNow(session));
   if (verdict.ok) return;
   throw new BusinessRuleError(`Status change ${before.status} -> ${to} is not allowed (${verdict.reason}).`, "invalid_status_transition");

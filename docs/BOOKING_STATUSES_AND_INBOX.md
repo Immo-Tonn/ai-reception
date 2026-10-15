@@ -20,7 +20,17 @@ SAME functions; the server is authoritative (`invalid_status_transition`).
 Corrections: noShow → completed / confirmed, completed → noShow / confirmed,
 cancelled → confirmed (future only; the slot is re-checked for conflicts).
 Every status change is audited; a change away from an outcome is marked
-`(correction)`. Moving is allowed only for active, not-yet-started-outcome rows.
+`(correction)`.
+
+**Who may correct:** changing a RECORDED outcome (completed / no-show /
+cancelled, incl. restoring a cancelled appointment) needs the permission
+`appointments.correct` = **owner, admin, manager**. Staff may set the first
+outcome (check-in, completed, no-show) but not change it afterwards.
+Enforced three times: UI (buttons hidden, hint shown), service
+(`assertStatusChange` → `forbidden`), database (0027 trigger
+`guard_appointment_history`, also against direct API calls). Every correction
+is in the audit log (app) and creates an Inbox event with old/new status and
+the initiator (database, 0027). Moving is allowed only for active, not-yet-started-outcome rows.
 
 ## 2. Calendar
 
@@ -63,7 +73,32 @@ duration, timezone, `status`, `old_status`, `initiator {kind, role, name}`.
   A guest vs. a signed-in client on the *first* booking cannot be told apart
   without changing the RPCs → both are "client (online)".
 - RLS on `inbox_events` is unchanged (select needs `appointments.view` in the same workspace).
-- Retention: none yet (open question, proposal: 12 months).
+- **Client erasure** (0027 `forget_client_in_inbox`): deleting a client removes
+  their name / id from all Inbox snapshots and previews of that workspace; the
+  events stay without personal data.
+
+### Retention of Inbox notifications (agreed: 12 months, NOT active)
+
+- Setting: `INBOX_RETENTION_MONTHS` (server env, whole months 1–120, default 12),
+  `src/lib/config/inboxRetention.ts`.
+- **Automatic deletion is not implemented and not switched on**
+  (`INBOX_AUTO_DELETE_ENABLED = false`). It needs a separate approval and a
+  legal review of the period (Needs legal review). Until then nothing is deleted.
+- Scope = notifications ONLY. Not affected, ever: `appointments` (the client's
+  booking history, statuses, no-show counters), `audit_logs` (who changed
+  what), `invoices` / `payments` (German retention duties of the business,
+  typically 6–10 years — Needs legal review), `waiting_list`, `clients`.
+- Dependencies checked: no table references `inbox_events` (no foreign keys
+  into it); the audit log does not read it; the client card and analytics do
+  not read it. Deleting an old notification therefore changes no history.
+- Datenschutz: notifications contain personal data (client name in the
+  snapshot), so a fixed period supports data minimisation (Art. 5 (1) e DSGVO).
+  The Datenschutzerklärung must name the period once it is final; after PR #7
+  is merged, add a row to `docs/DATA_RETENTION.md`. Backups keep deleted rows
+  until the backup itself expires.
+- When approved later: a daily, idempotent job (e.g. next to the cleanup cron
+  of PR #7) deletes `inbox_events` older than `inboxRetentionCutoff(months)`,
+  logs counts only, with a dry-run first.
 
 UI (`InboxEventsView`): search (client / service / staff / old preview), type
 filter, read/unread filter, newest/oldest, groups by day (workspace timezone),
@@ -72,6 +107,11 @@ links to the appointment (calendar opens on its day) and to the client.
 Works without 0027 (events simply have no snapshot).
 
 ## 5. Feature flags (Finance, Analytics) — `src/lib/config/features.ts`
+
+In plain words: `SERVICEOS_FEATURES` is a list of the unfinished modules that
+are switched ON for one deployment. It is read on the server when a page is
+rendered or an action is called. Nothing is deleted when a module is off; it
+is only hidden and locked.
 
 `SERVICEOS_FEATURES` (server env, comma list):
 
@@ -88,3 +128,34 @@ every finance / analytics Server Action answers `not_found`, the Today
 "Outstanding" card and the client's invoice section disappear, no invoice
 requests are made. Code, tables, data and calendar price / paid stay.
 Re-enable: set the variable in Vercel and redeploy.
+
+### Recommended setup per environment
+
+| Environment | Database | `SERVICEOS_FEATURES` | Who sees Finance / Analytics |
+|---|---|---|---|
+| Local (`next dev`) | local Supabase or ServiceOS Dev | unset (= on) | the developer |
+| Staging (`NEXT_PUBLIC_APP_ENV=staging`, password-protected) | **ServiceOS Dev, test data only** | `finance,analytics` | the team |
+| Vercel Preview of the PRODUCTION project | production data | **unset (= off)** | nobody |
+| Production | production data | **unset (= off)** | nobody |
+
+Rules:
+- Turn the modules on only where the database holds TEST data. The flag does
+  not decide which data is visible — the Supabase project of the environment
+  does. RLS still applies everywhere (a business only sees itself; finance
+  only for roles with `finance.view`).
+- Never point staging / previews at the production database to "test finance".
+- Later, to launch: set `SERVICEOS_FEATURES=finance,analytics` (or only one)
+  in the production environment and redeploy. Removing it hides them again.
+
+## 6. Merge and migration order (PR #7 → PR #8)
+
+1. Merge **PR #7** (Google Calendar; migrations 0025 / 0026 are already applied in production).
+2. Merge `main` into this branch, resolve the text conflicts (i18n files,
+   `appointments.service.ts`, `businessRuleError.ts`, `calendar/page.module.css`,
+   migrations README), run `npm run lint`, `npx tsc --noEmit`, `npx vitest run`,
+   `npm run build` — all must pass (the "consecutively numbered" migration
+   test only passes once 0025 / 0026 are in the branch).
+3. Merge **PR #8**. Code works without 0027 (Inbox simply shows no snapshot;
+   the service-level checks are active).
+4. Apply **0027** separately, after explicit approval: fresh backup → isolated
+   copy → Dev → production. It changes no existing rows.

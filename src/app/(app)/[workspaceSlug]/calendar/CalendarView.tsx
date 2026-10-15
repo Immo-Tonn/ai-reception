@@ -90,6 +90,7 @@ export function CalendarView({
   conflict,
   auditLog,
   repositoryErrors,
+  canCorrect,
 }: {
   workspaceSlug: string;
   locale: Locale;
@@ -104,6 +105,8 @@ export function CalendarView({
   auditLog: Messages["auditLog"];
   conflict: Messages["conflict"];
   repositoryErrors: Messages["repositoryErrors"];
+  /** owner / admin / manager: may correct a recorded outcome (server-checked as well). */
+  canCorrect: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -728,6 +731,7 @@ export function CalendarView({
         onDelete={editing ? handleDelete : undefined}
         deleteBlockers={editing ? deleteBlockers : null}
         timeZone={workspaceTimeZone}
+        canCorrect={canCorrect}
         locale={locale}
         messages={appointment}
         statusMessages={appointmentStatus}
@@ -772,6 +776,7 @@ export function CalendarView({
         onConfirmCancel={() => quickActionsTarget && handleConfirmCancel(quickActionsTarget)}
         onViewWaitingList={() => router.push(`/${workspaceSlug}/waiting-list`)}
         timeZone={workspaceTimeZone}
+        canCorrect={canCorrect}
       />
 
       <MoveAppointmentSheet

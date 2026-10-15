@@ -24,8 +24,20 @@
 --    progress), came from online booking (source <> 'user'), or are linked to
 --    an invoice, a client-account booking claim or the waiting list. They are
 --    cancelled instead. Cascades (deleting a whole workspace) are not blocked.
+-- 5. appointments.correct (owner / admin / manager): changing a RECORDED outcome
+--    (completed / no-show / cancelled, incl. restoring a cancelled appointment)
+--    is a correction of history. guard_appointment_history refuses it for other
+--    roles even when the API is called directly (bypassing the app). Staff may
+--    still set the first outcome. The change also creates an Inbox event with
+--    old/new status and the initiator.
+-- 6. forget_client_in_inbox: when a client is deleted (e.g. an erasure request),
+--    their name / id are removed from the Inbox snapshots and previews of that
+--    workspace. The events themselves stay (a booking happened), without
+--    personal data. Notifications are NOT the appointment history: deleting or
+--    ageing out an Inbox event never touches appointments or audit_logs.
 --
--- Additive: one new column, functions replaced in place. No row is changed.
+-- Additive: one new column, one permission row per role, functions replaced in
+-- place. No existing row is changed.
 
 alter table public.inbox_events
   add column if not exists details jsonb not null default '{}'::jsonb;
@@ -193,3 +205,56 @@ create trigger appointments_guard_delete
   for each row execute function public.guard_appointment_delete();
 
 revoke all on function public.guard_appointment_delete() from public, anon, authenticated;
+
+-- 5. Who may correct a recorded outcome (mirrors src/server/permissions/roles.ts).
+insert into public.role_permissions (role, permission) values
+  ('owner', 'appointments.correct'), ('admin', 'appointments.correct'), ('manager', 'appointments.correct')
+on conflict do nothing;
+
+create or replace function public.guard_appointment_history()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.status is distinct from old.status
+     and old.status in ('completed', 'no_show', 'cancelled')
+     and (select auth.uid()) is not null
+     and not public.has_workspace_permission(old.workspace_id, 'appointments.correct') then
+    raise exception 'appointment_correction_not_permitted' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists appointments_guard_history on public.appointments;
+create trigger appointments_guard_history
+  before update of status on public.appointments
+  for each row execute function public.guard_appointment_history();
+
+revoke all on function public.guard_appointment_history() from public, anon, authenticated;
+
+-- 6. A deleted client disappears from Inbox snapshots (no personal data left behind).
+create or replace function public.forget_client_in_inbox()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.inbox_events e
+     set details = e.details - 'client_name' - 'client_id',
+         preview = ''
+   where e.workspace_id = old.workspace_id
+     and (e.client_id = old.id or e.details->>'client_id' = old.id::text);
+  return old;
+end;
+$$;
+
+drop trigger if exists clients_forget_in_inbox on public.clients;
+create trigger clients_forget_in_inbox
+  before delete on public.clients
+  for each row execute function public.forget_client_in_inbox();
+
+revoke all on function public.forget_client_in_inbox() from public, anon, authenticated;

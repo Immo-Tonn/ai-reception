@@ -8,7 +8,7 @@ import { resolveServiceLabel } from "@/features/services/label";
 import type { Locale, Messages } from "@/lib/i18n";
 import { StatusBadge } from "./StatusBadge";
 import { activeStatuses } from "@/features/appointments/statusMeta";
-import { canTransition, hasStarted, wallNow } from "@/features/appointments/statusRules";
+import { canTransition, hasStarted, wallNow, isHistoryCorrection } from "@/features/appointments/statusRules";
 import styles from "./QuickActionsSheet.module.css";
 
 interface QuickActionsSheetProps {
@@ -29,6 +29,8 @@ interface QuickActionsSheetProps {
   onViewWaitingList: () => void;
   /** Workspace time zone (null: demo / this machine). */
   timeZone?: string | null;
+  /** May this person correct a recorded outcome (owner / admin / manager)? The server checks it too. */
+  canCorrect?: boolean;
 }
 
 export function QuickActionsSheet({
@@ -48,6 +50,7 @@ export function QuickActionsSheet({
   onConfirmCancel,
   onViewWaitingList,
   timeZone = null,
+  canCorrect = false,
 }: QuickActionsSheetProps) {
   const [mode, setMode] = useState<"menu" | "confirmCancel" | "cancelledMatches">("menu");
 
@@ -61,8 +64,9 @@ export function QuickActionsSheet({
   const isMasked = appointment.visibility === "private";
   // Same rules as the server (src/features/appointments/statusRules.ts).
   const now = wallNow(timeZone);
-  const allowed = (to: Appointment["status"]) => canTransition(appointment, to, now);
   const status = appointment.status;
+  const allowed = (to: Appointment["status"]) =>
+    canTransition(appointment, to, now) && (canCorrect || !isHistoryCorrection(status, to));
   const isOutcome = status === "completed" || status === "noShow" || status === "cancelled";
   const notStartedYet = !hasStarted(appointment, now) && (status === "pending" || status === "confirmed");
 
@@ -135,6 +139,7 @@ export function QuickActionsSheet({
             ))}
           </div>
 
+          {isOutcome && !canCorrect ? <p className={styles.hint}>{messages.correctionManagerOnly}</p> : null}
           {corrections.length > 0 && (
             <div className={styles.corrections}>
               <span className={styles.correctionsTitle}>{messages.correctionTitle}</span>

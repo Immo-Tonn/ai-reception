@@ -143,6 +143,44 @@ describe("0027 inbox snapshot", () => {
   });
 });
 
+describe("0027 history corrections", () => {
+  const STAFF_USER = "dddddddd-0000-4000-8000-0000000000e4";
+  const MANAGER_USER = "eeeeeeee-0000-4000-8000-0000000000e5";
+  beforeAll(async () => {
+    await db.exec(`insert into auth.users (id,email) values ('${STAFF_USER}','s@t.invalid'),('${MANAGER_USER}','m@t.invalid');
+      insert into profiles (id,email) values ('${STAFF_USER}','s@t.invalid'),('${MANAGER_USER}','m@t.invalid') on conflict do nothing;
+      insert into workspace_members (workspace_id,profile_id,role) values ('${ws}','${STAFF_USER}','staff'),('${ws}','${MANAGER_USER}','manager')`);
+  });
+
+  it("staff sets the first outcome but cannot rewrite it, even through the API; a manager can", async () => {
+    const staffActor: Actor = { kind: "user", id: STAFF_USER };
+    const id = await newAppointment(svc, -4, "10:00");
+    await run(staffActor, "update appointments set status='no_show' where id=$1", [id]);
+    expect(await codeOf(run(staffActor, "update appointments set status='completed' where id=$1", [id]))).toMatch(/appointment_correction_not_permitted/);
+    await run(staffActor, "update appointments set internal_notes='called' where id=$1", [id]); // other edits stay possible
+    await run({ kind: "user", id: MANAGER_USER }, "update appointments set status='completed' where id=$1", [id]);
+    const [{ status }] = await q<{ status: string }>("select status::text from appointments where id=$1", [id]);
+    expect(status).toBe("completed");
+    const ev = (await events(id)).find((e) => e.code === "booking.completed")!;
+    expect(ev.details).toMatchObject({ old_status: "no_show", initiator: { kind: "business_user", role: "manager" } });
+  });
+});
+
+describe("0027 client erasure", () => {
+  it("deleting a client removes their name and id from Inbox snapshots and previews; events stay", async () => {
+    const [{ id: tmpClient }] = await q<{ id: string }>("insert into clients (workspace_id,name) values ($1,'Erika Erase') returning id", [ws]);
+    const appt = await newAppointment(owner, 12, "10:00", { client_id: tmpClient });
+    expect((await events(appt))[0].details.client_name).toBe("Erika Erase");
+    await q("delete from appointments where id=$1", [appt]); // a mistaken booking: allowed, the event stays
+    await q("delete from clients where id=$1", [tmpClient]);
+    const [ev] = await events(appt);
+    expect(ev).toBeTruthy();
+    expect(JSON.stringify(ev)).not.toMatch(/Erika|Erase/);
+    expect(ev.details.client_id).toBeUndefined();
+    expect(ev.details.service).toBe("Manicure");
+  });
+});
+
 describe("0027 delete guard", () => {
   it("a mistaken business-created appointment can be deleted", async () => {
     const id = await newAppointment(owner, 9, "10:00");

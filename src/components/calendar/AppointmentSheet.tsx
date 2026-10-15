@@ -12,7 +12,7 @@ import type {
   RecurrenceFrequency,
   Visibility,
 } from "@/features/appointments/types";
-import { SELECTABLE_STATUSES, canTransition, checkInitialStatus, wallNow, type DeleteBlocker } from "@/features/appointments/statusRules";
+import { SELECTABLE_STATUSES, canTransition, checkInitialStatus, isHistoryCorrection, wallNow, type DeleteBlocker } from "@/features/appointments/statusRules";
 import { financialBucketChoices, visibilityChoices } from "@/features/appointments/simpleOptions";
 import { findConflicts, findNextAvailableSlot } from "@/features/appointments/conflicts";
 import { expandRecurrenceDates } from "@/features/appointments/recurrence";
@@ -46,6 +46,8 @@ interface AppointmentSheetProps {
   deleteBlockers?: DeleteBlocker[] | null;
   /** Workspace time zone (null: demo / this machine) — decides which statuses are possible yet. */
   timeZone?: string | null;
+  /** May this person correct a recorded outcome (owner / admin / manager)? The server checks it too. */
+  canCorrect?: boolean;
   locale: Locale;
   messages: Messages["appointment"];
   statusMessages: Messages["appointmentStatus"];
@@ -89,6 +91,7 @@ export function AppointmentSheet({
   onDelete,
   deleteBlockers = null,
   timeZone = null,
+  canCorrect = false,
   locale,
   messages,
   statusMessages,
@@ -616,7 +619,7 @@ export function AppointmentSheet({
               const allowed =
                 value === status ||
                 (isEditing && initialValue
-                  ? canTransition(initialValue, value, now)
+                  ? canTransition(initialValue, value, now) && (canCorrect || !isHistoryCorrection(initialValue.status, value))
                   : checkInitialStatus({ date, time }, value, now));
               return (
                 <button
@@ -700,7 +703,7 @@ export function AppointmentSheet({
               ))}
             </ul>
             {/* Only when cancelling is actually possible (a past outcome stays as it is). */}
-            {initialValue && canTransition(initialValue, "cancelled", wallNow(timeZone)) ? <span>{messages.deleteCancelInstead}</span> : null}
+            {initialValue && canTransition(initialValue, "cancelled", wallNow(timeZone)) && (canCorrect || !isHistoryCorrection(initialValue.status, "cancelled")) ? <span>{messages.deleteCancelInstead}</span> : null}
           </div>
         ) : null}
 
