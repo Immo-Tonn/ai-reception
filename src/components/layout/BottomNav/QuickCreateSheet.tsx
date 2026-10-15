@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Icon, Sheet, type IconName } from "@/components/ui";
 import type { Messages } from "@/lib/i18n";
+import { useFeatureEnabled } from "@/features/workspace/FeatureFlags";
 import styles from "./QuickCreateSheet.module.css";
 
 interface QuickCreateSheetProps {
@@ -20,8 +21,9 @@ export function QuickCreateSheet({
 }: QuickCreateSheetProps) {
   const router = useRouter();
   const base = `/${workspaceSlug}`;
+  const financeOn = useFeatureEnabled("finance");
 
-  const items: { icon: IconName; title: string; hint: string; href: string }[] = [
+  const allItems: { icon: IconName; title: string; hint: string; href: string }[] = [
     {
       icon: "calendar",
       title: messages.appointment,
@@ -41,6 +43,7 @@ export function QuickCreateSheet({
       href: `${base}/finance?create=invoice`,
     },
   ];
+  const items = allItems.filter((item) => financeOn || !item.href.includes("/finance"));
 
   function handleSelect(href: string) {
     onClose();

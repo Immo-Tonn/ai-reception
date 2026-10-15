@@ -67,7 +67,7 @@ export function MonthGrid({
             {dayAppointments.slice(0, 3).map((a) => (
               <span
                 key={a.id}
-                className={`${styles.chip} ${a.visibility === "private" ? styles.chipMasked : ""}`}
+                className={`${styles.chip} ${a.visibility === "private" ? styles.chipMasked : ""} ${a.status === "cancelled" || a.status === "rescheduled" ? styles.chipCancelled : a.status === "noShow" ? styles.chipNoShow : ""}`}
               >
                 {a.time} {a.visibility === "private" ? dashboardMessages.statusBusy : a.client}
               </span>

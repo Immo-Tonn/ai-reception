@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "@/components/ui";
 import { getWorkspaceConfig } from "@/features/workspace/registry";
+import { useFeatureEnabled } from "@/features/workspace/FeatureFlags";
 import type { Locale, Messages } from "@/lib/i18n";
 import styles from "./Sidebar.module.css";
 
@@ -37,6 +38,8 @@ export function Sidebar({
   const pathname = usePathname();
   const base = `/${workspaceSlug}`;
   const workspace = getWorkspaceConfig(workspaceSlug);
+  const financeOn = useFeatureEnabled("finance");
+  const analyticsOn = useFeatureEnabled("analytics");
 
   function isActive(segment: string) {
     return pathname === `${base}/${segment}` || pathname?.startsWith(`${base}/${segment}/`);
@@ -45,7 +48,12 @@ export function Sidebar({
   // Work's visibility/label live on WorkspaceConfig (§ single source of
   // truth) — a Salon simply omits it from `mainNav` instead of every nav
   // component branching on `workspaceSlug`.
-  const visibleNav = mainNav.filter((item) => item.key !== "work" || workspace.workEnabled !== false);
+  const visibleNav = mainNav.filter(
+    (item) =>
+      (item.key !== "work" || workspace.workEnabled !== false) &&
+      (item.key !== "finance" || financeOn) &&
+      (item.key !== "analytics" || analyticsOn),
+  );
 
   return (
     <aside className={styles.sidebar}>

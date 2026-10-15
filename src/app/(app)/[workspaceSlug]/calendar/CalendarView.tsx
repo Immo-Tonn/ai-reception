@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { localIsoDate } from "@/lib/date/localIsoDate";
+import { describeSaveError } from "@/lib/repository/describeSaveError";
+import { CANCELLED_LIKE, HISTORY_STATUSES, type DeleteBlocker } from "@/features/appointments/statusRules";
+import { getAppointmentDeleteBlockersAction } from "@/server/actions/appointments.actions";
 import { Button, Icon } from "@/components/ui";
 import { AppointmentSheet, type AppointmentSaveResult } from "@/components/calendar/AppointmentSheet";
 import { QuickActionsSheet } from "@/components/calendar/QuickActionsSheet";
@@ -22,6 +25,25 @@ import { resolveServiceLabel } from "@/features/services/label";
 import { getStaffLabel } from "@/features/staff/label";
 import type { Locale, Messages } from "@/lib/i18n";
 import styles from "./page.module.css";
+
+// "Show cancelled" is remembered per browser; read through useSyncExternalStore (server render = hidden).
+const SHOW_CANCELLED_KEY = "serviceos:calendar:showCancelled";
+const SHOW_CANCELLED_EVENT = "serviceos:showCancelled";
+function readShowCancelled(): boolean {
+  try {
+    return window.localStorage.getItem(SHOW_CANCELLED_KEY) === "1";
+  } catch {
+    return false; // storage unavailable: default stays "hidden"
+  }
+}
+function subscribeShowCancelled(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(SHOW_CANCELLED_EVENT, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(SHOW_CANCELLED_EVENT, onChange);
+  };
+}
 
 type DesktopView = "day" | "week" | "month" | "staff";
 
@@ -67,6 +89,7 @@ export function CalendarView({
   recurrence,
   conflict,
   auditLog,
+  repositoryErrors,
 }: {
   workspaceSlug: string;
   locale: Locale;
@@ -80,6 +103,7 @@ export function CalendarView({
   recurrence: Messages["recurrence"];
   auditLog: Messages["auditLog"];
   conflict: Messages["conflict"];
+  repositoryErrors: Messages["repositoryErrors"];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -105,14 +129,56 @@ export function CalendarView({
   // Real workspace: opens on the workspace-local today (same as Today).
   // Demo workspaces keep their seeded demo day.
   const workspaceToday = useWorkspaceToday(workspaceSlug);
-  const isRealWorkspace = useWorkspaceTimeZone(workspaceSlug) !== null;
+  const workspaceTimeZone = useWorkspaceTimeZone(workspaceSlug);
+  const isRealWorkspace = workspaceTimeZone !== null;
   const [selectedDate, setSelectedDate] = useState(
     searchParams.get("date") ?? (isRealWorkspace ? workspaceToday : "2026-09-22"),
   );
   const [staffFilter, setStaffFilter] = useState<string>("all");
+  // Cancelled appointments no longer occupy time: hidden unless asked for (remembered per browser).
+  const storedShowCancelled = useSyncExternalStore(subscribeShowCancelled, readShowCancelled, () => false);
+  // Session fallback when storage is unavailable (private mode): the toggle still works on this page.
+  const [showCancelledOverride, setShowCancelledOverride] = useState<boolean | null>(null);
+  const showCancelled = showCancelledOverride ?? storedShowCancelled;
+  function toggleShowCancelled() {
+    const next = !showCancelled;
+    setShowCancelledOverride(next);
+    try {
+      window.localStorage.setItem(SHOW_CANCELLED_KEY, next ? "1" : "0");
+      window.dispatchEvent(new Event(SHOW_CANCELLED_EVENT));
+    } catch {
+      // ignore: the override above keeps the choice for this visit
+    }
+  }
+  // What the calendar SHOWS (the full list still drives conflict checks and deep links).
+  const shownAppointments = useMemo(
+    () => (showCancelled ? appointments : appointments.filter((a) => !CANCELLED_LIKE.has(a.status))),
+    [appointments, showCancelled],
+  );
+  const [actionError, setActionError] = useState<string | null>(null);
+  // Server answer for ONE appointment id (a stale answer for another id is never shown).
+  const [fetchedBlockers, setFetchedBlockers] = useState<{ id: string; list: DeleteBlocker[] } | null>(null);
   const [desktopView, setDesktopView] = useState<DesktopView>("day");
 
   const [editing, setEditing] = useState<Appointment | null>(null);
+  // Can the appointment being edited be physically deleted? Real workspaces ask the server
+  // (role, history, online booking, invoice, waiting list); demo workspaces apply the status rule.
+  const editingId = editing?.id ?? null;
+  useEffect(() => {
+    if (!editingId || !isRealWorkspace) return;
+    let alive = true;
+    getAppointmentDeleteBlockersAction(workspaceSlug, editingId).then((r) => {
+      if (alive) setFetchedBlockers({ id: editingId, list: r.ok ? r.data : ["not_permitted"] });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [editingId, isRealWorkspace, workspaceSlug]);
+  const deleteBlockers: DeleteBlocker[] | null = !editing
+    ? null
+    : !isRealWorkspace
+      ? HISTORY_STATUSES.has(editing.status) ? ["has_history"] : []
+      : fetchedBlockers?.id === editing.id ? fetchedBlockers.list : null;
   const [sheetOpen, setSheetOpen] = useState(searchParams.get("create") === "appointment");
   const prefillClient = searchParams.get("client") ?? "";
 
@@ -144,7 +210,11 @@ export function CalendarView({
     [appointments],
   );
 
-  const dayAppointments = appointments
+  const hiddenCancelledToday = showCancelled
+    ? 0
+    : appointments.filter((a) => a.date === selectedDate && CANCELLED_LIKE.has(a.status) && (staffFilter === "all" || a.staff === staffFilter)).length;
+
+  const dayAppointments = shownAppointments
     .filter((item) => item.date === selectedDate)
     .filter((item) => staffFilter === "all" || item.staff === staffFilter)
     .sort((a, b) => a.time.localeCompare(b.time));
@@ -237,7 +307,14 @@ export function CalendarView({
 
   async function handleDelete() {
     if (!editing) return;
-    await remove(editing.id);
+    setActionError(null);
+    try {
+      await remove(editing.id);
+    } catch (error) {
+      setActionError(describeSaveError(error, repositoryErrors));
+      setSheetOpen(false);
+      return;
+    }
     log({
       action: "deleted",
       entityType: "appointment",
@@ -249,7 +326,14 @@ export function CalendarView({
   }
 
   async function handleSetStatus(appt: Appointment, status: AppointmentStatus) {
-    await update(appt.id, { status });
+    setActionError(null);
+    try {
+      await update(appt.id, { status });
+    } catch (error) {
+      // The server applies the same status rules; show its reason instead of an unhandled error.
+      setActionError(describeSaveError(error, repositoryErrors));
+      return;
+    }
     log({
       action: status === "cancelled" ? "cancelled" : "statusChanged",
       entityType: "appointment",
@@ -302,7 +386,7 @@ export function CalendarView({
       <button
         key={item.id}
         type="button"
-        className={`${styles.row} ${item.id === justSavedId ? styles.rowJustSaved : ""}`}
+        className={`${styles.row} ${item.id === justSavedId ? styles.rowJustSaved : ""} ${CANCELLED_LIKE.has(item.status) ? styles.rowCancelled : item.status === "noShow" ? styles.rowNoShow : ""}`}
         onClick={() => setQuickActionsTargetId(item.id)}
       >
         <span className={styles.rowTime}>{item.time}</span>
@@ -348,7 +432,7 @@ export function CalendarView({
       // Weekday via the static lookup, not Intl — see the note by
       // `weekdaysShort` in the i18n data files for why.
       label: `${calendar.weekdaysShort[d.getDay()]} ${d.getDate()}`,
-      appointments: appointments
+      appointments: shownAppointments
         .filter((a) => a.date === iso)
         .filter((a) => staffFilter === "all" || a.staff === staffFilter),
     };
@@ -358,7 +442,7 @@ export function CalendarView({
   const staffColumns: TimeGridColumn[] = demoStaff.map((s) => ({
     key: s.id,
     label: getStaffLabel(s.name, youLabel),
-    appointments: appointments.filter((a) => a.date === selectedDate && a.staff === s.name),
+    appointments: shownAppointments.filter((a) => a.date === selectedDate && a.staff === s.name),
   }));
 
   function shiftDesktopDate(days: number) {
@@ -452,7 +536,23 @@ export function CalendarView({
               {getStaffLabel(name, youLabel)}
             </button>
           ))}
+          <button
+            type="button"
+            aria-pressed={showCancelled}
+            className={`${styles.staffChip} ${showCancelled ? styles.staffChipActive : ""}`}
+            onClick={toggleShowCancelled}
+          >
+            {calendar.showCancelled}
+          </button>
         </div>
+        {hiddenCancelledToday > 0 && (
+          <p className={styles.hiddenNote}>{calendar.cancelledHidden.replace("{n}", String(hiddenCancelledToday))}</p>
+        )}
+        {actionError && (
+          <p className={styles.actionError} role="alert">
+            {actionError}
+          </p>
+        )}
 
         {desktopView === "day" &&
           (dayAppointments.length === 0 ? (
@@ -471,6 +571,7 @@ export function CalendarView({
               services={demoServices}
               locale={locale}
               dashboardMessages={dashboard}
+              statusMessages={appointmentStatus}
               onSelect={(a) => setQuickActionsTargetId(a.id)}
             />
           </div>
@@ -479,7 +580,7 @@ export function CalendarView({
         {desktopView === "month" && (
           <MonthGrid
             monthAnchor={selectedDate}
-            appointments={appointments.filter(
+            appointments={shownAppointments.filter(
               (a) => staffFilter === "all" || a.staff === staffFilter,
             )}
             weekdaysShort={calendar.weekdaysShort}
@@ -499,6 +600,7 @@ export function CalendarView({
               services={demoServices}
               locale={locale}
               dashboardMessages={dashboard}
+              statusMessages={appointmentStatus}
               onSelect={(a) => setQuickActionsTargetId(a.id)}
             />
           </div>
@@ -582,6 +684,7 @@ export function CalendarView({
             services={demoServices}
             locale={locale}
             dashboardMessages={dashboard}
+            statusMessages={appointmentStatus}
             onSelect={(a) => setQuickActionsTargetId(a.id)}
           />
         )}
@@ -589,7 +692,7 @@ export function CalendarView({
         {desktopView === "month" && (
           <MonthGrid
             monthAnchor={selectedDate}
-            appointments={appointments.filter(
+            appointments={shownAppointments.filter(
               (a) => staffFilter === "all" || a.staff === staffFilter,
             )}
             weekdaysShort={calendar.weekdaysShort}
@@ -608,6 +711,7 @@ export function CalendarView({
             services={demoServices}
             locale={locale}
             dashboardMessages={dashboard}
+            statusMessages={appointmentStatus}
             onSelect={(a) => setQuickActionsTargetId(a.id)}
           />
         )}
@@ -622,6 +726,8 @@ export function CalendarView({
         onClose={closeSheet}
         onSave={handleSave}
         onDelete={editing ? handleDelete : undefined}
+        deleteBlockers={editing ? deleteBlockers : null}
+        timeZone={workspaceTimeZone}
         locale={locale}
         messages={appointment}
         statusMessages={appointmentStatus}
@@ -665,6 +771,7 @@ export function CalendarView({
         onOpenClient={() => quickActionsTarget && handleOpenClient(quickActionsTarget)}
         onConfirmCancel={() => quickActionsTarget && handleConfirmCancel(quickActionsTarget)}
         onViewWaitingList={() => router.push(`/${workspaceSlug}/waiting-list`)}
+        timeZone={workspaceTimeZone}
       />
 
       <MoveAppointmentSheet

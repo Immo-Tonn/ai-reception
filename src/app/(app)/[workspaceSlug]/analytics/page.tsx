@@ -1,4 +1,6 @@
+import { notFound } from "next/navigation";
 import { getMessages } from "@/lib/i18n";
+import { isFeatureEnabled } from "@/lib/config/features";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { AnalyticsView } from "./AnalyticsView";
@@ -10,6 +12,7 @@ export default async function AnalyticsPage({
   params: Promise<{ workspaceSlug: string }>;
 }) {
   const { workspaceSlug } = await params;
+  if (!isFeatureEnabled("analytics")) notFound();
   const locale = await getRequestLocale();
   const { analytics, crossModule } = getMessages(locale);
 

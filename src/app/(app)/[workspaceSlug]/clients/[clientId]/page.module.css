@@ -224,3 +224,35 @@
   font: inherit;
   cursor: pointer;
 }
+
+/* History rows open the appointment in the calendar (status changes and corrections live there). */
+a.row {
+  color: inherit;
+  text-decoration: none;
+}
+
+.rowMuted {
+  opacity: 0.7;
+}
+
+.rowEnd {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.statusCounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+}
+
+.countWarning {
+  color: var(--panel-status-negative-text, #b42318);
+  font-weight: var(--font-weight-semibold);
+}

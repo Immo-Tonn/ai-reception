@@ -20,6 +20,7 @@ export default async function CalendarPage({
     recurrence,
     conflict,
     auditLog,
+    repositoryErrors,
   } = getMessages(locale);
 
   return (
@@ -36,6 +37,7 @@ export default async function CalendarPage({
       recurrence={recurrence}
       conflict={conflict}
       auditLog={auditLog}
+      repositoryErrors={repositoryErrors}
     />
   );
 }

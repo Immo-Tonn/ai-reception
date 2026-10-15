@@ -6,6 +6,7 @@ import { Button, Icon, SaveStatus } from "@/components/ui";
 import type { SaveState } from "@/components/ui";
 import { useLeads, useQuotes, useJobs, useProjects } from "@/features/work/useWork";
 import { useInvoices } from "@/features/finance/useInvoices";
+import { useFeatureEnabled } from "@/features/workspace/FeatureFlags";
 import { useAuditLog } from "@/features/auditLog/useAuditLog";
 import { useWorkspaceConfig, useWorkspaceToday } from "@/features/workspace/WorkspaceCatalog";
 import { getWorkspaceConfig, isDemoWorkspaceSlug } from "@/features/workspace/registry";
@@ -62,7 +63,8 @@ export function WorkView({
   const { items: quotes } = quotesState;
   const { items: jobs } = jobsState;
   const { items: projects } = projectsState;
-  const { create: createInvoice } = useInvoices(workspaceSlug);
+  const financeOn = useFeatureEnabled("finance");
+  const { create: createInvoice } = useInvoices(workspaceSlug, financeOn);
   const { log } = useAuditLog(workspaceSlug);
   const today = useWorkspaceToday(workspaceSlug);
 
@@ -579,7 +581,7 @@ export function WorkView({
                 ))}
               </div>
               <div className={styles.actionRow}>
-                {!real && job.status === "done" && !job.invoiceId && (
+                {!real && financeOn && job.status === "done" && !job.invoiceId && (
                   <button type="button" className={styles.actionButton} onClick={() => void handleJobToInvoice(job)}>
                     <Icon name="receipt" size={14} />
                     {messages.convertToInvoice}

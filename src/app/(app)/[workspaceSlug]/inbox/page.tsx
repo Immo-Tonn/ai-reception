@@ -11,11 +11,11 @@ export default async function InboxPage({
 }) {
   const { workspaceSlug } = await params;
   const locale = await getRequestLocale();
-  const { inbox } = getMessages(locale);
+  const { inbox, appointmentStatus } = getMessages(locale);
 
   // Real workspaces: business events from the database. The Conversation UI (WhatsApp/e-mail mock-ups) is demo-only.
   if (!isDemoWorkspaceSlug(workspaceSlug)) {
-    return <InboxEventsView workspaceSlug={workspaceSlug} locale={locale} messages={inbox} />;
+    return <InboxEventsView workspaceSlug={workspaceSlug} locale={locale} messages={inbox} statusMessages={appointmentStatus} />;
   }
   return <InboxView workspaceSlug={workspaceSlug} locale={locale} messages={inbox} />;
 }
