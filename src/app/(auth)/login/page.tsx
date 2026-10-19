@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Button, BackLink } from "@/components/ui";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
 import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
@@ -11,7 +12,12 @@ export const metadata: Metadata = {
   title: "Sign in — ServiceOS",
 };
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reset?: string }>;
+}) {
+  const { reset } = await searchParams;
   const locale = await getRequestLocale();
   const { login, common, authErrors } = getMessages(locale);
 
@@ -38,11 +44,23 @@ export default async function LoginPage() {
               <p className={styles.formSubtitle}>{login.subtitle}</p>
             </div>
 
+            {reset === "done" ? (
+              <p className={styles.formError} role="status">
+                {login.passwordResetDone}
+              </p>
+            ) : null}
+
             <LoginForm
               messages={login}
               errors={authErrors}
               passwordLabels={{ show: common.showPassword, hide: common.hidePassword }}
             />
+
+            <p className={styles.signupPrompt}>
+              <Link className={styles.signupLink} href="/forgot-password">
+                {login.forgotPassword}
+              </Link>
+            </p>
 
             <div className={styles.formFoot}>
               <span className={styles.divider}>{login.orDivider}</span>

@@ -101,6 +101,61 @@ export async function changePassword(
   return { ok: true };
 }
 
+/**
+ * Password recovery by one-time code (Supabase `recovery` OTP). The current
+ * password keeps working until a new one is set; nothing here uses the
+ * service role.
+ *
+ * Asking for a code answers the same way whether or not the address has an
+ * account: only a rate limit is reported, every other failure (unknown
+ * address, mail transport) looks like success and is logged by code only.
+ */
+export async function requestPasswordResetCode(
+  email: string,
+): Promise<{ ok: true } | { ok: false; code: AuthErrorCode }> {
+  if (!isSupabaseConfigured()) return { ok: false, code: "not_configured" };
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  if (!error) return { ok: true };
+  const code = mapSupabaseAuthError(error);
+  if (code === "rate_limited") return { ok: false, code };
+  console.error("[password-reset] request failed:", error.code ?? error.status ?? "unknown");
+  return { ok: true };
+}
+
+/** Checks the e-mailed code; a correct one opens a session for that user. */
+export async function verifyPasswordResetCode(
+  email: string,
+  code: string,
+): Promise<{ ok: true } | { ok: false; code: AuthErrorCode | "invalid_code" }> {
+  if (!isSupabaseConfigured()) return { ok: false, code: "not_configured" };
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: "recovery" });
+  if (error) {
+    if (mapSupabaseAuthError(error) === "rate_limited") return { ok: false, code: "rate_limited" };
+    if ((error.status ?? 400) >= 500) return { ok: false, code: "unknown" };
+    return { ok: false, code: "invalid_code" }; // wrong or expired: one answer for both
+  }
+  if (!data.session) return { ok: false, code: "invalid_code" };
+  return { ok: true };
+}
+
+/** Sets the new password for the signed-in (recovery) session, then ends ALL sessions: the person signs in again. */
+export async function completePasswordReset(
+  newPassword: string,
+): Promise<{ ok: true } | { ok: false; code: AuthErrorCode | "same_password" }> {
+  if (!isSupabaseConfigured()) return { ok: false, code: "not_configured" };
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) {
+    if (error.code === "same_password") return { ok: false, code: "same_password" };
+    return { ok: false, code: mapSupabaseAuthError(error) };
+  }
+  // Best effort: the password is already changed even if ending the sessions fails.
+  await supabase.auth.signOut({ scope: "global" }).catch(() => undefined);
+  return { ok: true };
+}
+
 export function getBusinessAuth(): BusinessAuthProvider {
   return supabaseBusinessAuth;
 }
