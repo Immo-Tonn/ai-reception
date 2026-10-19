@@ -74,10 +74,18 @@ export function BookingWizard({
   const [result, setResult] = useState<PublicBookingResult | null>(null);
   // null = untouched: the field shows the signed-in client's details (if any),
   // so prefill needs no effect. Once typed (even to ""), the typed value wins.
-  const [nameInput, setNameInput] = useState<string | null>(null);
+  const [firstNameInput, setFirstNameInput] = useState<string | null>(null);
+  const [lastNameInput, setLastNameInput] = useState<string | null>(null);
   const [emailInput, setEmailInput] = useState<string | null>(null);
   const [phoneInput, setPhoneInput] = useState<string | null>(null);
-  const name = nameInput ?? identity?.name ?? "";
+  // A signed-in client has one stored name: split it at the first space
+  // ("Anna Maria Müller" -> first "Anna", last "Maria Müller").
+  const [identityFirstName = "", ...identityLastParts] = (identity?.name ?? "").trim().split(/\s+/);
+  const firstName = firstNameInput ?? identityFirstName;
+  const lastName = lastNameInput ?? identityLastParts.join(" ");
+  // The server still receives ONE `name` ("first last"), so the shared validation
+  // (detailsValidation.ts) and the booking API stay unchanged.
+  const name = `${firstName.trim()} ${lastName.trim()}`.trim();
   const email = emailInput ?? identity?.email ?? "";
   const phone = phoneInput ?? identity?.phone ?? "";
   const [notes, setNotes] = useState("");
@@ -88,10 +96,11 @@ export function BookingWizard({
   // attempt (`submitAttempted`), never on first render of an empty form
   // (§ validation UX: don't just disable Submit with no explanation, but
   // don't scold an untouched field either).
-  const [touched, setTouched] = useState<{ name?: boolean; email?: boolean; phone?: boolean }>({});
+  const [touched, setTouched] = useState<{ firstName?: boolean; lastName?: boolean; email?: boolean; phone?: boolean }>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const nameFieldRef = useRef<HTMLInputElement>(null);
+  const firstNameFieldRef = useRef<HTMLInputElement>(null);
+  const lastNameFieldRef = useRef<HTMLInputElement>(null);
   const emailFieldRef = useRef<HTMLInputElement>(null);
   const phoneFieldRef = useRef<HTMLInputElement>(null);
 
@@ -117,7 +126,13 @@ export function BookingWizard({
     () => getClientDetailsFieldErrors({ name, email, phone }),
     [name, email, phone],
   );
-  const showNameError = Boolean(fieldErrors.name) && (touched.name || submitAttempted);
+  // First name is required, last name is optional. A format error on the combined
+  // name (digits, junk) is shown on every field that is filled in.
+  const nameFormatInvalid = Boolean(fieldErrors.name);
+  const firstNameInvalid = firstName.trim() === "" || nameFormatInvalid;
+  const lastNameInvalid = lastName.trim() !== "" && nameFormatInvalid;
+  const showFirstNameError = firstNameInvalid && (touched.firstName || submitAttempted);
+  const showLastNameError = lastNameInvalid && (touched.lastName || submitAttempted);
   const showEmailError = Boolean(fieldErrors.email) && (touched.email || submitAttempted);
   const showPhoneError = Boolean(fieldErrors.phone) && (touched.phone || submitAttempted);
 
@@ -212,13 +227,15 @@ export function BookingWizard({
 
   async function handleSubmit() {
     if (!selectedService || !selectedSlot) return;
-    if (fieldErrors.name || fieldErrors.email || fieldErrors.phone) {
+    if (firstNameInvalid || lastNameInvalid || fieldErrors.email || fieldErrors.phone) {
       setSubmitAttempted(true);
-      const firstInvalidRef = fieldErrors.name
-        ? nameFieldRef
-        : fieldErrors.email
-          ? emailFieldRef
-          : phoneFieldRef;
+      const firstInvalidRef = firstNameInvalid
+        ? firstNameFieldRef
+        : lastNameInvalid
+          ? lastNameFieldRef
+          : fieldErrors.email
+            ? emailFieldRef
+            : phoneFieldRef;
       firstInvalidRef.current?.focus();
       return;
     }
@@ -449,14 +466,23 @@ export function BookingWizard({
 
             <div className={styles.form}>
               <Input
-                ref={nameFieldRef}
-                label={`${booking.nameLabel} *`}
-                autoComplete="name"
-                value={name}
-                onChange={(e) => setNameInput(e.target.value)}
-                onBlur={() => setTouched((t) => ({ ...t, name: true }))}
-                error={showNameError ? booking.nameError : undefined}
+                ref={firstNameFieldRef}
+                label={`${booking.firstNameLabel} *`}
+                autoComplete="given-name"
+                value={firstName}
+                onChange={(e) => setFirstNameInput(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, firstName: true }))}
+                error={showFirstNameError ? booking.nameError : undefined}
                 required
+              />
+              <Input
+                ref={lastNameFieldRef}
+                label={booking.lastNameLabel}
+                autoComplete="family-name"
+                value={lastName}
+                onChange={(e) => setLastNameInput(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, lastName: true }))}
+                error={showLastNameError ? booking.nameError : undefined}
               />
               <Input
                 ref={emailFieldRef}
@@ -540,7 +566,8 @@ export function BookingWizard({
                 setSelectedStaffId("any");
                 setSelectedSlot(null);
                 setResult(null);
-                setNameInput("");
+                setFirstNameInput("");
+                setLastNameInput("");
                 setEmailInput("");
                 setPhoneInput("");
                 setNotes("");

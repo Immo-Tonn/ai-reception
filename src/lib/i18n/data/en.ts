@@ -957,6 +957,8 @@ export const en = {
     dateUnavailable: "Not available",
     detailsHelper: "We'll use these details to confirm and manage your booking.",
     nameLabel: "Full name",
+    firstNameLabel: "First name",
+    lastNameLabel: "Last name",
     emailLabel: "Email",
     phoneLabel: "Phone",
     nameError: "Enter a valid name.",

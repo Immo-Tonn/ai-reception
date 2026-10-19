@@ -933,6 +933,8 @@ export const de: Messages = {
     dateUnavailable: "Nicht verfügbar",
     detailsHelper: "Diese Angaben werden benötigt, um Ihren Termin zu bestätigen und zu verwalten.",
     nameLabel: "Vollständiger Name",
+    firstNameLabel: "Vorname",
+    lastNameLabel: "Nachname",
     emailLabel: "E-Mail",
     phoneLabel: "Telefon",
     nameError: "Geben Sie einen gültigen Namen ein.",

@@ -933,6 +933,8 @@ export const uk: Messages = {
     dateUnavailable: "Недоступно",
     detailsHelper: "Ці дані потрібні для підтвердження та керування вашим записом.",
     nameLabel: "Повне ім'я",
+    firstNameLabel: "Ім'я",
+    lastNameLabel: "Прізвище",
     emailLabel: "Електронна пошта",
     phoneLabel: "Телефон",
     nameError: "Введіть коректне ім'я.",

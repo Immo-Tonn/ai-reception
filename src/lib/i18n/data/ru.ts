@@ -933,6 +933,8 @@ export const ru: Messages = {
     dateUnavailable: "Недоступно",
     detailsHelper: "Эти данные нужны для подтверждения и управления вашей записью.",
     nameLabel: "Полное имя",
+    firstNameLabel: "Имя",
+    lastNameLabel: "Фамилия",
     emailLabel: "Электронная почта",
     phoneLabel: "Телефон",
     nameError: "Введите корректное имя.",
