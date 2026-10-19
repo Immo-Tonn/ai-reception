@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Button, Icon, Input } from "@/components/ui";
 import { uniqueSlotTimes, type AvailableSlot } from "@/features/appointments/availability";
 import {
@@ -31,6 +31,8 @@ import { formatCurrency, formatDate } from "@/lib/i18n/format";
 import styles from "./page.module.css";
 
 const DATE_STRIP_DAYS = 28;
+
+const subscribeNever = () => () => {};
 
 type Step = "service" | "staff" | "date" | "time" | "details" | "confirmation";
 const steps: Step[] = ["service", "staff", "date", "time", "details", "confirmation"];
@@ -67,13 +69,17 @@ export function BookingWizard({
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null | "any">("any");
   const [selectedDate, setSelectedDate] = useState(() => resolveToday(new Date(), timezone));
-  const [slots, setSlots] = useState<AvailableSlot[]>([]);
+  const [slotsResult, setSlotsResult] = useState<{ key: string; slots: AvailableSlot[] } | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
   const [result, setResult] = useState<PublicBookingResult | null>(null);
-  const [slotsLoading, setSlotsLoading] = useState(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  // null = untouched: the field shows the signed-in client's details (if any),
+  // so prefill needs no effect. Once typed (even to ""), the typed value wins.
+  const [nameInput, setNameInput] = useState<string | null>(null);
+  const [emailInput, setEmailInput] = useState<string | null>(null);
+  const [phoneInput, setPhoneInput] = useState<string | null>(null);
+  const name = nameInput ?? identity?.name ?? "";
+  const email = emailInput ?? identity?.email ?? "";
+  const phone = phoneInput ?? identity?.phone ?? "";
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,12 +98,13 @@ export function BookingWizard({
   const dateStrip = useMemo(() => buildDateStrip(new Date(), timezone, { maxDaysAhead: DATE_STRIP_DAYS - 1 }), [timezone]);
   // Days that really have slots (server-computed with the same engine as the time step).
   // null = not known yet / could not be determined: every day stays selectable then.
-  const [availableDates, setAvailableDates] = useState<Set<string> | null>(null);
-  const [datesLoading, setDatesLoading] = useState(false);
+  const [datesResult, setDatesResult] = useState<{ key: string; dates: Set<string> | null } | null>(null);
+  const datesKey = `${workspaceSlug}|${selectedServiceId}|${selectedStaffId}|${dateStrip[0]}|${dateStrip.length}`;
+  const datesLoading = step === "date" && !!selectedServiceId && datesResult?.key !== datesKey;
+  const availableDates = datesResult?.key === datesKey ? datesResult.dates : null;
   // Slots and booked times are the business's wall clock. Say so when the
   // visitor's own zone differs (detected after mount to keep SSR stable).
-  const [visitorZone, setVisitorZone] = useState<string | null>(null);
-  useEffect(() => setVisitorZone(browserTimeZone()), []);
+  const visitorZone = useSyncExternalStore(subscribeNever, browserTimeZone, () => null);
   const zoneNote =
     timezone && visitorZone && visitorZone !== timezone
       ? booking.timesInBusinessZone.replace("{city}", zoneCityLabel(timezone)).replace("{zone}", timezone)
@@ -114,55 +121,49 @@ export function BookingWizard({
   const showEmailError = Boolean(fieldErrors.email) && (touched.email || submitAttempted);
   const showPhoneError = Boolean(fieldErrors.phone) && (touched.phone || submitAttempted);
 
-  // A signed-in client (see /client/login, /client/signup) doesn't have
-  // to retype their details every booking — guest checkout still works
-  // without ever touching this (§ booking never depends on registration).
-  useEffect(() => {
-    if (!identity) return;
-    setName((current) => current || identity.name);
-    setEmail((current) => current || identity.email);
-    setPhone((current) => current || identity.phone);
-  }, [identity]);
-
   useEffect(() => {
     if (step !== "date" || !selectedServiceId) return;
     let cancelled = false;
-    setDatesLoading(true);
-    setAvailableDates(null);
     const staffId = selectedStaffId === "any" ? null : selectedStaffId;
     getPublicBookingService(workspaceSlug)
       .getAvailableDates(workspaceSlug, selectedServiceId, staffId, dateStrip[0], dateStrip.length)
       .then((dates) => {
-        if (!cancelled) setAvailableDates(dates ? new Set(dates) : null);
+        if (!cancelled) setDatesResult({ key: datesKey, dates: dates ? new Set(dates) : null });
       })
       .catch((err) => {
         if (cancelled) return;
-        setAvailableDates(null);
+        setDatesResult({ key: datesKey, dates: null });
         if (err instanceof BookingRateLimitedError) setError(booking.rateLimitedError);
-      })
-      .finally(() => {
-        if (!cancelled) setDatesLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [step, workspaceSlug, selectedServiceId, selectedStaffId, dateStrip, booking.rateLimitedError]);
+  }, [step, workspaceSlug, selectedServiceId, selectedStaffId, dateStrip, datesKey, booking.rateLimitedError]);
+
+  const slotsKey = `${workspaceSlug}|${selectedServiceId}|${selectedStaffId}|${selectedDate}`;
+  const slotsLoading = step === "time" && !!selectedServiceId && slotsResult?.key !== slotsKey;
+  const slots = slotsResult?.key === slotsKey ? slotsResult.slots : [];
 
   useEffect(() => {
     if (step !== "time" || !selectedServiceId) return;
-    setSlotsLoading(true);
+    let cancelled = false;
     const staffId = selectedStaffId === "any" ? null : selectedStaffId;
     getPublicBookingService(workspaceSlug)
       .getAvailableSlots(workspaceSlug, selectedServiceId, staffId, selectedDate)
       // "Any specialist" yields one slot per free specialist per time — the
       // visitor sees each time once; the assignee is resolved at booking.
-      .then((all) => setSlots(uniqueSlotTimes(all)))
-      .catch((err) => {
-        setSlots([]);
-        if (err instanceof BookingRateLimitedError) setError(booking.rateLimitedError);
+      .then((all) => {
+        if (!cancelled) setSlotsResult({ key: slotsKey, slots: uniqueSlotTimes(all) });
       })
-      .finally(() => setSlotsLoading(false));
-  }, [step, workspaceSlug, selectedServiceId, selectedStaffId, selectedDate, booking.rateLimitedError]);
+      .catch((err) => {
+        if (cancelled) return;
+        setSlotsResult({ key: slotsKey, slots: [] });
+        if (err instanceof BookingRateLimitedError) setError(booking.rateLimitedError);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step, workspaceSlug, selectedServiceId, selectedStaffId, selectedDate, slotsKey, booking.rateLimitedError]);
 
   // Embed resizing (§3): tell the embedding page how tall we are so an
   // iframe embed can size itself instead of showing a scrollbar. Messages
@@ -236,7 +237,6 @@ export function BookingWizard({
       goTo("confirmation");
     } catch (err) {
       if (!(err instanceof BookingUnavailableError)) {
-        // eslint-disable-next-line no-console
         console.error("Public booking failed", err);
       }
       setError(err instanceof BookingRateLimitedError ? booking.rateLimitedError : booking.slotTakenError);
@@ -453,7 +453,7 @@ export function BookingWizard({
                 label={`${booking.nameLabel} *`}
                 autoComplete="name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => setNameInput(e.target.value)}
                 onBlur={() => setTouched((t) => ({ ...t, name: true }))}
                 error={showNameError ? booking.nameError : undefined}
                 required
@@ -465,7 +465,7 @@ export function BookingWizard({
                 inputMode="email"
                 autoComplete="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => setEmailInput(e.target.value)}
                 onBlur={() => setTouched((t) => ({ ...t, email: true }))}
                 error={showEmailError ? booking.emailError : undefined}
                 required
@@ -477,7 +477,7 @@ export function BookingWizard({
                 inputMode="tel"
                 autoComplete="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhoneInput(e.target.value)}
                 onBlur={() => setTouched((t) => ({ ...t, phone: true }))}
                 error={showPhoneError ? booking.phoneError : undefined}
                 required
@@ -540,9 +540,9 @@ export function BookingWizard({
                 setSelectedStaffId("any");
                 setSelectedSlot(null);
                 setResult(null);
-                setName("");
-                setEmail("");
-                setPhone("");
+                setNameInput("");
+                setEmailInput("");
+                setPhoneInput("");
                 setNotes("");
                 setTouched({});
                 setSubmitAttempted(false);
