@@ -89,6 +89,16 @@ export default async function SettingsPage({
       </div>
 
       {!isDemoWorkspaceSlug(workspaceSlug) && (
+        <Link href={`/${workspaceSlug}/settings/account`} className={styles.row}>
+          <div className={styles.rowBody}>
+            <p className={styles.rowLabel}>{settings.accountSecurity.label}</p>
+            <p className={styles.rowDescription}>{settings.accountSecurity.description}</p>
+          </div>
+          <Icon name="chevronRight" size={18} />
+        </Link>
+      )}
+
+      {!isDemoWorkspaceSlug(workspaceSlug) && (
         <form suppressHydrationWarning action={signOutAction} className={styles.row}>
           <div className={styles.rowBody}>
             <p className={styles.rowLabel}>{settings.account.label}</p>

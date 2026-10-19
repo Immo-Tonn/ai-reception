@@ -74,6 +74,33 @@ export async function getCurrentUserSafe(): Promise<{ id: string; email: string 
   }
 }
 
+/**
+ * Changes the signed-in user's password. The CURRENT password is verified
+ * first (re-authentication through the user's own session — no service role),
+ * then the new one is set and every OTHER session of this user is ended; the
+ * current browser stays signed in. Failures are stable codes, never raw messages.
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ ok: true } | { ok: false; code: AuthErrorCode }> {
+  if (!isSupabaseConfigured()) return { ok: false, code: "not_configured" };
+  const supabase = await createSupabaseServerClient();
+  const { data, error: userError } = await supabase.auth.getUser();
+  const email = data.user?.email;
+  if (userError || !email) return { ok: false, code: "unknown" };
+
+  const verified = await supabase.auth.signInWithPassword({ email, password: currentPassword });
+  if (verified.error) return { ok: false, code: mapSupabaseAuthError(verified.error) };
+
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) return { ok: false, code: mapSupabaseAuthError(error) };
+
+  // Best effort: the password is already changed even if ending other sessions fails.
+  await supabase.auth.signOut({ scope: "others" }).catch(() => undefined);
+  return { ok: true };
+}
+
 export function getBusinessAuth(): BusinessAuthProvider {
   return supabaseBusinessAuth;
 }

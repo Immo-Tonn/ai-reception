@@ -231,6 +231,20 @@ export const ru: Messages = {
     no_workspace: "У этого аккаунта ещё нет рабочего пространства.",
     unknown: "Что-то пошло не так. Попробуйте ещё раз.",
   },
+  settingsAccount: {
+    title: "Аккаунт",
+    subtitle: "Управление входом в аккаунт.",
+    passwordTitle: "Смена пароля",
+    currentPasswordLabel: "Текущий пароль",
+    newPasswordLabel: "Новый пароль",
+    confirmPasswordLabel: "Повторите новый пароль",
+    changePassword: "Сменить пароль",
+    changing: "Меняем…",
+    passwordChanged: "Пароль изменён. На других устройствах выполнен выход.",
+    passwordMismatch: "Новые пароли не совпадают.",
+    passwordSame: "Новый пароль должен отличаться от текущего.",
+    currentPasswordWrong: "Текущий пароль указан неверно.",
+  },
   settingsServices: {
     title: "Услуги",
     subtitle: "Услуги вашего бизнеса — показываются в календаре и используются для записи.",
@@ -461,6 +475,10 @@ export const ru: Messages = {
     booking: {
       label: "Правила записи",
       description: "Автоподтверждение, время заранее, период записи, время начала.",
+    },
+    accountSecurity: {
+      label: "Аккаунт и пароль",
+      description: "Смена пароля.",
     },
     account: {
       label: "Аккаунт",

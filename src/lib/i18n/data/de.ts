@@ -231,6 +231,20 @@ export const de: Messages = {
     no_workspace: "Dieses Konto hat noch keinen Arbeitsbereich.",
     unknown: "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
   },
+  settingsAccount: {
+    title: "Konto",
+    subtitle: "Verwalten Sie Ihre Anmeldung.",
+    passwordTitle: "Passwort ändern",
+    currentPasswordLabel: "Aktuelles Passwort",
+    newPasswordLabel: "Neues Passwort",
+    confirmPasswordLabel: "Neues Passwort wiederholen",
+    changePassword: "Passwort ändern",
+    changing: "Wird geändert…",
+    passwordChanged: "Passwort geändert. Auf anderen Geräten wurden Sie abgemeldet.",
+    passwordMismatch: "Die neuen Passwörter stimmen nicht überein.",
+    passwordSame: "Das neue Passwort muss sich vom aktuellen unterscheiden.",
+    currentPasswordWrong: "Das aktuelle Passwort ist falsch.",
+  },
   settingsServices: {
     title: "Leistungen",
     subtitle: "Die Leistungen Ihres Betriebs – im Kalender sichtbar und für Buchungen genutzt.",
@@ -461,6 +475,10 @@ export const de: Messages = {
     booking: {
       label: "Buchungsregeln",
       description: "Auto-Bestätigung, Vorlauf, Buchungszeitraum, Startzeiten.",
+    },
+    accountSecurity: {
+      label: "Konto & Passwort",
+      description: "Passwort ändern.",
     },
     account: {
       label: "Konto",

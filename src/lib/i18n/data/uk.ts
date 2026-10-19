@@ -231,6 +231,20 @@ export const uk: Messages = {
     no_workspace: "У цього акаунта ще немає робочого простору.",
     unknown: "Щось пішло не так. Спробуйте ще раз.",
   },
+  settingsAccount: {
+    title: "Акаунт",
+    subtitle: "Керування входом в акаунт.",
+    passwordTitle: "Зміна пароля",
+    currentPasswordLabel: "Поточний пароль",
+    newPasswordLabel: "Новий пароль",
+    confirmPasswordLabel: "Повторіть новий пароль",
+    changePassword: "Змінити пароль",
+    changing: "Змінюємо…",
+    passwordChanged: "Пароль змінено. На інших пристроях виконано вихід.",
+    passwordMismatch: "Нові паролі не збігаються.",
+    passwordSame: "Новий пароль має відрізнятися від поточного.",
+    currentPasswordWrong: "Поточний пароль вказано неправильно.",
+  },
   settingsServices: {
     title: "Послуги",
     subtitle: "Послуги вашого бізнесу — показуються в календарі та використовуються для запису.",
@@ -461,6 +475,10 @@ export const uk: Messages = {
     booking: {
       label: "Правила бронювання",
       description: "Автопідтвердження, час наперед, період бронювання, час початку.",
+    },
+    accountSecurity: {
+      label: "Акаунт і пароль",
+      description: "Зміна пароля.",
     },
     account: {
       label: "Акаунт",

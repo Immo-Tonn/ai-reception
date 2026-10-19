@@ -245,6 +245,20 @@ export const en = {
     no_workspace: "This account has no workspace yet.",
     unknown: "Something went wrong. Please try again.",
   },
+  settingsAccount: {
+    title: "Account",
+    subtitle: "Manage how you sign in.",
+    passwordTitle: "Change password",
+    currentPasswordLabel: "Current password",
+    newPasswordLabel: "New password",
+    confirmPasswordLabel: "Repeat new password",
+    changePassword: "Change password",
+    changing: "Changing…",
+    passwordChanged: "Password changed. Other devices have been signed out.",
+    passwordMismatch: "The new passwords do not match.",
+    passwordSame: "The new password must differ from the current one.",
+    currentPasswordWrong: "The current password is incorrect.",
+  },
   settingsServices: {
     title: "Services",
     subtitle: "The services your business offers — shown in the calendar and used for booking.",
@@ -475,6 +489,10 @@ export const en = {
     booking: {
       label: "Booking rules",
       description: "Auto-confirm, notice, booking window, start times.",
+    },
+    accountSecurity: {
+      label: "Account & password",
+      description: "Change your password.",
     },
     account: {
       label: "Account",
