@@ -1,4 +1,4 @@
-import { computeSlotsFor } from "@/features/appointments/availability";
+import { computeSlotsFor, type ExternalBusyInput } from "@/features/appointments/availability";
 import type { Appointment } from "@/features/appointments/types";
 import type { ServiceDefinition } from "@/features/services/types";
 import type { StaffMember } from "@/features/staff/types";
@@ -29,7 +29,7 @@ export function computeAvailableDates(params: {
   /** Wall-clock "now + min notice" (see `nowAsWallClock`). */
   notBefore?: Date;
   slotIntervalMinutes?: number;
-}): string[] {
+} & ExternalBusyInput): string[] {
   const { fromDate, days, today, maxHorizonDays, ...rest } = params;
   const out: string[] = [];
   for (let i = 0; i < Math.max(0, days); i++) {

@@ -4,6 +4,19 @@
 > This file is the running log of what each stage changed. Older sections below (e.g. "Audit status (2026-10-04)") are HISTORICAL and may be outdated: trust ROADMAP.md and the newest stage sections.
 > Latest stage commit: `ddaa140` (Business Operations foundation, branch `feature/business-operations-foundation`).
 
+## STAGE (in progress, 2026-10-13): Google Calendar FreeBusy, branch `feature/google-calendar-freebusy` (from team/main `d431188`)
+
+Migrations **0025 and 0026 applied to production** (2026-10-13, each after a backup + verification). Read first: [docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md](docs/PRODUCTION_DEPLOYMENT_CHECKLIST.md) (incl. Team
+Lead Handover Summary), then [docs/EXTERNAL_CALENDAR.md](docs/EXTERNAL_CALENDAR.md),
+[docs/DATA_RETENTION.md](docs/DATA_RETENTION.md), [docs/BACKUP_RECOVERY.md](docs/BACKUP_RECOVERY.md).
+- One way Google -> ServiceOS per staff member; ONE availability engine; fail-closed per person.
+- OAuth code + PKCE + OIDC ID-token verification (JWKS); identity = HMAC of `sub`; manage page for self-service
+  disconnect; Google revokes account-wide -> `releaseGrant` revokes only the last connection of an account.
+- Daily Vercel Cron cleanup (CRON_SECRET); staff deactivation removes the connection; "revoked" status never
+  auto-deleted. Datenschutz draft (4 languages) = Needs legal review.
+- Same branch, separate commit: global word-break policy (mobile).
+- Verified only with a mock provider / signed test tokens. Real Google needs the team lead's Google Cloud setup.
+
 ## TARGET: real vs demo separation, editable settings (decided after manual E2E)
 
 ### Target behaviour

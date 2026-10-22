@@ -53,6 +53,16 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
         ],
       },
+      // Google Calendar connect pages: the URL carries a single-use secret (never leak it via Referer),
+      // nothing is indexed or cached.
+      {
+        source: "/connect-calendar/:path*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          { key: "Cache-Control", value: "no-store" },
+        ],
+      },
       {
         source: "/book/:workspaceSlug/embed",
         headers: [{ key: "Content-Security-Policy", value: "frame-ancestors *" }],
