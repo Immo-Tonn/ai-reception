@@ -169,16 +169,36 @@ function slotChanged(before: Appointment, after: Appointment): boolean {
   );
 }
 
-/** "Now" on the workspace wall clock (demo workspaces: this machine's clock). */
-async function workspaceNow(session: Session): Promise<WallNow> {
-  return wallNow(await getWorkspaceTimeZone(session));
+/**
+ * "Now" on the workspace wall clock. Demo workspaces: this machine's clock.
+ * A REAL workspace whose time zone could not be read gets `null` (unknown) —
+ * never the server clock (UTC on Vercel), which would shift "has it started?".
+ */
+async function workspaceNow(session: Session): Promise<WallNow | null> {
+  if (isDemoWorkspaceSlug(session.workspaceId)) return wallNow(null);
+  const tz = await getWorkspaceTimeZone(session);
+  return tz ? wallNow(tz) : null;
+}
+
+/** Long before / after any appointment: a rule that holds for BOTH does not depend on the time. */
+const NOTHING_STARTED: WallNow = { date: "0000-01-01", time: "00:00" };
+const EVERYTHING_STARTED: WallNow = { date: "9999-12-31", time: "23:59" };
+
+/** With an unknown "now", allow only what is allowed at any time (fail closed, never guess). */
+function allowedWhateverTheTime(check: (now: WallNow) => boolean): boolean {
+  return check(NOTHING_STARTED) && check(EVERYTHING_STARTED);
 }
 
 /** Server-side status rules (the UI shows only allowed actions, this is the authority). */
 async function assertStatusChange(session: Session, before: Appointment, to: Appointment["status"]) {
   // Correcting a recorded outcome is not for every role (staff could otherwise rewrite history).
   if (isHistoryCorrection(before.status, to)) assertCan(session.role, "appointments.correct");
-  const verdict = checkStatusTransition(before, to, await workspaceNow(session));
+  const now = await workspaceNow(session);
+  if (!now) {
+    if (allowedWhateverTheTime((t) => checkStatusTransition(before, to, t).ok)) return;
+    throw new BusinessRuleError("The workspace time zone could not be read; this status change depends on the time.", "invalid_status_transition");
+  }
+  const verdict = checkStatusTransition(before, to, now);
   if (verdict.ok) return;
   throw new BusinessRuleError(`Status change ${before.status} -> ${to} is not allowed (${verdict.reason}).`, "invalid_status_transition");
 }
@@ -201,7 +221,8 @@ export async function createAppointment(
 ): Promise<Appointment> {
   assertCan(session.role, "appointments.create");
   const data = createAppointmentSchema.parse(input);
-  if (!checkInitialStatus(data, data.status, await workspaceNow(session))) {
+  const now = await workspaceNow(session);
+  if (now ? !checkInitialStatus(data, data.status, now) : !allowedWhateverTheTime((t) => checkInitialStatus(data, data.status, t))) {
     throw new BusinessRuleError(`Status ${data.status} is not allowed for this appointment time.`, "invalid_status_transition");
   }
 

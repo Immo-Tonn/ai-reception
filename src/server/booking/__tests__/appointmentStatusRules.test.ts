@@ -118,6 +118,22 @@ describe("status rules (server)", () => {
   });
 });
 
+describe("unknown workspace time zone (never the server clock)", () => {
+  it("allows only time-independent changes and refuses the rest", async () => {
+    const s = await owner();
+    const future = await svc.createAppointment(s, input({ time: "12:00", status: "pending" }));
+    const past = await pastAppointment();
+    await q("update workspaces set timezone='Not/AZone' where id=$1", [wsId]);
+    try {
+      expect((await svc.updateAppointment(s, future.id, { status: "confirmed" }))?.status).toBe("confirmed");
+      await expect(svc.updateAppointment(s, past, { status: "completed" })).rejects.toMatchObject({ code: "invalid_status_transition" });
+      await expect(svc.cancelAppointment(s, future.id)).rejects.toMatchObject({ code: "invalid_status_transition" });
+    } finally {
+      await q("update workspaces set timezone='Europe/Berlin' where id=$1", [wsId]);
+    }
+  });
+});
+
 describe("corrections of a recorded outcome: owner / admin / manager only", () => {
   it("staff sets the first outcome but cannot change it; a manager corrects it (audited)", async () => {
     const id = await pastAppointment();
