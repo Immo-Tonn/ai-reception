@@ -16,9 +16,18 @@ const toMinutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.
  * `busy_until`) -> the minimal `Appointment` objects the availability engine's
  * conflict check understands. They carry no `serviceId`, so the engine adds no
  * second buffer on top. A range crossing midnight is split per calendar day
- * (wall clock in the business's zone).
+ * (wall clock in the business's zone). External calendar busy time (e.g. a
+ * two-week holiday) can span many days: callers clip ranges to the window they
+ * need; `MAX_DAYS_PER_RANGE` is only a safety cap.
  */
-export function busyRangesToAppointments(ranges: BusyRange[], timeZone: string, staff: StaffMember[]): Appointment[] {
+const MAX_DAYS_PER_RANGE = 400;
+
+export function busyRangesToAppointments(
+  ranges: BusyRange[],
+  timeZone: string,
+  staff: StaffMember[],
+  idPrefix = "busy",
+): Appointment[] {
   const names = new Map(staff.map((s) => [s.id, s.name]));
   const out: Appointment[] = [];
   let seq = 0;
@@ -27,13 +36,13 @@ export function busyRangesToAppointments(ranges: BusyRange[], timeZone: string, 
     let cursor = instantToWall(range.busy_from, timeZone);
     const end = instantToWall(range.busy_until, timeZone);
     let guard = 0;
-    while (guard++ < 4) {
+    while (guard++ < MAX_DAYS_PER_RANGE) {
       const lastOfThisDay = cursor.date === end.date;
       const fromMin = toMinutes(cursor.time);
       const toMin = lastOfThisDay ? toMinutes(end.time) : 24 * 60;
       if (toMin > fromMin) {
         out.push({
-          id: `busy-${seq++}`,
+          id: `${idPrefix}-${seq++}`,
           client: "",
           service: "",
           staff: range.staff_id ? (names.get(range.staff_id) ?? "") : "",

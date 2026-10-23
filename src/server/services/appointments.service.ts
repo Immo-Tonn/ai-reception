@@ -17,10 +17,14 @@ import {
   type UpdateAppointmentInput,
   type MoveAppointmentInput,
 } from "@/server/validation/appointment.schema";
-import { checkSlotAvailable } from "@/features/appointments/availability";
+import { checkSlotAvailable, type ExternalBusyInput } from "@/features/appointments/availability";
+import type { StaffMember } from "@/features/staff/types";
+import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
+import { addDays, wallToInstant } from "@/lib/time/zonedTime";
+import { getExternalBusyLoader } from "@/server/externalCalendar/deps";
+import { externalBusyForEngine } from "@/server/externalCalendar/engineInput";
 import { activeStatuses } from "@/features/appointments/statusMeta";
 import { checkInitialStatus, checkStatusTransition, HISTORY_STATUSES, wallNow, type DeleteBlocker, type WallNow, isHistoryCorrection } from "@/features/appointments/statusRules";
-import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getWorkspaceTimeZone } from "./finance.service";
 import { BusinessRuleError } from "./businessRuleError";
@@ -59,6 +63,28 @@ export async function getAppointment(
   return appt ? applyVisibility(appt, session) : undefined;
 }
 
+/**
+ * The staff member's external calendar busy time around `date` (freshly
+ * confirmed: `commit`). Demo workspaces and deployments without Supabase have
+ * none. A real workspace whose time zone cannot be read is treated as
+ * unconfirmed for that person rather than guessed.
+ */
+async function externalBusyFor(session: Session, staff: Pick<StaffMember, "id">, date: string, staffList: StaffMember[]): Promise<ExternalBusyInput> {
+  if (isDemoWorkspaceSlug(session.workspaceId)) return {};
+  const loader = getExternalBusyLoader();
+  if (!loader) return {};
+  const tz = await getWorkspaceTimeZone(session);
+  if (!tz) return { externalUnavailableStaffIds: [staff.id] };
+  const result = await loader({
+    workspaceId: session.workspaceId,
+    staffIds: [staff.id],
+    from: wallToInstant(addDays(date, -1), "00:00", tz),
+    until: wallToInstant(addDays(date, 2), "00:00", tz),
+    mode: "commit",
+  });
+  return externalBusyForEngine(result, tz, staffList);
+}
+
 async function checkBusinessRules(
   session: Session,
   candidate: Pick<
@@ -66,7 +92,7 @@ async function checkBusinessRules(
     "id" | "staff" | "resourceId" | "date" | "time" | "durationMinutes" | "service"
   > &
     Partial<Pick<Appointment, "staffId" | "serviceId">>,
-  options: { rejectInactiveService?: boolean } = {},
+  options: { rejectInactiveService?: boolean; checkExternalCalendar?: boolean } = {},
 ) {
   const [existing, services, staffList, workingHours] = await Promise.all([
     getServerAppointmentsRepository(session.workspaceId).list(),
@@ -86,10 +112,17 @@ async function checkBusinessRules(
     staffList.find((s) => (candidate.staffId ? s.id === candidate.staffId : s.name === candidate.staff)) ??
     ({ id: candidate.staffId ?? candidate.staff, name: candidate.staff } as const);
 
+  // External calendar busy time counts only when the slot itself changes (a
+  // new appointment, another time/person/duration): editing notes or status of
+  // an appointment that now overlaps a Google event must stay possible — the
+  // owner decides about such conflicts, ServiceOS never acts on them.
+  const external = options.checkExternalCalendar ? await externalBusyFor(session, staff, candidate.date, staffList) : {};
+
   // The SAME rule Public Booking uses (`checkSlotAvailable`): working hours,
-  // staff and resource collisions with buffers. The database's exclusion
-  // constraints back it up if two requests race.
+  // staff and resource collisions with buffers, external busy time. The
+  // database's exclusion constraints back it up if two requests race.
   const result = checkSlotAvailable({
+    ...external,
     service: { ...service, durationMinutes: candidate.durationMinutes },
     staff,
     resourceId: candidate.resourceId,
@@ -108,9 +141,31 @@ async function checkBusinessRules(
   if (result.reason === "resourceConflict") {
     throw new BusinessRuleError("The selected resource is already booked at this time.", "resource_conflict");
   }
+  if (result.reason === "externalBusy") {
+    throw new BusinessRuleError(`${candidate.staff} is busy in their connected calendar at this time.`, "external_calendar_busy");
+  }
+  if (result.reason === "externalUnconfirmed") {
+    throw new BusinessRuleError(
+      `The connected calendar of ${candidate.staff} could not be checked right now. Try again, or disconnect it in Settings.`,
+      "external_calendar_unconfirmed",
+    );
+  }
   throw new BusinessRuleError(
     `${candidate.staff} is not available at ${candidate.date} ${candidate.time} (${result.reason}).`,
     "outside_working_hours",
+  );
+}
+
+/** Did the occupied slot change (time, person, length, service — anything that moves the busy window)? */
+function slotChanged(before: Appointment, after: Appointment): boolean {
+  return (
+    before.date !== after.date ||
+    before.time !== after.time ||
+    before.durationMinutes !== after.durationMinutes ||
+    (before.staffId ?? before.staff) !== (after.staffId ?? after.staff) ||
+    (before.serviceId ?? before.service) !== (after.serviceId ?? after.service) ||
+    // Re-activating a cancelled appointment books the slot again.
+    (before.status === "cancelled" || before.status === "noShow") !== (after.status === "cancelled" || after.status === "noShow")
   );
 }
 
@@ -160,7 +215,7 @@ export async function createAppointment(
     time: data.time,
     durationMinutes: data.durationMinutes,
     service: data.service,
-  }, { rejectInactiveService: true });
+  }, { rejectInactiveService: true, checkExternalCalendar: true });
 
   const draft: Appointment = {
     ...data,
@@ -223,6 +278,7 @@ export async function updateAppointment(
   }, {
     // Editing an old appointment keeps its (possibly archived) service; only picking another one is checked.
     rejectInactiveService: merged.serviceId !== before.serviceId || merged.service !== before.service,
+    checkExternalCalendar: slotChanged(before, merged),
   });
 
   const updated = await writeOrConflict(() => repo.update(id, patch));
@@ -256,7 +312,7 @@ export async function moveAppointment(
     throw new BusinessRuleError("Only upcoming active appointments can be moved.", "invalid_status_transition");
   }
 
-  await checkBusinessRules(session, { ...before, id, date, time });
+  await checkBusinessRules(session, { ...before, id, date, time }, { checkExternalCalendar: slotChanged(before, { ...before, date, time }) });
 
   const updated = await writeOrConflict(() => repo.update(id, { date, time }));
 

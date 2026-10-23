@@ -13,6 +13,8 @@ import {
 } from "@/server/validation/scheduling.schema";
 import { assertCanRead, assertCanWriteCatalog, audit, nextSortOrder, syncLinks } from "./schedulingShared";
 import { replaceWorkingHours } from "./workingHours.service";
+import { getExternalCalendarDeps } from "@/server/externalCalendar/deps";
+import { removeConnectionForInactiveStaff } from "@/server/externalCalendar/service";
 
 /**
  * Staff management (operational schedule people, NOT logins). Permission: `staff.manage`.
@@ -160,6 +162,15 @@ export async function setStaffActive(session: Session, id: string, active: boole
   if (error) throw toRepositoryError(error, "staff.setActive");
   if (!data) throw new RepositoryNotFoundError("staff.setActive");
   await audit(session, "updated", "staff", id, `Staff ${active ? "reactivated" : "deactivated"}: ${before.name}`);
+  // Deactivated = never bookable: the Google Calendar connection has no purpose any more
+  // (docs/DATA_RETENTION.md). Best effort — the daily cleanup retries anything left behind.
+  if (!active) {
+    try {
+      await removeConnectionForInactiveStaff(getExternalCalendarDeps(), session.workspaceId, id);
+    } catch {
+      // Not configured (no service role key) or storage error: the cleanup job handles it.
+    }
+  }
   return getStaff(session, id);
 }
 

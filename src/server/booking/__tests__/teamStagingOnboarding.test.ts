@@ -7,6 +7,8 @@ import { makeTeamWorld, type TeamWorld, type Tenant } from "./teamStagingWorld";
 // starts from a CLEAN workspace; then finishes onboarding. Real PostgreSQL (PGlite, migrations 0001-0024).
 vi.mock("@/lib/supabase/server", async () => ({ createSupabaseServerClient: async () => (await import("./teamStagingWorld")).holder.user }));
 vi.mock("@/lib/supabase/admin", async () => ({ createSupabaseAdminClient: () => ({ rpc: async (n: string, a: Record<string, unknown>) => (await import("./teamStagingWorld")).holder.admin!.rpc(n, a) }) }));
+// External calendars are covered by externalCalendar*.test.ts; this world has no connections.
+vi.mock("@/server/externalCalendar/deps", () => ({ getExternalBusyLoader: () => undefined }));
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://supabase.test.invalid";
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "test-anon";
 
