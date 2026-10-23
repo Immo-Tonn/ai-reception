@@ -52,7 +52,7 @@ Server: `getDeleteBlockers` + `removeAppointment`. Database (0027):
 (private invoices, client-account booking claims). Workspace deletion
 (cascade) is not blocked.
 
-## 4. Inbox events (migration 0027 — NOT applied to production)
+## 4. Inbox events (migration 0027 — applied to production 2026-10-23)
 
 `inbox_events.details` (jsonb, ≤ 4 KB) — snapshot at the moment of the change:
 client name/id, service, staff, `starts_at`, `old_starts_at` (reschedule),
@@ -133,10 +133,14 @@ Re-enable: set the variable in Vercel and redeploy.
 
 | Environment | Database | `SERVICEOS_FEATURES` | Who sees Finance / Analytics |
 |---|---|---|---|
-| Local (`next dev`) | local Supabase or ServiceOS Dev | unset (= on) | the developer |
-| Staging (`NEXT_PUBLIC_APP_ENV=staging`, password-protected) | **ServiceOS Dev, test data only** | `finance,analytics` | the team |
-| Vercel Preview of the PRODUCTION project | production data | **unset (= off)** | nobody |
-| Production | production data | **unset (= off)** | nobody |
+| Local (`next dev`) with the LOCAL Supabase (`supabase start`) or demo workspaces | test data | unset (= on) | the developer |
+| Staging with its OWN test Supabase project (does not exist yet) | test data | `finance,analytics` | the team |
+| Vercel Preview | **production data** (shares the production keys) | **unset (= off)** | nobody |
+| Production (`livetermin.de`) | production data | **unset (= off)** | nobody |
+
+⚠️ "ServiceOS Dev" is the Supabase project that serves PRODUCTION (real
+businesses). It is not a test database. Until a separate test project
+exists, Finance / Analytics are tested only locally.
 
 Rules:
 - Turn the modules on only where the database holds TEST data. The flag does
@@ -147,15 +151,13 @@ Rules:
 - Later, to launch: set `SERVICEOS_FEATURES=finance,analytics` (or only one)
   in the production environment and redeploy. Removing it hides them again.
 
-## 6. Merge and migration order (PR #7 → PR #8)
+## 6. Status of the rollout (2026-10-23)
 
-1. Merge **PR #7** (Google Calendar; migrations 0025 / 0026 are already applied in production).
-2. Merge `main` into this branch, resolve the text conflicts (i18n files,
-   `appointments.service.ts`, `businessRuleError.ts`, `calendar/page.module.css`,
-   migrations README), run `npm run lint`, `npx tsc --noEmit`, `npx vitest run`,
-   `npm run build` — all must pass (the "consecutively numbered" migration
-   test only passes once 0025 / 0026 are in the branch).
-3. Merge **PR #8**. Code works without 0027 (Inbox simply shows no snapshot;
-   the service-level checks are active).
-4. Apply **0027** separately, after explicit approval: fresh backup → isolated
-   copy → Dev → production. It changes no existing rows.
+1. ✅ PR #7 (Google Calendar) merged into `main`.
+2. ✅ `main` merged into this branch; the three conflicts resolved by keeping
+   both sides; tsc, all tests (1160) and the build pass.
+3. ✅ Migration **0027 applied to production** after a fresh encrypted backup
+   and an isolated restore + apply test (only `role_permissions` +3 rows,
+   every other table unchanged, Auth 11/11). Migration history 0001–0027 is
+   in order, `supabase db push --dry-run` reports "up to date".
+4. ⏳ Merge **PR #8** (team lead). No SQL, no conflicts, no ENV change needed.
