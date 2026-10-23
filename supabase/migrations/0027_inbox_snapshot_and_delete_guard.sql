@@ -100,6 +100,8 @@ begin
     return new;
   end if;
 
+  -- Everything below is best effort: an Inbox problem must never block a booking.
+  begin
   -- Who made the change.
   if v_override is not null then
     v_actor_kind := left(v_override, 30);
@@ -154,16 +156,15 @@ begin
     'initiator', jsonb_strip_nulls(jsonb_build_object('kind', v_actor_kind, 'role', v_actor_role, 'name', v_actor_name))
   ));
 
-  begin
-    insert into public.inbox_events
-      (workspace_id, type, code, title, preview, entity_type, entity_id, client_id, actor_id, dedupe_key, details)
-    values
-      (new.workspace_id, v_type, v_code, v_title, v_preview, 'appointment', new.id::text, v_client, v_actor,
-       'appointment:' || new.id::text || ':' || v_code || ':' || txid_current()::text,
-       v_details)
-    on conflict (workspace_id, dedupe_key) do nothing;
+  insert into public.inbox_events
+    (workspace_id, type, code, title, preview, entity_type, entity_id, client_id, actor_id, dedupe_key, details)
+  values
+    (new.workspace_id, v_type, v_code, v_title, v_preview, 'appointment', new.id::text, v_client, v_actor,
+     'appointment:' || new.id::text || ':' || v_code || ':' || txid_current()::text,
+     v_details)
+  on conflict (workspace_id, dedupe_key) do nothing;
   exception when others then
-    -- An inbox hiccup must never block a booking.
+    -- Snapshot or insert failed: skip the event, keep the booking.
     raise warning 'inbox event skipped: %', sqlerrm;
   end;
   return new;
