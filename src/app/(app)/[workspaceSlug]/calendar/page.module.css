@@ -512,3 +512,77 @@
     height: 44px;
   }
 }
+
+.todayButton {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Phones: the period bar spans the width — arrows at the edges, label in the middle. */
+.mobilePeriod {
+  margin-bottom: var(--space-4);
+}
+
+.mobilePeriod .dateNav {
+  gap: var(--space-2);
+}
+
+.mobilePeriod .dateNavLabel {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-small);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (pointer: coarse) {
+  .todayButton {
+    min-height: 44px;
+  }
+}
+
+/* Week on phones: the grid scrolls sideways inside its own box; a soft edge
+   and a hint say that more days follow. */
+.weekScroller {
+  position: relative;
+}
+
+.weekScroller::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  right: 0;
+  bottom: 1px;
+  width: 28px;
+  pointer-events: none;
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  background: linear-gradient(to right, transparent, var(--color-paper));
+  opacity: 0.85;
+}
+
+.scrollHint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-small);
+  color: var(--text-secondary);
+}
+
+/* Month on phones: the selected day's appointments under the compact grid. */
+.dayAgenda {
+  margin-top: var(--space-5);
+}
+
+.dayAgendaTitle {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}

@@ -649,6 +649,8 @@ export const ru: Messages = {
     readySummaryBuckets: "Финансовые категории",
   },
   calendar: {
+    dayCount: "записей: {n}",
+    scrollHint: "Листайте, чтобы увидеть все дни",
     nextPeriod: "Вперёд",
     previousPeriod: "Назад",
     title: "Календарь",

@@ -16,6 +16,9 @@ export function MonthGrid({
   dashboardMessages,
   today: todayProp,
   onSelectDay,
+  compact = false,
+  selectedDate,
+  countLabel,
 }: {
   monthAnchor: string; // any ISO date within the month to display
   appointments: Appointment[];
@@ -28,6 +31,12 @@ export function MonthGrid({
   /** Workspace-local today (YYYY-MM-DD); falls back to the browser date. */
   today?: string;
   onSelectDay: (date: string) => void;
+  /** Phones: square cells with dots instead of text chips; the day's list is shown by the caller. */
+  compact?: boolean;
+  /** Highlighted day (compact mode). */
+  selectedDate?: string;
+  /** Screen-reader text per day, e.g. "{n} appointments". */
+  countLabel?: string;
 }) {
   const anchor = new Date(monthAnchor + "T00:00:00");
   const year = anchor.getFullYear();
@@ -46,7 +55,7 @@ export function MonthGrid({
   });
 
   return (
-    <div className={styles.grid}>
+    <div className={`${styles.grid} ${compact ? styles.gridCompact : ""}`}>
       {days.slice(0, 7).map((d) => (
         <div key={d.toISOString()} className={styles.weekdayHeader}>
           {weekdaysShort[d.getDay()]}
@@ -60,11 +69,24 @@ export function MonthGrid({
           <button
             key={iso}
             type="button"
-            className={`${styles.cell} ${outside ? styles.cellOutside : ""} ${iso === today ? styles.cellToday : ""}`}
+            className={`${styles.cell} ${outside ? styles.cellOutside : ""} ${iso === today ? styles.cellToday : ""} ${compact && iso === selectedDate ? styles.cellSelected : ""}`}
             onClick={() => onSelectDay(iso)}
+            aria-pressed={compact ? iso === selectedDate : undefined}
+            aria-label={compact && countLabel ? `${iso}: ${countLabel.replace("{n}", String(dayAppointments.length))}` : undefined}
           >
             <span className={styles.cellDate}>{d.getDate()}</span>
-            {dayAppointments.slice(0, 3).map((a) => (
+            {compact ? (
+              <span className={styles.dots} aria-hidden="true">
+                {dayAppointments.slice(0, 3).map((a) => (
+                  <span
+                    key={a.id}
+                    className={`${styles.dot} ${a.status === "cancelled" || a.status === "rescheduled" || a.status === "noShow" ? styles.dotMuted : ""}`}
+                  />
+                ))}
+                {dayAppointments.length > 3 ? <span className={styles.dotMore}>+</span> : null}
+              </span>
+            ) : null}
+            {!compact && dayAppointments.slice(0, 3).map((a) => (
               <span
                 key={a.id}
                 className={`${styles.chip} ${a.visibility === "private" ? styles.chipMasked : ""} ${a.status === "cancelled" || a.status === "rescheduled" ? styles.chipCancelled : a.status === "noShow" ? styles.chipNoShow : ""}`}
@@ -72,7 +94,7 @@ export function MonthGrid({
                 {a.time} {a.visibility === "private" ? dashboardMessages.statusBusy : a.client}
               </span>
             ))}
-            {dayAppointments.length > 3 && (
+            {!compact && dayAppointments.length > 3 && (
               <span className={styles.more}>+{dayAppointments.length - 3}</span>
             )}
           </button>

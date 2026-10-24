@@ -74,3 +74,50 @@
 .chipNoShow {
   opacity: 0.65;
 }
+
+/* Compact (phones): square cells, number + dots; every day fits the width. */
+.gridCompact .weekdayHeader {
+  padding: var(--space-1) 0;
+  font-size: 10px;
+}
+
+.gridCompact .cell {
+  min-height: 48px;
+  padding: var(--space-1) 0;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 3px;
+}
+
+.gridCompact .cellDate {
+  font-size: var(--font-size-small);
+}
+
+.cellSelected {
+  box-shadow: inset 0 0 0 2px var(--color-ink);
+}
+
+.dots {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 6px;
+}
+
+.dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-accent-mint);
+}
+
+.dotMuted {
+  background: var(--text-muted);
+  opacity: 0.6;
+}
+
+.dotMore {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-secondary);
+}

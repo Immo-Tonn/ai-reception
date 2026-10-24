@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button, Icon, LanguageSwitcher, ThemeSwitcher } from "@/components/ui";
 import { getMessages } from "@/lib/i18n";
+import { MobileBackToMore } from "@/components/layout/MobileBackToMore/MobileBackToMore";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { getRequestTheme } from "@/lib/theme/next";
 import { headers } from "next/headers";
@@ -33,95 +34,98 @@ export default async function SettingsPage({
   const { nav, settings, legal } = getMessages(locale);
 
   return (
-    <main className={styles.page}>
-      <h1 className={styles.title}>{nav.settings}</h1>
+    <>
+      <MobileBackToMore workspaceSlug={workspaceSlug} label={nav.more} />
+      <main className={styles.page}>
+        <h1 className={styles.title}>{nav.settings}</h1>
 
-      {!isDemoWorkspaceSlug(workspaceSlug) && (
-        <Link href={`/${workspaceSlug}/settings/business`} className={styles.row}>
+        {!isDemoWorkspaceSlug(workspaceSlug) && (
+          <Link href={`/${workspaceSlug}/settings/business`} className={styles.row}>
+            <div className={styles.rowBody}>
+              <p className={styles.rowLabel}>{settings.businessProfile.label}</p>
+              <p className={styles.rowDescription}>{settings.businessProfile.description}</p>
+            </div>
+            <Icon name="chevronRight" size={18} />
+          </Link>
+        )}
+
+        {!isDemoWorkspaceSlug(workspaceSlug) && (
+          <Link href={`/${workspaceSlug}/settings/services`} className={styles.row}>
+            <div className={styles.rowBody}>
+              <p className={styles.rowLabel}>{settings.services.label}</p>
+              <p className={styles.rowDescription}>{settings.services.description}</p>
+            </div>
+            <Icon name="chevronRight" size={18} />
+          </Link>
+        )}
+
+        {(
+          [
+            ["staff", settings.staff],
+            ["resources", settings.resources],
+            ["hours", settings.hours],
+            ["booking", settings.booking],
+            ["integrations", settings.integrations],
+          ] as const
+        ).map(([path, entry]) => (
+          <Link key={path} href={`/${workspaceSlug}/settings/${path}`} className={styles.row}>
+            <div className={styles.rowBody}>
+              <p className={styles.rowLabel}>{entry.label}</p>
+              <p className={styles.rowDescription}>{entry.description}</p>
+            </div>
+            <Icon name="chevronRight" size={18} />
+          </Link>
+        ))}
+
+        <div className={styles.row}>
           <div className={styles.rowBody}>
-            <p className={styles.rowLabel}>{settings.businessProfile.label}</p>
-            <p className={styles.rowDescription}>{settings.businessProfile.description}</p>
+            <p className={styles.rowLabel}>{settings.language.label}</p>
+            <p className={styles.rowDescription}>{settings.language.description}</p>
           </div>
-          <Icon name="chevronRight" size={18} />
-        </Link>
-      )}
-
-      {!isDemoWorkspaceSlug(workspaceSlug) && (
-        <Link href={`/${workspaceSlug}/settings/services`} className={styles.row}>
-          <div className={styles.rowBody}>
-            <p className={styles.rowLabel}>{settings.services.label}</p>
-            <p className={styles.rowDescription}>{settings.services.description}</p>
-          </div>
-          <Icon name="chevronRight" size={18} />
-        </Link>
-      )}
-
-      {(
-        [
-          ["staff", settings.staff],
-          ["resources", settings.resources],
-          ["hours", settings.hours],
-          ["booking", settings.booking],
-          ["integrations", settings.integrations],
-        ] as const
-      ).map(([path, entry]) => (
-        <Link key={path} href={`/${workspaceSlug}/settings/${path}`} className={styles.row}>
-          <div className={styles.rowBody}>
-            <p className={styles.rowLabel}>{entry.label}</p>
-            <p className={styles.rowDescription}>{entry.description}</p>
-          </div>
-          <Icon name="chevronRight" size={18} />
-        </Link>
-      ))}
-
-      <div className={styles.row}>
-        <div className={styles.rowBody}>
-          <p className={styles.rowLabel}>{settings.language.label}</p>
-          <p className={styles.rowDescription}>{settings.language.description}</p>
+          <LanguageSwitcher currentLocale={locale} />
         </div>
-        <LanguageSwitcher currentLocale={locale} />
-      </div>
 
-      <div className={styles.row}>
-        <div className={styles.rowBody}>
-          <p className={styles.rowLabel}>{settings.theme.label}</p>
+        <div className={styles.row}>
+          <div className={styles.rowBody}>
+            <p className={styles.rowLabel}>{settings.theme.label}</p>
+          </div>
+          <ThemeSwitcher initialTheme={theme} labels={settings.theme} />
         </div>
-        <ThemeSwitcher initialTheme={theme} labels={settings.theme} />
-      </div>
 
-      {!isDemoWorkspaceSlug(workspaceSlug) && (
-        <form suppressHydrationWarning action={signOutAction} className={styles.row}>
-          <div className={styles.rowBody}>
-            <p className={styles.rowLabel}>{settings.account.label}</p>
-          </div>
-          <Button type="submit" variant="secondary" size="sm">
-            {settings.account.signOut}
-          </Button>
-        </form>
-      )}
+        {!isDemoWorkspaceSlug(workspaceSlug) && (
+          <form suppressHydrationWarning action={signOutAction} className={styles.row}>
+            <div className={styles.rowBody}>
+              <p className={styles.rowLabel}>{settings.account.label}</p>
+            </div>
+            <Button type="submit" variant="secondary" size="sm">
+              {settings.account.signOut}
+            </Button>
+          </form>
+        )}
 
-      {(
-        [
-          ["/impressum", legal.impressumLabel, legal.settingsImpressumDescription],
-          ["/datenschutz", legal.datenschutzLabel, legal.settingsDatenschutzDescription],
-        ] as const
-      ).map(([href, label, description]) => (
-        <Link key={href} href={href} className={styles.row}>
-          <div className={styles.rowBody}>
-            <p className={styles.rowLabel}>{label}</p>
-            <p className={styles.rowDescription}>{description}</p>
-          </div>
-          <Icon name="chevronRight" size={18} />
-        </Link>
-      ))}
+        {(
+          [
+            ["/impressum", legal.impressumLabel, legal.settingsImpressumDescription],
+            ["/datenschutz", legal.datenschutzLabel, legal.settingsDatenschutzDescription],
+          ] as const
+        ).map(([href, label, description]) => (
+          <Link key={href} href={href} className={styles.row}>
+            <div className={styles.rowBody}>
+              <p className={styles.rowLabel}>{label}</p>
+              <p className={styles.rowDescription}>{description}</p>
+            </div>
+            <Icon name="chevronRight" size={18} />
+          </Link>
+        ))}
 
-      <OnlineBookingSection
-        workspaceSlug={workspaceSlug}
-        distribution={distribution}
-        baseSource={source}
-        labels={settings.onlineBooking}
-        showDemoNote={isDemo}
-      />
-    </main>
+        <OnlineBookingSection
+          workspaceSlug={workspaceSlug}
+          distribution={distribution}
+          baseSource={source}
+          labels={settings.onlineBooking}
+          showDemoNote={isDemo}
+        />
+      </main>
+    </>
   );
 }

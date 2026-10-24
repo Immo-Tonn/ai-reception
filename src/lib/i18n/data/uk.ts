@@ -649,6 +649,8 @@ export const uk: Messages = {
     readySummaryBuckets: "Фінансові категорії",
   },
   calendar: {
+    dayCount: "записів: {n}",
+    scrollHint: "Гортайте, щоб побачити всі дні",
     nextPeriod: "Вперед",
     previousPeriod: "Назад",
     title: "Календар",

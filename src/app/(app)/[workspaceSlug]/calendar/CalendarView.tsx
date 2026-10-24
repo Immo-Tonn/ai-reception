@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { localIsoDate } from "@/lib/date/localIsoDate";
 import { describeSaveError } from "@/lib/repository/describeSaveError";
@@ -162,6 +162,16 @@ export function CalendarView({
   // Server answer for ONE appointment id (a stale answer for another id is never shown).
   const [fetchedBlockers, setFetchedBlockers] = useState<{ id: string; list: DeleteBlocker[] } | null>(null);
   const [desktopView, setDesktopView] = useState<DesktopView>("day");
+  // Week on phones: bring the selected day into view (Monday-first columns, 56px time axis).
+  const mobileWeekScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (desktopView !== "week") return;
+    const box = mobileWeekScrollRef.current;
+    if (!box || box.scrollWidth <= box.clientWidth) return;
+    const index = (new Date(selectedDate + "T00:00:00").getDay() + 6) % 7;
+    const columnWidth = (box.scrollWidth - 56) / 7;
+    box.scrollLeft = Math.max(0, index * columnWidth - columnWidth / 2);
+  }, [desktopView, selectedDate]);
 
   const [editing, setEditing] = useState<Appointment | null>(null);
   // Can the appointment being edited be physically deleted? Real workspaces ask the server
@@ -448,11 +458,44 @@ export function CalendarView({
     appointments: shownAppointments.filter((a) => a.date === selectedDate && a.staff === s.name),
   }));
 
-  function shiftDesktopDate(days: number) {
+  /** Prev/next by the period of the current view: day (day/staff), week, or a whole MONTH. */
+  function shiftPeriod(direction: 1 | -1) {
     const d = new Date(selectedDate + "T00:00:00");
-    d.setDate(d.getDate() + days);
+    if (desktopView === "month") d.setMonth(d.getMonth() + direction, 1);
+    else d.setDate(d.getDate() + (desktopView === "week" ? 7 : 1) * direction);
     setSelectedDate(localIsoDate(d));
   }
+
+  function periodLabel() {
+    const d = new Date(selectedDate + "T00:00:00");
+    if (desktopView === "month") return d.toLocaleDateString(locale, { month: "long", year: "numeric" });
+    if (desktopView === "week") {
+      const start = new Date(weekDays[0] + "T00:00:00");
+      const end = new Date(weekDays[weekDays.length - 1] + "T00:00:00");
+      // Short enough for a phone: "21–27 Sep" (same month) or "28 Sep – 4 Oct"; the year is in Month view.
+      return start.getMonth() === end.getMonth()
+        ? `${start.getDate()}–${end.toLocaleDateString(locale, { day: "numeric", month: "short" })}`
+        : `${start.toLocaleDateString(locale, { day: "numeric", month: "short" })} – ${end.toLocaleDateString(locale, { day: "numeric", month: "short" })}`;
+    }
+    return d.toLocaleDateString(locale, { dateStyle: "long" });
+  }
+
+  const periodNav = (
+    <div className={styles.dateNav}>
+      <button type="button" className={styles.dateNavButton} onClick={() => shiftPeriod(-1)} aria-label={calendar.previousPeriod}>
+        <Icon name="chevronRight" size={16} style={{ transform: "rotate(180deg)" }} />
+      </button>
+      <span className={styles.dateNavLabel}>{periodLabel()}</span>
+      <button type="button" className={styles.dateNavButton} onClick={() => shiftPeriod(1)} aria-label={calendar.nextPeriod}>
+        <Icon name="chevronRight" size={16} />
+      </button>
+      {selectedDate !== workspaceToday ? (
+        <button type="button" className={styles.todayButton} onClick={() => setSelectedDate(workspaceToday)}>
+          {calendar.today}
+        </button>
+      ) : null}
+    </div>
+  );
 
   const desktopViewTabs: { key: DesktopView; label: string }[] = [
     { key: "day", label: calendar.dayView },
@@ -496,6 +539,8 @@ export function CalendarView({
             </button>
           ))}
         </div>
+
+        <div className={styles.mobilePeriod}>{periodNav}</div>
 
         {desktopView === "day" && (
           <div className={styles.dateStrip}>
@@ -568,7 +613,12 @@ export function CalendarView({
           ))}
 
         {desktopView === "week" && (
-          <div className={styles.gridScroll}>
+          <>
+          <p className={styles.scrollHint}>
+            {calendar.scrollHint} <Icon name="arrowRight" size={14} />
+          </p>
+          <div className={styles.weekScroller}>
+          <div className={styles.gridScroll} ref={mobileWeekScrollRef}>
             <TimeGrid
               columns={weekColumns}
               services={demoServices}
@@ -578,22 +628,39 @@ export function CalendarView({
               onSelect={(a) => setQuickActionsTargetId(a.id)}
             />
           </div>
+          </div>
+          </>
         )}
 
         {desktopView === "month" && (
-          <MonthGrid
-            monthAnchor={selectedDate}
-            appointments={shownAppointments.filter(
-              (a) => staffFilter === "all" || a.staff === staffFilter,
-            )}
-            weekdaysShort={calendar.weekdaysShort}
-            dashboardMessages={dashboard}
-            today={workspaceToday}
-            onSelectDay={(date) => {
-              setSelectedDate(date);
-              setDesktopView("day");
-            }}
-          />
+          <>
+            <MonthGrid
+              compact
+              monthAnchor={selectedDate}
+              selectedDate={selectedDate}
+              countLabel={calendar.dayCount}
+              appointments={shownAppointments.filter(
+                (a) => staffFilter === "all" || a.staff === staffFilter,
+              )}
+              weekdaysShort={calendar.weekdaysShort}
+              dashboardMessages={dashboard}
+              today={workspaceToday}
+              // Phones: pick a day and see its appointments right below (no jump to Day view).
+              onSelectDay={(date) => setSelectedDate(date)}
+            />
+            <section className={styles.dayAgenda} aria-live="polite">
+              <h2 className={styles.dayAgendaTitle}>
+                {new Date(selectedDate + "T00:00:00").toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })}
+              </h2>
+              {dayAppointments.length === 0 ? (
+                <div className={styles.empty}>
+                  <span className={styles.emptyTitle}>{calendar.noAppointments}</span>
+                </div>
+              ) : (
+                <div className={styles.list}>{dayAppointments.map(renderRow)}</div>
+              )}
+            </section>
+          </>
         )}
 
         {desktopView === "staff" && (
@@ -626,29 +693,7 @@ export function CalendarView({
             ))}
           </div>
 
-          <div className={styles.dateNav}>
-            <button
-              type="button"
-              className={styles.dateNavButton}
-              onClick={() => shiftDesktopDate(desktopView === "week" ? -7 : -1)}
-              aria-label={calendar.previousPeriod}
-            >
-              <Icon name="chevronRight" size={16} style={{ transform: "rotate(180deg)" }} />
-            </button>
-            <span className={styles.dateNavLabel}>
-              {new Date(selectedDate + "T00:00:00").toLocaleDateString(locale, {
-                dateStyle: "long",
-              })}
-            </span>
-            <button
-              type="button"
-              className={styles.dateNavButton}
-              onClick={() => shiftDesktopDate(desktopView === "week" ? 7 : 1)}
-              aria-label={calendar.nextPeriod}
-            >
-              <Icon name="chevronRight" size={16} />
-            </button>
-          </div>
+          {periodNav}
 
           <div className={styles.staffRow} style={{ marginBottom: 0 }}>
             <button
@@ -682,6 +727,7 @@ export function CalendarView({
           ))}
 
         {desktopView === "week" && (
+          <div className={styles.gridScroll}>
           <TimeGrid
             columns={weekColumns}
             services={demoServices}
@@ -690,6 +736,7 @@ export function CalendarView({
             statusMessages={appointmentStatus}
             onSelect={(a) => setQuickActionsTargetId(a.id)}
           />
+          </div>
         )}
 
         {desktopView === "month" && (
@@ -709,6 +756,7 @@ export function CalendarView({
         )}
 
         {desktopView === "staff" && (
+          <div className={styles.gridScroll}>
           <TimeGrid
             columns={staffColumns}
             services={demoServices}
@@ -717,6 +765,7 @@ export function CalendarView({
             statusMessages={appointmentStatus}
             onSelect={(a) => setQuickActionsTargetId(a.id)}
           />
+          </div>
         )}
       </div>
 
