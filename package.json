@@ -16,12 +16,12 @@
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
-    "next": "16.3.5",
+    "next": "16.4.3",
     "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "^0.0.1",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
@@ -31,8 +31,11 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.1.1",
     "eslint": "^9",
-    "eslint-config-next": "16.3.5",
+    "eslint-config-next": "16.4.3",
     "typescript": "^5",
     "vitest": "^4.1.11"
+  },
+  "overrides": {
+    "source-map-js": "^1.2.2"
   }
 }
