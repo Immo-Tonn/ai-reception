@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
 import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
 import { BackLink } from "@/components/ui";
@@ -47,16 +48,16 @@ export default async function SignupPage() {
 
             <p className={styles.signupPrompt}>
               {signup.loginPrompt}{" "}
-              <a className={styles.signupLink} href="/login">
+              <Link className={styles.signupLink} href="/login">
                 {signup.loginLink}
-              </a>
+              </Link>
             </p>
 
             <p className={styles.signupPrompt}>
               {signup.clientPrompt}{" "}
-              <a className={styles.signupLink} href="/client">
+              <Link className={styles.signupLink} href="/client">
                 {signup.clientLink}
-              </a>
+              </Link>
             </p>
           </div>
         </section>

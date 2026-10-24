@@ -40,6 +40,7 @@ export function DemoBookingsView({
   const [demoEmail, setDemoEmail] = useState("");
   const [rows, setRows] = useState<ClientBookingRow[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const isLoaded = !identity || loaded;
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
   const [rescheduleTargetId, setRescheduleTargetId] = useState<string | null>(null);
@@ -52,12 +53,16 @@ export function DemoBookingsView({
   }
 
   useEffect(() => {
-    if (!identity) {
+    if (!identity) return; // nothing to load: `isLoaded` below is already true
+    let cancelled = false;
+    void listMyBookings(identity).then((list) => {
+      if (cancelled) return;
+      setRows(list);
       setLoaded(true);
-      return;
-    }
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [identity]);
 
   // Business wall-clock date + the business zone saved on the record (legacy
@@ -89,7 +94,7 @@ export function DemoBookingsView({
     setTimeout(() => setToast(null), 2500);
   }
 
-  if (!authLoaded || !loaded) return null;
+  if (!authLoaded || !isLoaded) return null;
 
   if (!identity) {
     return (
@@ -304,19 +309,27 @@ function ReschedulePanel({
   );
 
   const [selectedDate, setSelectedDate] = useState(dateStrip[0]);
-  const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Answer stored with its day: "loading" is derived and a late answer cannot replace a newer day.
+  const [answer, setAnswer] = useState<{ date: string; slots: AvailableSlot[] } | null>(null);
+  const loading = Boolean(service) && answer?.date !== selectedDate;
+  const slots = answer && answer.date === selectedDate ? answer.slots : [];
 
   useEffect(() => {
     if (!service) return;
-    setLoading(true);
-    setSelectedSlot(null);
+    let cancelled = false;
     getPublicBookingService(row.workspaceSlug)
       .getAvailableSlots(row.workspaceSlug, service.id, staffMember?.id ?? null, selectedDate)
-      .then(setSlots)
-      .finally(() => setLoading(false));
+      .then((list) => {
+        if (!cancelled) setAnswer({ date: selectedDate, slots: list });
+      })
+      .catch(() => {
+        if (!cancelled) setAnswer({ date: selectedDate, slots: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [row.workspaceSlug, service, staffMember, selectedDate]);
 
   async function handleConfirm() {
@@ -344,7 +357,11 @@ function ReschedulePanel({
               key={iso}
               type="button"
               className={`${styles.dateChip} ${selectedDate === iso ? styles.dateChipActive : ""}`}
-              onClick={() => setSelectedDate(iso)}
+              onClick={() => {
+                if (iso === selectedDate) return;
+                setSelectedDate(iso);
+                setSelectedSlot(null);
+              }}
             >
               <span>{date.toLocaleDateString(locale, { weekday: "short" })}</span>
               <strong>{date.getDate()}</strong>

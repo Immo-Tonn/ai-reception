@@ -56,7 +56,7 @@
   var frameOrigin;
   try {
     frameOrigin = new URL(origin).origin;
-  } catch (e) {
+  } catch {
     console.error("[ServiceOS embed] invalid data-origin.");
     return;
   }

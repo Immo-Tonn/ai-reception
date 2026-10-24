@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button, Icon, Input, Sheet } from "@/components/ui";
 import { ClientPicker } from "./ClientPicker";
 import type { ClientRecord } from "@/features/clients/types";
@@ -28,6 +28,7 @@ import type { Locale, Messages } from "@/lib/i18n";
 import { useI18n } from "@/lib/i18n/I18nProvider";
 import { describeSaveError } from "@/lib/repository/describeSaveError";
 import styles from "./AppointmentSheet.module.css";
+import { newLocalId } from "@/lib/browser";
 
 export type AppointmentSaveResult =
   | { mode: "create"; appointments: Appointment[] }
@@ -151,15 +152,17 @@ export function AppointmentSheet({
   const selectedService = services.find((s) => s.name === serviceName);
   const selectedStaffId = staffList.find((s) => s.name === staff)?.id;
 
-  // Keep duration/price in sync with the chosen service, but only when
-  // creating — editing shouldn't silently overwrite a custom price.
-  useEffect(() => {
-    if (isEditing || !selectedService) return;
-    setDuration(selectedService.durationMinutes);
-    setPrice(selectedService.price);
-    if (!selectedService.requiredResourceType) setResourceId(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serviceName]);
+  // Picking a service fills in its duration/price, but only when creating —
+  // editing shouldn't silently overwrite a custom price. (The initial values
+  // already come from the first service, so nothing is needed on open.)
+  function selectService(name: string) {
+    setServiceName(name);
+    const next = services.find((s) => s.name === name);
+    if (isEditing || !next) return;
+    setDuration(next.durationMinutes);
+    setPrice(next.price);
+    if (!next.requiredResourceType) setResourceId(null);
+  }
 
   const eligibleStaff = useMemo(() => {
     if (!selectedService || selectedService.allowedStaffIds.length === 0) return staffList;
@@ -253,7 +256,7 @@ export function AppointmentSheet({
     let result: AppointmentSaveResult;
 
     if (!isEditing && recurrenceFreq !== "none") {
-      const seriesId = `series-${Date.now()}`;
+      const seriesId = `series-${newLocalId()}`;
       const dates = recurrencePreviewDates;
       const created: Appointment[] = [];
       for (const occurrenceDate of dates) {
@@ -274,7 +277,7 @@ export function AppointmentSheet({
         );
         if (occurrenceConflict.hasConflict) continue;
         created.push({
-          id: `${Date.now()}-${occurrenceDate}`,
+          id: newLocalId(occurrenceDate),
           date: occurrenceDate,
           time,
           durationMinutes: duration,
@@ -310,7 +313,7 @@ export function AppointmentSheet({
         mode: "create",
         appointments: [
           {
-            id: `${Date.now()}`,
+            id: newLocalId(),
             date,
             time,
             durationMinutes: duration,
@@ -327,7 +330,7 @@ export function AppointmentSheet({
       await onSave(result);
       onClose();
     } catch (error) {
-      // eslint-disable-next-line no-console
+       
       console.error("Failed to save appointment", error);
       setSaveError(describeSaveError(error, allMessages.repositoryErrors));
     } finally {
@@ -421,7 +424,7 @@ export function AppointmentSheet({
           <select suppressHydrationWarning
             className={styles.select}
             value={serviceName}
-            onChange={(event) => setServiceName(event.target.value)}
+            onChange={(event) => selectService(event.target.value)}
           >
             {services.map((item) => (
               <option key={item.id} value={item.name}>

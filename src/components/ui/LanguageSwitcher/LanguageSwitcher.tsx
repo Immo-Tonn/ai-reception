@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Icon } from "../Icon/Icon";
 import { locales, localeMeta, LOCALE_COOKIE, type Locale } from "@/lib/i18n";
 import styles from "./LanguageSwitcher.module.css";
+import { writePreferenceCookie } from "@/lib/browser";
 
 export function LanguageSwitcher({ currentLocale }: { currentLocale: Locale }) {
   const [open, setOpen] = useState(false);
@@ -23,7 +24,7 @@ export function LanguageSwitcher({ currentLocale }: { currentLocale: Locale }) {
   }, [open]);
 
   function selectLocale(locale: Locale) {
-    document.cookie = `${LOCALE_COOKIE}=${locale}; path=/; max-age=31536000; SameSite=Lax`;
+    writePreferenceCookie(LOCALE_COOKIE, locale);
     setOpen(false);
     router.refresh();
   }
