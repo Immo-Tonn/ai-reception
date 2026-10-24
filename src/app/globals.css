@@ -123,6 +123,13 @@ select {
   }
 }
 
+/* Client pages with the bottom tab bar: keep the last content above it. */
+@media (max-width: 767px) {
+  body:has([data-client-tab-bar]) {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+}
+
 :focus-visible {
   outline: 2px solid var(--color-accent-blue);
   outline-offset: 2px;

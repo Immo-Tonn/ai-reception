@@ -30,7 +30,6 @@ import { formatCurrency, formatDate } from "@/lib/i18n/format";
 import styles from "./BookingsView.module.css";
 import { useClientValue } from "@/lib/hooks/useClientValue";
 import { AddToCalendar } from "@/components/calendar/AddToCalendar";
-import { CalendarSubscription } from "./CalendarSubscription";
 
 export type BookingsViewState = "signed_out" | "ready";
 
@@ -79,6 +78,7 @@ export function BookingsView({
 function SignedOutPrompt({ client, expired }: { client: Messages["client"]; expired: boolean }) {
   return (
     <main className={styles.screen}>
+      <ClientNav client={client} active="bookings" showSignOut={false} />
       <div className={styles.body}>
         <h1 className={styles.title}>{client.signedOutTitle}</h1>
         {expired ? (
@@ -226,8 +226,10 @@ function ReadyView({
             {client.bookAppointmentCta}
           </Link>
         ) : null}
+        <Link href="/client/profile" className={styles.calendarHint}>
+          {client.calendarSyncInProfile}
+        </Link>
 
-        <CalendarSubscription client={client} />
 
         <div className={styles.tabs} role="tablist">
           <button

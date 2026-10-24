@@ -211,3 +211,48 @@ export async function resetMyCalendarFeedAction(): Promise<ClientActionResult<My
   return withUser(async (userId) => feedFor(userId, await bumpFeedVersion(getPublicBookingDeps().admin, userId)));
 }
 
+
+// ---------------------------------------------------------------------------
+// Profile (name, phone) — only the signed-in client's own row
+// ---------------------------------------------------------------------------
+
+export interface MyProfile {
+  email: string | null;
+  fullName: string;
+  phone: string;
+}
+
+const profileSchema = z.object({
+  fullName: z.string().trim().max(120),
+  phone: z.string().trim().max(40).regex(/^[0-9+()\-\s/.]*$/),
+});
+
+export async function getMyProfileAction(): Promise<ClientActionResult<MyProfile>> {
+  return withUser(async (userId) => {
+    const { admin } = getPublicBookingDeps();
+    const [row, user] = await Promise.all([
+      admin.from("client_accounts").select("full_name, phone").eq("user_id", userId).maybeSingle(),
+      admin.auth.admin.getUserById(userId),
+    ]);
+    if (row.error) throw new Error("profile_read_failed");
+    const data = (row.data ?? {}) as { full_name?: string | null; phone?: string | null };
+    return { email: user.data.user?.email ?? null, fullName: data.full_name ?? "", phone: data.phone ?? "" };
+  });
+}
+
+/** Saves exactly what was entered (an emptied field is cleared on purpose). */
+export async function updateMyProfileAction(input: { fullName: string; phone: string }): Promise<ClientActionResult<MyProfile>> {
+  const parsed = profileSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, code: "invalid_input" };
+  return withUser(async (userId) => {
+    const deps = getPublicBookingDeps();
+    await ensureClientAccount(deps, userId); // the row exists for every signed-in client
+    const update = await deps.admin
+      .from("client_accounts")
+      .update({ full_name: parsed.data.fullName, phone: parsed.data.phone, updated_at: new Date().toISOString() }) // columns are NOT NULL, empty = ""
+      .eq("user_id", userId);
+    if (update.error) throw new Error("profile_update_failed");
+    const user = await deps.admin.auth.admin.getUserById(userId);
+    return { email: user.data.user?.email ?? null, fullName: parsed.data.fullName, phone: parsed.data.phone };
+  });
+}

@@ -99,6 +99,15 @@ export function DemoBookingsView({
   if (!identity) {
     return (
       <main className={styles.screen}>
+        {/* Same navigation as everywhere in the client area: a way back and the tab bar. */}
+        <ClientNav
+          client={client}
+          active="bookings"
+          showSignOut={false}
+          bookHref="/client/book?demo=1"
+          bookingsHref="/client/bookings?demo=1"
+          profileHref={null}
+        />
         <div className={styles.body}>
           <h1 className={styles.title}>{client.demoBookingsTitle}</h1>
           <p className={styles.demoBanner}>{client.demoBookingsNote}</p>
@@ -135,6 +144,7 @@ export function DemoBookingsView({
         active="bookings"
         bookHref="/client/book?demo=1"
         bookingsHref="/client/bookings?demo=1"
+        profileHref={null}
         signOut={() => {
           signOut();
           router.push("/client/bookings?demo=1");

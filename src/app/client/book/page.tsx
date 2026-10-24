@@ -10,6 +10,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getCurrentUserSafe } from "@/server/auth/supabaseBusinessAuth";
 import { demoWorkspaces } from "@/features/workspace/registry";
 import { loadDiscoverableBusinesses } from "@/server/booking/discovery.service";
+import { getPublicBookingDeps } from "@/server/booking/deps";
+import { listMyBookings } from "@/server/clientAccount/clientAccount.service";
 import styles from "../client.module.css";
 
 export const metadata: Metadata = {
@@ -43,7 +45,20 @@ export default async function ClientDiscoverPage({
   const { client, common } = getMessages(locale);
   // Signed-in clients get the shared client navigation (Book / My bookings / Sign out);
   // visitors keep the plain back link. Never throws for anonymous visitors.
-  const signedIn = !showDemo && isSupabaseConfigured() && (await getCurrentUserSafe()) !== null;
+  const user = !showDemo && isSupabaseConfigured() ? await getCurrentUserSafe() : null;
+  const signedIn = user !== null;
+  // "My businesses": where this client already booked (most recent first, each once). Best effort.
+  const myBusinesses: { slug: string; name: string }[] = [];
+  if (user) {
+    try {
+      const bookings = await listMyBookings(getPublicBookingDeps(), user.id);
+      for (const b of [...bookings].sort((x, y) => y.startsAt.localeCompare(x.startsAt))) {
+        if (!myBusinesses.some((m) => m.slug === b.workspaceSlug)) myBusinesses.push({ slug: b.workspaceSlug, name: b.businessName });
+      }
+    } catch {
+      // the directory below still works
+    }
+  }
 
   return (
     <main className={styles.screen}>
@@ -59,7 +74,30 @@ export default async function ClientDiscoverPage({
         <h1 className={styles.title}>{client.entryTitle}</h1>
         <p className={styles.subtitle}>{showDemo ? client.entrySubtitle : client.entrySubtitleReal}</p>
 
-        {!showDemo && real.length === 0 ? (
+        {myBusinesses.length > 0 ? (
+          <section className={styles.myBusinesses} aria-labelledby="my-businesses">
+            <h2 id="my-businesses" className={styles.sectionLabel}>
+              {client.myBusinessesTitle}
+            </h2>
+            <div className={styles.businessList} role="list">
+              {myBusinesses.map((b) => (
+                <Link key={b.slug} href={`/book/${b.slug}?from=client`} className={styles.businessCard} role="listitem">
+                  <span className={styles.businessInitial} aria-hidden="true">
+                    {[...b.name][0]?.toUpperCase()}
+                  </span>
+                  <span className={styles.businessBody}>
+                    <span className={styles.businessName}>{b.name}</span>
+                  </span>
+                  <span className={styles.businessCta}>
+                    {client.bookAgain} <span aria-hidden="true">→</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {!showDemo && real.length === 0 && myBusinesses.length === 0 ? (
           <div className={styles.emptyDirectory} role="status">
             <p className={styles.noticeTitle}>{client.discoveryEmptyTitle}</p>
             <p className={styles.noticeText}>{client.discoveryEmptyBody}</p>
@@ -68,7 +106,7 @@ export default async function ClientDiscoverPage({
 
         <div className={styles.businessList} role="list">
           {real.map((b) => (
-            <Link key={b.slug} href={`/book/${b.slug}`} className={styles.businessCard} role="listitem">
+            <Link key={b.slug} href={`/book/${b.slug}?from=client`} className={styles.businessCard} role="listitem">
               <span className={styles.businessInitial} aria-hidden="true">
                 {[...b.name][0]?.toUpperCase()}
               </span>
@@ -85,9 +123,9 @@ export default async function ClientDiscoverPage({
             </Link>
           ))}
           {(showDemo ? demoWorkspaces : []).map((workspace) => (
-            <Link key={workspace.slug} href={`/book/${workspace.slug}`} className={styles.businessCard}>
-              <span className={styles.businessEmoji} aria-hidden="true">
-                {workspace.emoji}
+            <Link key={workspace.slug} href={`/book/${workspace.slug}?from=client`} className={styles.businessCard}>
+              <span className={styles.businessInitial} aria-hidden="true">
+                {[...workspace.name][0]?.toUpperCase()}
               </span>
               <span className={styles.businessBody}>
                 <span className={styles.businessName}>{workspace.name}</span>

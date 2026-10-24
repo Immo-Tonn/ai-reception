@@ -34,3 +34,15 @@
     padding: var(--space-4) var(--space-6);
   }
 }
+
+/* Below the sidebar breakpoint the header is ONE row: the business switcher.
+   Language and theme are in Settings (More -> Settings). */
+.topBarPreferences {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .topBarPreferences {
+    display: block;
+  }
+}
