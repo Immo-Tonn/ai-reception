@@ -529,6 +529,21 @@
   margin-bottom: var(--space-4);
 }
 
+/* Phone: the four view tabs share the full width instead of scrolling
+   inside the pill on 320px screens. */
+.mobileOnly .viewSwitcher {
+  display: flex;
+  width: 100%;
+  overflow: visible;
+}
+
+.mobileOnly .viewTab {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 var(--space-2);
+  white-space: nowrap;
+}
+
 .mobilePeriod .dateNav {
   gap: var(--space-2);
 }
