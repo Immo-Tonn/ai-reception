@@ -46,6 +46,7 @@ export function BookingWizard({
   branding,
   profile,
   timezone = null,
+  backToBusinessesHref = null,
   services,
   staffList,
   chromeless = false,
@@ -59,6 +60,8 @@ export function BookingWizard({
   profile?: PublicProfile;
   /** Business IANA zone; null (demo presets) keeps browser-local "today". */
   timezone?: string | null;
+  /** Set when the visitor came from the ServiceOS business list (never for a business's own shared link). */
+  backToBusinessesHref?: string | null;
   /** Catalog of THIS workspace, loaded by the server page (demo preset or the database). */
   services: ServiceDefinition[];
   staffList: StaffMember[];
@@ -292,6 +295,12 @@ export function BookingWizard({
       <div className={`${styles.content} ${step === "details" ? styles.contentDetails : ""}`}>
         {step === "service" && (
           <>
+            {backToBusinessesHref ? (
+              <Link href={backToBusinessesHref} className={styles.stepBack}>
+                <Icon name="arrowLeft" size={16} strokeWidth={1.8} />
+                {client.allBusinesses}
+              </Link>
+            ) : null}
             {profile ? <BusinessAbout profile={profile} /> : null}
             <h1 className={styles.stepTitle}>{booking.stepService}</h1>
             <div className={styles.optionList}>
@@ -325,7 +334,7 @@ export function BookingWizard({
           <>
             <button type="button" className={styles.stepBack} onClick={() => goTo("service")}>
               <Icon name="arrowLeft" size={16} strokeWidth={1.8} />
-              {booking.stepService}
+              {booking.back}
             </button>
             <h1 className={styles.stepTitle}>{booking.stepStaff}</h1>
             <div className={styles.optionList}>
@@ -372,7 +381,7 @@ export function BookingWizard({
           <>
             <button type="button" className={styles.stepBack} onClick={() => goTo("staff")}>
               <Icon name="arrowLeft" size={16} strokeWidth={1.8} />
-              {booking.stepStaff}
+              {booking.back}
             </button>
             <h1 className={styles.stepTitle}>{booking.stepDate}</h1>
             {error && <p className={styles.errorText}>{error}</p>}
@@ -414,7 +423,7 @@ export function BookingWizard({
           <>
             <button type="button" className={styles.stepBack} onClick={() => goTo("date")}>
               <Icon name="arrowLeft" size={16} strokeWidth={1.8} />
-              {booking.stepDate}
+              {booking.back}
             </button>
             <h1 className={styles.stepTitle}>{booking.stepTime}</h1>
             {zoneNote && <p className={styles.fieldHint}>{zoneNote}</p>}
@@ -448,7 +457,7 @@ export function BookingWizard({
           <>
             <button type="button" className={styles.stepBack} onClick={() => goTo("time")}>
               <Icon name="arrowLeft" size={16} strokeWidth={1.8} />
-              {booking.stepTime}
+              {booking.back}
             </button>
             <h1 className={styles.stepTitle}>{booking.stepDetails}</h1>
             <p className={styles.detailsHelper}>{booking.detailsHelper}</p>

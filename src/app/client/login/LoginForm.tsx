@@ -52,7 +52,6 @@ export function LoginForm({
           showLabel={passwordLabels.show}
           hideLabel={passwordLabels.hide}
           name="password"
-          placeholder="••••••••"
           autoComplete="current-password"
           required
         />

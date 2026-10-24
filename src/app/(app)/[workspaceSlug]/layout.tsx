@@ -58,7 +58,10 @@ export default async function WorkspaceLayout({
       <div className={styles.content}>
         <div className={styles.topBar}>
           <WorkspaceSwitcher currentSlug={workspaceSlug} workspaces={myWorkspaces} />
-          <Preferences />
+          {/* Phones: language and theme live in Settings (one compact header row). */}
+          <div className={styles.topBarPreferences}>
+            <Preferences />
+          </div>
         </div>
         {children}
       </div>

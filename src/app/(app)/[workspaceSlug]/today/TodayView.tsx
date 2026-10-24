@@ -108,38 +108,24 @@ export function TodayView({
         <p className={styles.subtitle}>{dashboard.subtitle}</p>
       </header>
 
-      <Link
-        href={`/${workspaceSlug}/assistant`}
-        className={styles.assistantEntry}
-        onKeyDown={activateOnSpace}
-      >
-        <span className={styles.assistantEntryIcon}>
-          <Icon name="assistant" size={18} />
-        </span>
-        <span className={styles.assistantEntryBody}>
-          <span className={styles.assistantEntryTitle}>{dashboard.askAssistant}</span>
-          <span className={styles.assistantEntryHint}>{dashboard.askAssistantHint}</span>
-        </span>
-        <Icon name="chevronRight" size={18} />
-      </Link>
-
-      <section className={styles.metrics}>
-        <div className={styles.metricCard} style={{ background: "var(--tint-blue)", color: "var(--color-accent-blue)" }}>
+      {/* Neutral cards: colour is reserved for the one number that needs attention. */}
+      <section className={`${styles.metrics} ${financeOn ? styles.metricsFour : ""}`}>
+        <div className={styles.metricCard}>
           <span className={styles.metricLabel}>{dashboard.cardToday}</span>
           <span className={styles.metricValue}>{todayAppointments.length}</span>
           <span className={styles.metricMeta}>{dashboard.cardBookings}</span>
         </div>
-        <div className={styles.metricCard} style={{ background: "var(--tint-mint)", color: "var(--color-accent-mint)" }}>
+        <div className={`${styles.metricCard} ${styles.metricWide}`}>
           <span className={styles.metricLabel}>{dashboard.cardRevenue}</span>
           <span className={styles.metricValue}>{formatCurrency(revenueToday, "EUR", locale)}</span>
         </div>
-        <div className={styles.metricCard} style={{ background: "var(--tint-peach)", color: "var(--color-accent-peach)" }}>
+        <div className={styles.metricCard}>
           <span className={styles.metricLabel}>{dashboard.cardRequests}</span>
-          <span className={styles.metricValue}>{pendingToday.length}</span>
+          <span className={`${styles.metricValue} ${pendingToday.length > 0 ? styles.metricValueAttention : ""}`}>{pendingToday.length}</span>
           <span className={styles.metricMeta}>{dashboard.cardRequestsNew}</span>
         </div>
         {financeOn ? (
-          <div className={styles.metricCard} style={{ background: "var(--tint-lavender)", color: "var(--color-accent-lavender)" }}>
+          <div className={styles.metricCard}>
             <span className={styles.metricLabel}>{dashboard.cardOutstanding}</span>
             <span className={styles.metricValue}>{formatCurrency(outstanding, "EUR", locale)}</span>
           </div>
@@ -224,6 +210,22 @@ export function TodayView({
           </div>
         )}
       </section>
+
+      {/* Secondary: the day's schedule comes first. */}
+      <Link
+        href={`/${workspaceSlug}/assistant`}
+        className={styles.assistantEntry}
+        onKeyDown={activateOnSpace}
+      >
+        <span className={styles.assistantEntryIcon}>
+          <Icon name="assistant" size={18} />
+        </span>
+        <span className={styles.assistantEntryBody}>
+          <span className={styles.assistantEntryTitle}>{dashboard.askAssistant}</span>
+          <span className={styles.assistantEntryHint}>{dashboard.askAssistantHint}</span>
+        </span>
+        <Icon name="chevronRight" size={18} />
+      </Link>
     </main>
   );
 }

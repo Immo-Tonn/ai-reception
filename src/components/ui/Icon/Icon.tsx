@@ -29,6 +29,7 @@ export type IconName =
   | "search"
   | "send"
   | "history"
+  | "user"
   | "eye"
   | "eyeOff"
   | "alert";
@@ -44,6 +45,8 @@ const paths: Record<IconName, string> = {
     "M4 5h16a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1ZM3 10h18M8 3v4M16 3v4",
   inbox:
     "M3 12h4.5l1.5 3h6l1.5-3H21M4 12 5.6 5.4A1 1 0 0 1 6.57 4.6h10.86a1 1 0 0 1 .97.76L20 12v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6Z",
+  // One person (profile / account), same stroke language as "clients".
+  user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM5 20c.7-3.6 3.4-5.5 7-5.5s6.3 1.9 7 5.5",
   clients:
     "M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3 20c.6-3.2 3-5 6-5s5.4 1.8 6 5M17 11a2.5 2.5 0 1 0 0-5M16.5 15c2.4.3 4 1.9 4.5 5",
   work:
