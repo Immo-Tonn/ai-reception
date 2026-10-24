@@ -35,7 +35,7 @@ beforeAll(async () => {
   wsB = await prov(OWNER_B, "b@t.invalid", "Biz B", "ext-b");
   staffA = (await q<{ id: string }>("select id from staff_profiles where workspace_id=$1", [wsA]))[0].id;
   staffB = (await q<{ id: string }>("select id from staff_profiles where workspace_id=$1", [wsB]))[0].id;
-});
+}, 120_000); // replaying every migration can take longer than the 10 s default under a full parallel run
 
 afterAll(async () => {
   await db.close();

@@ -29,6 +29,8 @@ import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency, formatDate } from "@/lib/i18n/format";
 import styles from "./BookingsView.module.css";
 import { useClientValue } from "@/lib/hooks/useClientValue";
+import { AddToCalendar } from "@/components/calendar/AddToCalendar";
+import { CalendarSubscription } from "./CalendarSubscription";
 
 export type BookingsViewState = "signed_out" | "ready";
 
@@ -225,6 +227,8 @@ function ReadyView({
           </Link>
         ) : null}
 
+        <CalendarSubscription client={client} />
+
         <div className={styles.tabs} role="tablist">
           <button
             type="button"
@@ -351,6 +355,18 @@ function BookingCard({
         </span>
         {booking.price > 0 ? (
           <span className={styles.metaLine}>{formatCurrency(booking.price, booking.currency, locale)}</span>
+        ) : null}
+        {booking.isUpcoming && booking.status !== "cancelled" ? (
+          <AddToCalendar
+            labels={{ title: client.addToCalendarTitle, google: client.addToCalendarGoogle, appleOutlook: client.addToCalendarFile }}
+            event={{
+              uid: `appointment-${booking.id}@serviceos`,
+              start: new Date(booking.startsAt),
+              end: new Date(booking.endsAt),
+              summary: [booking.serviceName, booking.businessName].filter(Boolean).join(" · "),
+              status: booking.status === "pending" ? "TENTATIVE" : "CONFIRMED",
+            }}
+          />
         ) : null}
       </div>
 

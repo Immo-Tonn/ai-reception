@@ -22,6 +22,10 @@ import { loadMyBookingsForPage as loadPageData, type MyBookingsPageData } from "
 import { readPendingClaims, writePendingClaims } from "@/server/clientAccount/pendingClaims";
 import { safeClientRedirect } from "@/server/clientAccount/safeRedirect";
 import { authAttemptAllowed } from "@/server/auth/authRateLimit";
+import { headers } from "next/headers";
+import { deriveServerSecret } from "@/lib/supabase/admin";
+import { getPublicBaseUrl } from "@/lib/config/publicBaseUrl";
+import { bumpFeedVersion, createFeedToken, getFeedVersion } from "@/server/clientAccount/calendarFeed";
 
 export interface ClientAuthState {
   error?: AuthErrorCode;
@@ -175,3 +179,35 @@ export async function rescheduleMyBookingAction(
 export async function loadMyBookingsForPage(): Promise<MyBookingsPageData> {
   return loadPageData();
 }
+
+// ---------------------------------------------------------------------------
+// Calendar subscription (all my bookings in Google / Apple / Outlook)
+// ---------------------------------------------------------------------------
+
+export interface MyCalendarFeed {
+  /** https URL of the iCalendar feed (copy / Outlook). */
+  url: string;
+  /** Same feed for Apple Calendar / iPhone ("webcal://"). */
+  webcalUrl: string;
+  /** Opens Google Calendar's "add calendar from URL" with this feed. */
+  googleUrl: string;
+}
+
+async function feedFor(userId: string, version: number): Promise<MyCalendarFeed> {
+  const { baseUrl } = getPublicBaseUrl((await headers()).get("host"));
+  if (!baseUrl) throw new Error("public_base_url_missing"); // NEXT_PUBLIC_APP_URL not set
+  const url = `${baseUrl}/api/calendar/client/${createFeedToken(deriveServerSecret("client-calendar-feed"), userId, version)}.ics`;
+  const webcalUrl = url.replace(/^https?:\/\//, "webcal://");
+  return { url, webcalUrl, googleUrl: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl)}` };
+}
+
+/** The signed-in client's personal subscription link. */
+export async function getMyCalendarFeedAction(): Promise<ClientActionResult<MyCalendarFeed>> {
+  return withUser(async (userId) => feedFor(userId, await getFeedVersion(getPublicBookingDeps().admin, userId)));
+}
+
+/** New link; every previously shared one stops working immediately. */
+export async function resetMyCalendarFeedAction(): Promise<ClientActionResult<MyCalendarFeed>> {
+  return withUser(async (userId) => feedFor(userId, await bumpFeedVersion(getPublicBookingDeps().admin, userId)));
+}
+

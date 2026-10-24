@@ -16,7 +16,7 @@ beforeAll(async () => {
   await db.exec(`insert into auth.users (id,email) values ('${OWNER}','o6@t.invalid')`);
   ws = (await run<{ out_workspace_id: string }>(svc, "select * from public.provision_workspace($1,$2,'','Biz','m26','en')", [OWNER, "o6@t.invalid"]))[0].out_workspace_id;
   staff = (await db.query<{ id: string }>("select id from staff_profiles where workspace_id=$1", [ws])).rows[0].id;
-});
+}, 120_000); // replaying every migration can take longer than the 10 s default under a full parallel run
 afterAll(() => db.close());
 
 describe("0026 google_subject_hash", () => {
