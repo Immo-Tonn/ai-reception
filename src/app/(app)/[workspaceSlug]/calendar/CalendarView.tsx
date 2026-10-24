@@ -192,8 +192,19 @@ export function CalendarView({
     : !isRealWorkspace
       ? HISTORY_STATUSES.has(editing.status) ? ["has_history"] : []
       : fetchedBlockers?.id === editing.id ? fetchedBlockers.list : null;
-  const [sheetOpen, setSheetOpen] = useState(searchParams.get("create") === "appointment");
+  const createParam = searchParams.get("create");
+  const [sheetOpen, setSheetOpen] = useState(createParam === "appointment");
   const prefillClient = searchParams.get("client") ?? "";
+  // "Create → Appointment" while already on Calendar only changes the query
+  // string (no remount), so open the sheet when `?create=` appears.
+  const [seenCreateParam, setSeenCreateParam] = useState(createParam);
+  if (createParam !== seenCreateParam) {
+    setSeenCreateParam(createParam);
+    if (createParam === "appointment") {
+      setEditing(null);
+      setSheetOpen(true);
+    }
+  }
 
   // Store only the id and derive the live object from `appointments` on
   // every render — holding the Appointment object itself would freeze a
@@ -477,7 +488,10 @@ export function CalendarView({
         ? `${start.getDate()}–${end.toLocaleDateString(locale, { day: "numeric", month: "short" })}`
         : `${start.toLocaleDateString(locale, { day: "numeric", month: "short" })} – ${end.toLocaleDateString(locale, { day: "numeric", month: "short" })}`;
     }
-    return d.toLocaleDateString(locale, { dateStyle: "long" });
+    // Year only when it isn't the current one — "26 October" fits a 320px phone.
+    return selectedDate.slice(0, 4) === workspaceToday.slice(0, 4)
+      ? d.toLocaleDateString(locale, { day: "numeric", month: "long" })
+      : d.toLocaleDateString(locale, { dateStyle: "long" });
   }
 
   const periodNav = (
