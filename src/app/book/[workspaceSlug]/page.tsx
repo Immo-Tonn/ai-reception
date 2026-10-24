@@ -4,6 +4,9 @@ import { getRequestLocale } from "@/lib/i18n/next";
 import { loadPublicPageData } from "@/server/booking/pageData";
 import { LanguageSwitcher } from "@/components/ui";
 import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { getCurrentUserSafe } from "@/server/auth/supabaseBusinessAuth";
+import { isClientCalendarConnected } from "@/server/clientAccount/pageData";
 import { BookingWizard } from "./BookingWizard";
 import styles from "./page.module.css";
 
@@ -25,6 +28,10 @@ export default async function PublicBookingPage({
   const { booking, client } = getMessages(locale);
   // Unknown slug = 404 inside (never another business's catalog).
   const { branding, services, staff, profile, timezone } = await loadPublicPageData(workspaceSlug);
+  // A signed-in client whose calendar already subscribes gets "it will appear automatically"
+  // instead of "add to calendar" buttons (no duplicates). Anonymous visitors: false.
+  const user = isSupabaseConfigured() ? await getCurrentUserSafe() : null;
+  const calendarConnected = user ? await isClientCalendarConnected(user.id) : false;
 
   return (
     <div className={styles.page}>
@@ -39,6 +46,7 @@ export default async function PublicBookingPage({
         services={services}
         staffList={staff}
         backToBusinessesHref={cameFromList ? "/client/book" : null}
+        calendarConnected={calendarConnected}
         // One compact header row: language only (the theme follows the device).
         headerActions={<LanguageSwitcher currentLocale={locale} />}
       />

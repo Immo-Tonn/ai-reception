@@ -70,6 +70,9 @@ export const de: Messages = {
     clientLink: "Jetzt buchen",
   },
   client: {
+    calendarSyncAnotherDevice: "Weiteres Gerät verbinden",
+    calendarSyncConnectedShort: "✓ Ihre Termine erscheinen automatisch in Ihrem Kalender",
+    calendarSyncConnected: "Kalender verbunden — Ihre Termine erscheinen dort von selbst.",
     bookAgain: "Erneut buchen",
     myBusinessesTitle: "Meine Unternehmen",
     calendarSyncInProfile: "Alle Termine in Ihrem Kalender → Profil",
@@ -985,6 +988,7 @@ export const de: Messages = {
     actionConfirmedReply: "Erledigt — die Verschiebung ist in diesem Demo-Thread bestätigt (im Kalender tatsächlich verschieben).",
   },
   booking: {
+    calendarAutoNote: "Der Termin erscheint automatisch in Ihrem Kalender.",
     addToCalendarFile: "Apple / Outlook",
     addToCalendarGoogle: "Google Kalender",
     addToCalendarTitle: "Zum eigenen Kalender hinzufügen",

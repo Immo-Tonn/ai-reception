@@ -70,6 +70,9 @@ export const ru: Messages = {
     clientLink: "Записаться",
   },
   client: {
+    calendarSyncAnotherDevice: "Подключить ещё устройство",
+    calendarSyncConnectedShort: "✓ Записи сами появляются в вашем календаре",
+    calendarSyncConnected: "Календарь подключён — записи появляются в нём сами.",
     bookAgain: "Записаться снова",
     myBusinessesTitle: "Мои бизнесы",
     calendarSyncInProfile: "Все записи в вашем календаре → Профиль",
@@ -985,6 +988,7 @@ export const ru: Messages = {
     actionConfirmedReply: "Готово — перенос подтверждён в этом демо-чате (чтобы перенести по-настоящему, откройте Календарь).",
   },
   booking: {
+    calendarAutoNote: "Запись появится в вашем календаре автоматически.",
     addToCalendarFile: "Apple / Outlook",
     addToCalendarGoogle: "Google Календарь",
     addToCalendarTitle: "Добавить в свой календарь",

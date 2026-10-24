@@ -47,6 +47,7 @@ export function BookingsView({
   bookings,
   hasPendingClaims,
   email,
+  calendarConnected = false,
 }: {
   locale: Locale;
   client: Messages["client"];
@@ -55,6 +56,8 @@ export function BookingsView({
   bookings: MyBooking[];
   hasPendingClaims: boolean;
   email: string | null;
+  /** The client's calendar already subscribes: no per-booking "add" buttons (no duplicates). */
+  calendarConnected?: boolean;
 }) {
   const [expired, setExpired] = useState(false);
   const handleExpired = useCallback(() => setExpired(true), []);
@@ -70,6 +73,7 @@ export function BookingsView({
       bookings={bookings}
       hasPendingClaims={hasPendingClaims}
       email={email}
+      calendarConnected={calendarConnected}
       onExpired={handleExpired}
     />
   );
@@ -113,6 +117,7 @@ function ReadyView({
   bookings,
   hasPendingClaims,
   email,
+  calendarConnected,
   onExpired,
 }: {
   locale: Locale;
@@ -121,6 +126,7 @@ function ReadyView({
   bookings: MyBooking[];
   hasPendingClaims: boolean;
   email: string | null;
+  calendarConnected: boolean;
   onExpired: () => void;
 }) {
   const router = useRouter();
@@ -227,7 +233,7 @@ function ReadyView({
           </Link>
         ) : null}
         <Link href="/client/profile" className={styles.calendarHint}>
-          {client.calendarSyncInProfile}
+          {calendarConnected ? client.calendarSyncConnectedShort : client.calendarSyncInProfile}
         </Link>
 
 
@@ -271,6 +277,7 @@ function ReadyView({
                 client={client}
                 appointmentStatus={appointmentStatus}
                 browserZone={browserZone}
+                calendarConnected={calendarConnected}
                 busy={busy}
                 cancelling={cancelTargetId === booking.id}
                 rescheduling={rescheduleTargetId === booking.id}
@@ -304,6 +311,7 @@ function BookingCard({
   client,
   appointmentStatus,
   browserZone,
+  calendarConnected,
   busy,
   cancelling,
   rescheduling,
@@ -320,6 +328,7 @@ function BookingCard({
   client: Messages["client"];
   appointmentStatus: Messages["appointmentStatus"];
   browserZone: string | null;
+  calendarConnected: boolean;
   busy: boolean;
   cancelling: boolean;
   rescheduling: boolean;
@@ -358,7 +367,7 @@ function BookingCard({
         {booking.price > 0 ? (
           <span className={styles.metaLine}>{formatCurrency(booking.price, booking.currency, locale)}</span>
         ) : null}
-        {booking.isUpcoming && booking.status !== "cancelled" ? (
+        {booking.isUpcoming && booking.status !== "cancelled" && !calendarConnected ? (
           <AddToCalendar
             labels={{ title: client.addToCalendarTitle, google: client.addToCalendarGoogle, appleOutlook: client.addToCalendarFile }}
             event={{

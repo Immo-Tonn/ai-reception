@@ -47,6 +47,7 @@ export function BookingWizard({
   profile,
   timezone = null,
   backToBusinessesHref = null,
+  calendarConnected = false,
   services,
   staffList,
   chromeless = false,
@@ -62,6 +63,8 @@ export function BookingWizard({
   timezone?: string | null;
   /** Set when the visitor came from the ServiceOS business list (never for a business's own shared link). */
   backToBusinessesHref?: string | null;
+  /** Signed-in client whose own calendar already subscribes to their bookings. */
+  calendarConnected?: boolean;
   /** Catalog of THIS workspace, loaded by the server page (demo preset or the database). */
   services: ServiceDefinition[];
   staffList: StaffMember[];
@@ -561,21 +564,28 @@ export function BookingWizard({
                 </dd>
               </div>
             </dl>
-            <AddToCalendar
-              labels={{ title: booking.addToCalendarTitle, google: booking.addToCalendarGoogle, appleOutlook: booking.addToCalendarFile }}
-              event={(() => {
-                // The booked time is the BUSINESS wall clock; demo workspaces have no zone (browser-local).
-                const start = timezone ? wallToInstant(result.date, result.time, timezone) : new Date(`${result.date}T${result.time}:00`);
-                return {
-                  uid: `appointment-${result.appointmentId}@serviceos`,
-                  start,
-                  end: new Date(start.getTime() + selectedService.durationMinutes * 60_000),
-                  summary: `${getServiceLabel(selectedService, locale)} · ${branding.businessName}`,
-                  description: staffLabel(result.staffName),
-                  status: result.status === "confirmed" ? "CONFIRMED" : "TENTATIVE",
-                };
-              })()}
-            />
+            {calendarConnected && result.claim === "linked" ? (
+              // Linked to the account the client's calendar subscribes to: it appears there by itself.
+              <p className={styles.calendarAutoNote} role="status">
+                <Icon name="check" size={16} /> {booking.calendarAutoNote}
+              </p>
+            ) : (
+              <AddToCalendar
+                labels={{ title: booking.addToCalendarTitle, google: booking.addToCalendarGoogle, appleOutlook: booking.addToCalendarFile }}
+                event={(() => {
+                  // The booked time is the BUSINESS wall clock; demo workspaces have no zone (browser-local).
+                  const start = timezone ? wallToInstant(result.date, result.time, timezone) : new Date(`${result.date}T${result.time}:00`);
+                  return {
+                    uid: `appointment-${result.appointmentId}@serviceos`,
+                    start,
+                    end: new Date(start.getTime() + selectedService.durationMinutes * 60_000),
+                    summary: `${getServiceLabel(selectedService, locale)} · ${branding.businessName}`,
+                    description: staffLabel(result.staffName),
+                    status: result.status === "confirmed" ? "CONFIRMED" : "TENTATIVE",
+                  };
+                })()}
+              />
+            )}
             <Button
               fullWidth
               onClick={() => {

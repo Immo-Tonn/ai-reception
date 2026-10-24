@@ -5,7 +5,7 @@ import { getPublicBaseUrl } from "@/lib/config/publicBaseUrl";
 import { getMessages } from "@/lib/i18n";
 import { getPublicBookingDeps } from "@/server/booking/deps";
 import { listMyBookings } from "@/server/clientAccount/clientAccount.service";
-import { bookingsToIcs, getFeedVersion, readFeedToken } from "@/server/clientAccount/calendarFeed";
+import { bookingsToIcs, getFeedState, markFeedConnected, readFeedToken } from "@/server/clientAccount/calendarFeed";
 import { getRateLimiter } from "@/server/ratelimit";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,9 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/calendar
     const limit = await getRateLimiter().hit({ scope: "client_calendar_feed", limit: 60, windowSeconds: 3600 }, parsed.userId);
     if (!limit.allowed) return new NextResponse("Too many requests", { status: 429, headers: { ...PRIVATE_HEADERS, "Retry-After": String(limit.retryAfterSeconds) } });
     const deps = getPublicBookingDeps();
-    if ((await getFeedVersion(deps.admin, parsed.userId)) !== parsed.version) return notFound(); // link was reset
+    const state = await getFeedState(deps.admin, parsed.userId);
+    if (state.version !== parsed.version) return notFound(); // link was reset
+    if (!state.connected) await markFeedConnected(deps.admin, parsed.userId, parsed.version); // first fetch by a calendar app
     const bookings = await listMyBookings(deps, parsed.userId);
     const { baseUrl } = getPublicBaseUrl(request.headers.get("host"));
     const lang = request.headers.get("accept-language")?.slice(0, 2);

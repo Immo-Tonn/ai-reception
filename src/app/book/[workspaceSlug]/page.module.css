@@ -549,3 +549,12 @@
   color: var(--color-ink);
 }
 
+
+.calendarAutoNote {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 var(--space-4);
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+}
