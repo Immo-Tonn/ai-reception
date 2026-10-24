@@ -652,6 +652,8 @@ export const de: Messages = {
     readySummaryBuckets: "Finanzkonten",
   },
   calendar: {
+    dayCount: "{n} Termine",
+    scrollHint: "Wischen für alle Tage",
     nextPeriod: "Weiter",
     previousPeriod: "Zurück",
     title: "Kalender",

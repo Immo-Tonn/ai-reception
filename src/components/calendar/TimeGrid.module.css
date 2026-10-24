@@ -1,15 +1,25 @@
 .grid {
   display: grid;
   grid-template-columns: 56px 1fr;
+  /* Fills the container, but never narrower than "time axis + N columns x
+     min width": inside a horizontal scroller (.gridScroll) every day stays
+     reachable instead of being clipped. --column-count is set by TimeGrid. */
+  --column-min: 120px;
+  min-width: calc(56px + var(--column-count, 1) * var(--column-min));
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--surface-primary);
-  overflow: hidden;
 }
 
 .hourAxis {
   display: grid;
   border-right: 1px solid var(--border-subtle);
+  /* Times stay visible while the days scroll sideways. */
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface-primary);
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
 }
 
 .hourLabel {
@@ -22,7 +32,16 @@
 .columns {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(120px, 1fr);
+  /* Equal columns; long appointment titles ellipsize instead of widening a day. */
+  grid-auto-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+/* Phones: a bit narrower so ~2.5 days are visible and the next one peeks in. */
+@media (max-width: 899px) {
+  .grid {
+    --column-min: 112px;
+  }
 }
 
 .column {

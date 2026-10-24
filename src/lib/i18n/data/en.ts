@@ -666,6 +666,8 @@ export const en = {
     readySummaryBuckets: "Financial buckets",
   },
   calendar: {
+    dayCount: "{n} appointments",
+    scrollHint: "Swipe to see all days",
     nextPeriod: "Next",
     previousPeriod: "Previous",
     title: "Calendar",
