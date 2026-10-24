@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Repository } from "./types";
+import { trackBusy } from "@/lib/ui/busy";
 
 /**
  * Generic client hook over a Repository. Components use the per-feature
@@ -35,26 +36,39 @@ export function useRepositoryCollection<T extends { id: string }>(
 
   const create = useCallback(
     async (item: T) => {
-      const created = await repository.create(item);
-      await refresh();
-      return created;
+      // The whole change (save + reload) shows the app-wide busy bar.
+      return trackBusy(
+        (async () => {
+          const created = await repository.create(item);
+          await refresh();
+          return created;
+        })(),
+      );
     },
     [repository, refresh],
   );
 
   const update = useCallback(
     async (id: string, patch: Partial<T>) => {
-      const updated = await repository.update(id, patch);
-      await refresh();
-      return updated;
+      return trackBusy(
+        (async () => {
+          const updated = await repository.update(id, patch);
+          await refresh();
+          return updated;
+        })(),
+      );
     },
     [repository, refresh],
   );
 
   const remove = useCallback(
     async (id: string) => {
-      await repository.remove(id);
-      await refresh();
+      await trackBusy(
+        (async () => {
+          await repository.remove(id);
+          await refresh();
+        })(),
+      );
     },
     [repository, refresh],
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "@/components/ui";
 import { getWorkspaceConfig } from "@/features/workspace/registry";
@@ -64,7 +65,7 @@ export function Sidebar({
 
       <nav className={styles.nav}>
         {visibleNav.map((item) => (
-          <a
+          <Link
             key={item.segment}
             href={`${base}/${item.segment}`}
             className={`${styles.navItem} ${isActive(item.segment) ? styles.navItemActive : ""}`}
@@ -73,14 +74,14 @@ export function Sidebar({
               <Icon name={item.icon} size={18} />
             </span>
             {item.key === "work" ? (workspace.workLabel?.[locale] ?? messages.work) : messages[item.key]}
-          </a>
+          </Link>
         ))}
       </nav>
 
       <div className={styles.spacer} />
 
       <div className={styles.footNav}>
-        <a
+        <Link
           href={`${base}/settings`}
           className={`${styles.navItem} ${isActive("settings") ? styles.navItemActive : ""}`}
         >
@@ -88,7 +89,7 @@ export function Sidebar({
             <Icon name="settings" size={18} />
           </span>
           {messages.settings}
-        </a>
+        </Link>
       </div>
     </aside>
   );

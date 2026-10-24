@@ -631,7 +631,7 @@ export function CalendarView({
               type="button"
               className={styles.dateNavButton}
               onClick={() => shiftDesktopDate(desktopView === "week" ? -7 : -1)}
-              aria-label="Previous"
+              aria-label={calendar.previousPeriod}
             >
               <Icon name="chevronRight" size={16} style={{ transform: "rotate(180deg)" }} />
             </button>
@@ -644,7 +644,7 @@ export function CalendarView({
               type="button"
               className={styles.dateNavButton}
               onClick={() => shiftDesktopDate(desktopView === "week" ? 7 : 1)}
-              aria-label="Next"
+              aria-label={calendar.nextPeriod}
             >
               <Icon name="chevronRight" size={16} />
             </button>

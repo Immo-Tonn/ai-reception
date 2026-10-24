@@ -1,0 +1,15 @@
+.wrap {
+  padding: var(--space-2) var(--space-4) 0;
+}
+
+@media (min-width: 768px) {
+  .wrap {
+    padding: var(--space-2) var(--space-8) 0;
+  }
+}
+
+@media (min-width: 900px) {
+  .wrap {
+    display: none;
+  }
+}

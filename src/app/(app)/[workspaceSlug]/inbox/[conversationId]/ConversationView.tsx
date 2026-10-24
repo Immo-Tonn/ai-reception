@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Icon } from "@/components/ui";
@@ -63,9 +64,9 @@ export function ConversationView({
     return (
       <main className={styles.page}>
         <div className={styles.header}>
-          <a href={`/${workspaceSlug}/inbox`} className={styles.backLink}>
+          <Link href={`/${workspaceSlug}/inbox`} className={styles.backLink}>
             <Icon name="chevronRight" size={18} />
-          </a>
+          </Link>
         </div>
         <div className={styles.notFound}>{messages.notFound}</div>
       </main>
@@ -146,9 +147,9 @@ export function ConversationView({
   return (
     <main className={styles.page}>
       <div className={styles.header}>
-        <a href={`/${workspaceSlug}/inbox`} className={styles.backLink} aria-label={messages.back}>
+        <Link href={`/${workspaceSlug}/inbox`} className={styles.backLink} aria-label={messages.back}>
           <Icon name="chevronRight" size={18} />
-        </a>
+        </Link>
         <div className={styles.headerBody}>
           <span className={styles.headerName}>{conversation.clientName}</span>
           <span className={styles.headerMeta}>
@@ -172,12 +173,12 @@ export function ConversationView({
 
       <div className={styles.convertRow}>
         {conversation.clientId ? (
-          <a
+          <Link
             className={styles.convertButton}
             href={`/${workspaceSlug}/clients/${conversation.clientId}`}
           >
             {messages.clientProfile}
-          </a>
+          </Link>
         ) : (
           <button type="button" className={styles.convertButton} onClick={handleCreateClient}>
             {messages.convertToClient}

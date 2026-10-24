@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Icon, type IconName } from "@/components/ui";
 import { getWorkspaceConfig } from "@/features/workspace/registry";
 import { getMessages, type Messages } from "@/lib/i18n";
@@ -41,7 +42,7 @@ export default async function MorePage({
       </header>
       <div className={styles.list}>
         {visibleItems.map((item) => (
-          <a key={item.segment} href={`/${workspaceSlug}/${item.segment}`} className={styles.item}>
+          <Link key={item.segment} href={`/${workspaceSlug}/${item.segment}`} className={styles.item}>
             <span className={styles.itemIcon}>
               <Icon name={item.icon} size={18} />
             </span>
@@ -51,7 +52,7 @@ export default async function MorePage({
             <span className={styles.itemChevron}>
               <Icon name="chevronRight" size={18} />
             </span>
-          </a>
+          </Link>
         ))}
       </div>
     </main>

@@ -498,3 +498,17 @@
   color: var(--panel-status-negative-text, #b42318);
   font-size: var(--font-size-small);
 }
+
+/* Touch screens: finger-sized targets (44px) for the filter / view chips and
+   the date arrows — 36px is easy to miss on a phone. Desktop keeps 36px. */
+@media (pointer: coarse) {
+  .staffChip,
+  .viewTab {
+    height: 44px;
+  }
+
+  .dateNavButton {
+    width: 44px;
+    height: 44px;
+  }
+}

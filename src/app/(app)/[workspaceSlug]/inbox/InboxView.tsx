@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/ui";
 import { useConversations } from "@/features/inbox/useConversations";
@@ -128,7 +129,7 @@ export function InboxView({
       ) : (
         <div className={styles.list}>
           {filtered.map((conversation) => (
-            <a
+            <Link
               key={conversation.id}
               href={`/${workspaceSlug}/inbox/${conversation.id}`}
               className={styles.row}
@@ -153,7 +154,7 @@ export function InboxView({
                   </span>
                 )}
               </span>
-            </a>
+            </Link>
           ))}
         </div>
       )}
