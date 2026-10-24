@@ -479,7 +479,13 @@ export function CalendarView({
 
   function periodLabel() {
     const d = new Date(selectedDate + "T00:00:00");
-    if (desktopView === "month") return d.toLocaleDateString(locale, { month: "long", year: "numeric" });
+    const thisYear = selectedDate.slice(0, 4) === workspaceToday.slice(0, 4);
+    // Year only when it isn't the current one, so the label fits a 320px phone.
+    if (desktopView === "month") {
+      return thisYear
+        ? d.toLocaleDateString(locale, { month: "long" })
+        : d.toLocaleDateString(locale, { month: "long", year: "numeric" });
+    }
     if (desktopView === "week") {
       const start = new Date(weekDays[0] + "T00:00:00");
       const end = new Date(weekDays[weekDays.length - 1] + "T00:00:00");
@@ -488,8 +494,7 @@ export function CalendarView({
         ? `${start.getDate()}–${end.toLocaleDateString(locale, { day: "numeric", month: "short" })}`
         : `${start.toLocaleDateString(locale, { day: "numeric", month: "short" })} – ${end.toLocaleDateString(locale, { day: "numeric", month: "short" })}`;
     }
-    // Year only when it isn't the current one — "26 October" fits a 320px phone.
-    return selectedDate.slice(0, 4) === workspaceToday.slice(0, 4)
+    return thisYear
       ? d.toLocaleDateString(locale, { day: "numeric", month: "long" })
       : d.toLocaleDateString(locale, { dateStyle: "long" });
   }

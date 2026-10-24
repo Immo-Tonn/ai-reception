@@ -548,13 +548,13 @@
   gap: var(--space-2);
 }
 
+/* Short labels (no current year); a long cross-month week wraps to a
+   second line instead of being cut off. */
 .mobilePeriod .dateNavLabel {
   flex: 1;
   min-width: 0;
   font-size: var(--font-size-small);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
 }
 
 @media (pointer: coarse) {

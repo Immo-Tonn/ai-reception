@@ -1,9 +1,12 @@
 "use client";
 
 import { localIsoDate } from "@/lib/date/localIsoDate";
-import type { Appointment } from "@/features/appointments/types";
+import type { Appointment, AppointmentStatus } from "@/features/appointments/types";
 import type { Messages } from "@/lib/i18n";
 import styles from "./MonthGrid.module.css";
+
+/** Not taking place — a day with only these gets a muted count. */
+const INACTIVE = new Set<AppointmentStatus>(["cancelled", "rescheduled", "noShow"]);
 
 function isoDate(d: Date) {
   return localIsoDate(d);
@@ -31,7 +34,7 @@ export function MonthGrid({
   /** Workspace-local today (YYYY-MM-DD); falls back to the browser date. */
   today?: string;
   onSelectDay: (date: string) => void;
-  /** Phones: square cells with dots instead of text chips; the day's list is shown by the caller. */
+  /** Phones: square cells with the number of appointments instead of text chips; the day's list is shown by the caller. */
   compact?: boolean;
   /** Highlighted day (compact mode). */
   selectedDate?: string;
@@ -75,15 +78,12 @@ export function MonthGrid({
             aria-label={compact && countLabel ? `${iso}: ${countLabel.replace("{n}", String(dayAppointments.length))}` : undefined}
           >
             <span className={styles.cellDate}>{d.getDate()}</span>
-            {compact ? (
-              <span className={styles.dots} aria-hidden="true">
-                {dayAppointments.slice(0, 3).map((a) => (
-                  <span
-                    key={a.id}
-                    className={`${styles.dot} ${a.status === "cancelled" || a.status === "rescheduled" || a.status === "noShow" ? styles.dotMuted : ""}`}
-                  />
-                ))}
-                {dayAppointments.length > 3 ? <span className={styles.dotMore}>+</span> : null}
+            {compact && dayAppointments.length > 0 ? (
+              <span
+                className={`${styles.count} ${dayAppointments.every((a) => INACTIVE.has(a.status)) ? styles.countMuted : ""}`}
+                aria-hidden="true"
+              >
+                {dayAppointments.length > 99 ? "99+" : dayAppointments.length}
               </span>
             ) : null}
             {!compact && dayAppointments.slice(0, 3).map((a) => (

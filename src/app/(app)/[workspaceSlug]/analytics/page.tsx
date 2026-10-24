@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getMessages } from "@/lib/i18n";
-import { MobileBackToMore } from "@/components/layout/MobileBackToMore/MobileBackToMore";
+import { MobileBackToToday } from "@/components/layout/MobileBackToToday/MobileBackToToday";
 import { isFeatureEnabled } from "@/lib/config/features";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
@@ -16,7 +16,7 @@ export default async function AnalyticsPage({
   if (!isFeatureEnabled("analytics")) notFound();
   const locale = await getRequestLocale();
   const { analytics, crossModule, nav } = getMessages(locale);
-  const back = <MobileBackToMore workspaceSlug={workspaceSlug} label={nav.more} />;
+  const back = <MobileBackToToday workspaceSlug={workspaceSlug} label={nav.today} />;
 
   // Demo workspaces keep the pure calculations on demo data; real workspaces read the database
   // (SECURITY INVOKER aggregate under the viewer's RLS) and never fall back to demo data.
