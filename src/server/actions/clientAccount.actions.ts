@@ -21,6 +21,7 @@ import {
 import { loadMyBookingsForPage as loadPageData, type MyBookingsPageData } from "@/server/clientAccount/pageData";
 import { readPendingClaims, writePendingClaims } from "@/server/clientAccount/pendingClaims";
 import { safeClientRedirect } from "@/server/clientAccount/safeRedirect";
+import { authAttemptAllowed } from "@/server/auth/authRateLimit";
 
 export interface ClientAuthState {
   error?: AuthErrorCode;
@@ -67,6 +68,7 @@ export async function signUpClientAction(_prev: ClientAuthState, formData: FormD
     return { error: weak ? "weak_password" : "invalid_input" };
   }
   const { email, password, fullName, phone, locale } = parsed.data;
+  if (!(await authAttemptAllowed({ kind: "sign_up" }))) return { error: "rate_limited" };
   const result = await getBusinessAuth().signUpWithPassword(email, password);
   if (!result.ok) {
     // Neutral for an already-registered address (no account enumeration).
@@ -81,6 +83,7 @@ export async function signUpClientAction(_prev: ClientAuthState, formData: FormD
 export async function signInClientAction(_prev: ClientAuthState, formData: FormData): Promise<ClientAuthState> {
   const parsed = credentials.safeParse({ email: field(formData, "email"), password: field(formData, "password") });
   if (!parsed.success) return { error: "invalid_input" };
+  if (!(await authAttemptAllowed({ kind: "sign_in", email: parsed.data.email }))) return { error: "rate_limited" };
   const result = await getBusinessAuth().signInWithPassword(parsed.data.email, parsed.data.password);
   if (!result.ok) return { error: result.code };
   await afterSignIn(result.userId);

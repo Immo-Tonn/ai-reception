@@ -5,6 +5,7 @@ import { getBusinessAuth } from "@/server/auth/supabaseBusinessAuth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { signInSchema } from "@/server/validation/auth.schema";
 import type { AuthErrorCode } from "@/server/auth/businessAuth";
+import { authAttemptAllowed } from "@/server/auth/authRateLimit";
 
 export interface LoginState {
   error?: AuthErrorCode | "no_workspace";
@@ -16,6 +17,8 @@ export async function signInOwnerAction(_prev: LoginState, formData: FormData): 
   const typedEmail = String(formData.get("email") ?? "").trim().slice(0, 254);
   const parsed = signInSchema.safeParse({ email: formData.get("email"), password: formData.get("password") });
   if (!parsed.success) return { error: "invalid_credentials", email: typedEmail }; // do not hint which field was wrong
+
+  if (!(await authAttemptAllowed({ kind: "sign_in", email: parsed.data.email }))) return { error: "rate_limited", email: typedEmail };
 
   const auth = getBusinessAuth();
   const result = await auth.signInWithPassword(parsed.data.email, parsed.data.password);
