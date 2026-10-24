@@ -2,6 +2,7 @@
 
 import { getSession } from "@/server/auth/session";
 import * as analyticsService from "@/server/services/analytics.service";
+import { assertFeatureEnabled } from "@/server/features";
 import { runAction, type ActionResult } from "./result";
 import type { AnalyticsOverview } from "@/features/analytics/overview";
 
@@ -10,5 +11,8 @@ export async function getAnalyticsOverviewAction(
   workspaceSlug: string,
   range: { from: string; to: string },
 ): Promise<ActionResult<AnalyticsOverview>> {
-  return runAction(async () => analyticsService.getAnalyticsOverview(await getSession(workspaceSlug), range));
+  return runAction(async () => {
+    assertFeatureEnabled("analytics");
+    return analyticsService.getAnalyticsOverview(await getSession(workspaceSlug), range);
+  });
 }

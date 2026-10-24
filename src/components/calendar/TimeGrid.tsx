@@ -5,6 +5,7 @@ import { getGridPlacement, gridHourLabels, GRID_ROW_COUNT } from "@/features/app
 import type { ServiceDefinition } from "@/features/services/types";
 import { resolveServiceLabel } from "@/features/services/label";
 import type { Locale, Messages } from "@/lib/i18n";
+import { CANCELLED_LIKE } from "@/features/appointments/statusRules";
 import styles from "./TimeGrid.module.css";
 
 export interface TimeGridColumn {
@@ -18,12 +19,15 @@ export function TimeGrid({
   services,
   locale,
   dashboardMessages,
+  statusMessages,
   onSelect,
 }: {
   columns: TimeGridColumn[];
   services: ServiceDefinition[];
   locale: Locale;
   dashboardMessages: Messages["dashboard"];
+  /** When given, cancelled / no-show blocks carry their status as text. */
+  statusMessages?: Messages["appointmentStatus"];
   onSelect: (appointment: Appointment) => void;
 }) {
   const hours = gridHourLabels();
@@ -57,11 +61,13 @@ export function TimeGrid({
                 appointment.durationMinutes,
               );
               const isMasked = appointment.visibility === "private";
+              const isCancelled = CANCELLED_LIKE.has(appointment.status);
+              const isNoShow = appointment.status === "noShow";
               return (
                 <button
                   key={appointment.id}
                   type="button"
-                  className={`${styles.block} ${isMasked ? styles.blockMasked : ""}`}
+                  className={`${styles.block} ${isMasked ? styles.blockMasked : ""} ${isCancelled ? styles.blockCancelled : ""} ${isNoShow ? styles.blockNoShow : ""}`}
                   style={{
                     gridRow: `${rowStart + 1} / span ${rowSpan}`,
                     background: isMasked ? undefined : "var(--tint-blue)",
@@ -76,6 +82,9 @@ export function TimeGrid({
                     {appointment.time}
                     {!isMasked ? ` · ${resolveServiceLabel(appointment.service, services, locale)}` : ""}
                   </span>
+                  {(isCancelled || isNoShow) && statusMessages ? (
+                    <span className={styles.blockStatus}>{statusMessages[appointment.status]}</span>
+                  ) : null}
                 </button>
               );
             })}

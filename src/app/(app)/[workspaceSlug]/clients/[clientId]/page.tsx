@@ -9,7 +9,7 @@ export default async function ClientDetailPage({
 }) {
   const { workspaceSlug, clientId } = await params;
   const locale = await getRequestLocale();
-  const { clients, crossModule } = getMessages(locale);
+  const { clients, crossModule, appointmentStatus } = getMessages(locale);
 
   return (
     <ClientDetailView
@@ -18,6 +18,7 @@ export default async function ClientDetailPage({
       locale={locale}
       messages={clients}
       crossModule={crossModule}
+      statusMessages={appointmentStatus}
     />
   );
 }

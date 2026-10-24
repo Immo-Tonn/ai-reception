@@ -1,3 +1,4 @@
+import { isFeatureEnabled } from "@/lib/config/features";
 import "server-only";
 import type { Session } from "@/server/auth/session";
 import { assertCan, can } from "@/server/permissions/roles";
@@ -70,7 +71,8 @@ export async function getClientRelated(session: Session, clientId: string): Prom
     projects: projects.map((r) => item(r, "status", false)),
   };
 
-  if (can(session.role, "finance.view")) {
+  // Finance switched off (feature flag): the invoices section is simply absent, like for a viewer without finance.view.
+  if (can(session.role, "finance.view") && isFeatureEnabled("finance")) {
     const [{ data: ws_row }, { data, error }] = await Promise.all([
       db.from("workspaces").select("timezone").eq("id", ws).maybeSingle(),
       db

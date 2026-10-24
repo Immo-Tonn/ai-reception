@@ -10,6 +10,7 @@ import type {
   MoveAppointmentInput,
 } from "@/server/validation/appointment.schema";
 import type { Appointment } from "@/features/appointments/types";
+import type { DeleteBlocker } from "@/features/appointments/statusRules";
 
 /**
  * Server Actions = the typed contract layer. Each one resolves the session,
@@ -62,4 +63,9 @@ export async function removeAppointmentAction(workspaceSlug: string, id: string)
     await appointmentsService.removeAppointment(await getSession(workspaceSlug), id);
     return null;
   });
+}
+
+/** Why the appointment may not be physically deleted (empty = deletion allowed: a mistake, no history, no links). */
+export async function getAppointmentDeleteBlockersAction(workspaceSlug: string, id: string): Promise<ActionResult<DeleteBlocker[]>> {
+  return runAction(async () => appointmentsService.getAppointmentDeleteBlockers(await getSession(workspaceSlug), id));
 }

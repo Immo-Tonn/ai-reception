@@ -13,7 +13,15 @@ import { UnauthenticatedError, WorkspaceAccessError } from "@/server/auth/resolv
  * Raw error messages (database text, stack traces) never cross this line —
  * the UI localizes the code.
  */
-export type ActionErrorCode = "unauthenticated" | "forbidden" | "invalid_input" | "not_found" | "conflict" | "unknown";
+export type ActionErrorCode =
+  | "unauthenticated"
+  | "forbidden"
+  | "invalid_input"
+  | "not_found"
+  | "conflict"
+  | "invalid_status"
+  | "delete_blocked"
+  | "unknown";
 export type ActionResult<T> = { ok: true; data: T } | { ok: false; code: ActionErrorCode };
 
 export function toActionError(error: unknown): ActionErrorCode {
@@ -25,6 +33,8 @@ export function toActionError(error: unknown): ActionErrorCode {
   ) {
     return "forbidden";
   }
+  if (error instanceof BusinessRuleError && error.code === "invalid_status_transition") return "invalid_status";
+  if (error instanceof BusinessRuleError && error.code === "delete_not_allowed") return "delete_blocked";
   if (error instanceof BusinessRuleError || error instanceof RepositoryConflictError) return "conflict";
   if (error instanceof RepositoryNotFoundError) return "not_found";
   if (error instanceof ZodError) return "invalid_input";

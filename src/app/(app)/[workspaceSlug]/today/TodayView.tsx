@@ -4,6 +4,7 @@ import type { KeyboardEvent } from "react";
 import { Icon } from "@/components/ui";
 import { useAppointments } from "@/features/appointments/useAppointments";
 import { useInvoices } from "@/features/finance/useInvoices";
+import { useFeatureEnabled } from "@/features/workspace/FeatureFlags";
 import { calculateOutstanding } from "@/features/finance/calculations";
 import { isOpenInvoice } from "@/features/finance/status";
 import { useWorkspaceConfig, useWorkspaceToday } from "@/features/workspace/WorkspaceCatalog";
@@ -51,7 +52,8 @@ export function TodayView({
   dashboard: Messages["dashboard"];
 }) {
   const { items: appointments } = useAppointments(workspaceSlug);
-  const { items: invoices } = useInvoices(workspaceSlug);
+  const financeOn = useFeatureEnabled("finance");
+  const { items: invoices } = useInvoices(workspaceSlug, financeOn);
   const workspaceServices = useWorkspaceConfig(workspaceSlug).services;
 
   const todayIso = useWorkspaceToday(workspaceSlug);
@@ -135,10 +137,12 @@ export function TodayView({
           <span className={styles.metricValue}>{pendingToday.length}</span>
           <span className={styles.metricMeta}>{dashboard.cardRequestsNew}</span>
         </div>
-        <div className={styles.metricCard} style={{ background: "var(--tint-lavender)", color: "var(--color-accent-lavender)" }}>
-          <span className={styles.metricLabel}>{dashboard.cardOutstanding}</span>
-          <span className={styles.metricValue}>{formatCurrency(outstanding, "EUR", locale)}</span>
-        </div>
+        {financeOn ? (
+          <div className={styles.metricCard} style={{ background: "var(--tint-lavender)", color: "var(--color-accent-lavender)" }}>
+            <span className={styles.metricLabel}>{dashboard.cardOutstanding}</span>
+            <span className={styles.metricValue}>{formatCurrency(outstanding, "EUR", locale)}</span>
+          </div>
+        ) : null}
       </section>
 
       {attentionItems.length > 0 && (

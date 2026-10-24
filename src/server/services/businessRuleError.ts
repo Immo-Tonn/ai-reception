@@ -8,7 +8,9 @@ export class BusinessRuleError extends Error {
       | "resource_type_mismatch"
       | "invalid_work_transition"
       | "external_calendar_busy"
-      | "external_calendar_unconfirmed",
+      | "external_calendar_unconfirmed"
+      | "invalid_status_transition"
+      | "delete_not_allowed",
   ) {
     super(message);
     this.name = "BusinessRuleError";

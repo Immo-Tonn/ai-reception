@@ -65,3 +65,12 @@
   font-size: 10px;
   color: var(--text-secondary);
 }
+
+.chipCancelled {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.chipNoShow {
+  opacity: 0.65;
+}
