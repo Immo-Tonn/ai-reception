@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getMessages } from "@/lib/i18n";
-import { MobileBackToMore } from "@/components/layout/MobileBackToMore/MobileBackToMore";
+import { MobileBackToToday } from "@/components/layout/MobileBackToToday/MobileBackToToday";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { getSession } from "@/server/auth/session";
@@ -29,7 +29,7 @@ export default async function FinancePage({
 
   return (
     <>
-      <MobileBackToMore workspaceSlug={workspaceSlug} label={nav.more} />
+      <MobileBackToToday workspaceSlug={workspaceSlug} label={nav.today} />
       <FinanceView
         workspaceSlug={workspaceSlug}
         locale={locale}

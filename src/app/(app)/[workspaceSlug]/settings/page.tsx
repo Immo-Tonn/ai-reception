@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Button, Icon, LanguageSwitcher, ThemeSwitcher } from "@/components/ui";
 import { getMessages } from "@/lib/i18n";
-import { MobileBackToMore } from "@/components/layout/MobileBackToMore/MobileBackToMore";
+import { MobileBackToToday } from "@/components/layout/MobileBackToToday/MobileBackToToday";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { getRequestTheme } from "@/lib/theme/next";
 import { headers } from "next/headers";
@@ -35,7 +35,7 @@ export default async function SettingsPage({
 
   return (
     <>
-      <MobileBackToMore workspaceSlug={workspaceSlug} label={nav.more} />
+      <MobileBackToToday workspaceSlug={workspaceSlug} label={nav.today} />
       <main className={styles.page}>
         <h1 className={styles.title}>{nav.settings}</h1>
 
