@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar/Sidebar";
 import { BottomNav } from "@/components/layout/BottomNav/BottomNav";
+import { BusyBar } from "@/components/layout/BusyBar/BusyBar";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher/WorkspaceSwitcher";
 import { getMessages } from "@/lib/i18n";
@@ -52,6 +53,7 @@ export default async function WorkspaceLayout({
   const shell = (
     <FeatureFlagsProvider value={getFeatureFlags()}>
     <div className={styles.shell}>
+      <BusyBar />
       <Sidebar workspaceSlug={workspaceSlug} locale={locale} messages={nav} appName={common.appName} />
       <div className={styles.content}>
         <div className={styles.topBar}>

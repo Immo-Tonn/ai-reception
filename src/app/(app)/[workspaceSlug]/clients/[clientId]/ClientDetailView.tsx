@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { belongsToClient } from "@/features/appointments/identity";
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/ui";
@@ -102,10 +103,10 @@ export function ClientDetailView({
   if (!client) {
     return (
       <main className={styles.page}>
-        <a className={styles.backLink} href={`/${workspaceSlug}/clients`}>
+        <Link className={styles.backLink} href={`/${workspaceSlug}/clients`}>
           <Icon name="chevronRight" size={14} style={{ transform: "rotate(180deg)" }} />
           {messages.back}
-        </a>
+        </Link>
         <div className={styles.empty}>
           <div>{messages.notFoundTitle}</div>
           <div>{messages.notFoundDescription}</div>
@@ -116,10 +117,10 @@ export function ClientDetailView({
 
   return (
     <main className={styles.page}>
-      <a className={styles.backLink} href={`/${workspaceSlug}/clients`}>
+      <Link className={styles.backLink} href={`/${workspaceSlug}/clients`}>
         <Icon name="chevronRight" size={14} style={{ transform: "rotate(180deg)" }} />
         {messages.back}
-      </a>
+      </Link>
 
       <div className={styles.header}>
         <span className={styles.avatar}>{initials(client.name)}</span>
@@ -173,7 +174,7 @@ export function ClientDetailView({
         ) : (
           <div className={styles.list}>
             {upcoming.map((item) => (
-              <a key={item.id} className={styles.row} href={appointmentHref(item)}>
+              <Link key={item.id} className={styles.row} href={appointmentHref(item)}>
                 <div>
                   <div className={styles.rowTitle}>{item.service}</div>
                   <div className={styles.rowSubtitle}>
@@ -181,7 +182,7 @@ export function ClientDetailView({
                   </div>
                 </div>
                 <StatusBadge status={item.status} labels={statusMessages} />
-              </a>
+              </Link>
             ))}
           </div>
         ))}
@@ -192,7 +193,7 @@ export function ClientDetailView({
         ) : (
           <div className={styles.list}>
             {history.map((item) => (
-              <a
+              <Link
                 key={item.id}
                 className={`${styles.row} ${item.status === "cancelled" || item.status === "noShow" ? styles.rowMuted : ""}`}
                 href={appointmentHref(item)}
@@ -210,7 +211,7 @@ export function ClientDetailView({
                     <span className={styles.rowValue}>{formatCurrency(item.price, item.currency, locale)}</span>
                   ) : null}
                 </span>
-              </a>
+              </Link>
             ))}
           </div>
         ))}

@@ -105,6 +105,24 @@ select {
   color: inherit;
 }
 
+/* Touch feedback (phones/tablets): the tap highlight is turned off above, so
+   without this a press shows nothing until the next screen arrives and people
+   tap again. Instant, subtle, no layout shift. */
+@media (hover: none) {
+  a,
+  button,
+  [role="button"] {
+    transition: opacity var(--motion-fast) var(--motion-ease);
+  }
+
+  a:active,
+  button:not(:disabled):active,
+  [role="button"]:active {
+    opacity: 0.6;
+    transition-duration: 0ms;
+  }
+}
+
 :focus-visible {
   outline: 2px solid var(--color-accent-blue);
   outline-offset: 2px;

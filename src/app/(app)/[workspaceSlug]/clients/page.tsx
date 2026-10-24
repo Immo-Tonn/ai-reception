@@ -1,4 +1,5 @@
 import { getMessages } from "@/lib/i18n";
+import { MobileBackToMore } from "@/components/layout/MobileBackToMore/MobileBackToMore";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { ClientsView } from "./ClientsView";
 
@@ -9,7 +10,12 @@ export default async function ClientsPage({
 }) {
   const { workspaceSlug } = await params;
   const locale = await getRequestLocale();
-  const { clients } = getMessages(locale);
+  const { clients, nav } = getMessages(locale);
 
-  return <ClientsView workspaceSlug={workspaceSlug} locale={locale} messages={clients} />;
+  return (
+    <>
+      <MobileBackToMore workspaceSlug={workspaceSlug} label={nav.more} />
+      <ClientsView workspaceSlug={workspaceSlug} locale={locale} messages={clients} />
+    </>
+  );
 }

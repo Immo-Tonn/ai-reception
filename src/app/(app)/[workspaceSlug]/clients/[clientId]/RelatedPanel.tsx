@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getClientRelatedAction } from "@/server/actions/crossModule.actions";
 import type { ActionResult } from "@/server/actions/result";
@@ -78,7 +79,7 @@ export function RelatedPanel({
           <div className={styles.rowSubtitle}>{group.title}</div>
           <div className={styles.list}>
             {group.items.map((item) => (
-              <a key={item.id} className={styles.row} style={{ minHeight: 44, color: "inherit", textDecoration: "none" }} href={`/${workspaceSlug}/work`}>
+              <Link key={item.id} className={styles.row} style={{ minHeight: 44, color: "inherit", textDecoration: "none" }} href={`/${workspaceSlug}/work`}>
                 <div>
                   <div className={styles.rowTitle}>{item.title}</div>
                   <div className={styles.rowSubtitle}>{statusLabel(item.status)}</div>
@@ -86,7 +87,7 @@ export function RelatedPanel({
                 {item.amountMinor !== undefined && item.currency && (
                   <span className={styles.rowValue}>{money(item.amountMinor, item.currency)}</span>
                 )}
-              </a>
+              </Link>
             ))}
           </div>
         </div>
@@ -97,13 +98,13 @@ export function RelatedPanel({
           <div className={styles.rowSubtitle}>{messages.invoices}</div>
           <div className={styles.list}>
             {invoices.map((inv) => (
-              <a key={inv.id} className={styles.row} style={{ minHeight: 44, color: "inherit", textDecoration: "none" }} href={`/${workspaceSlug}/finance`}>
+              <Link key={inv.id} className={styles.row} style={{ minHeight: 44, color: "inherit", textDecoration: "none" }} href={`/${workspaceSlug}/finance`}>
                 <div>
                   <div className={styles.rowTitle}>{inv.number}</div>
                   <div className={styles.rowSubtitle}>{invoiceLabel(inv.status)}</div>
                 </div>
                 <span className={styles.rowValue}>{money(inv.amountMinor, inv.currency)}</span>
-              </a>
+              </Link>
             ))}
           </div>
         </div>

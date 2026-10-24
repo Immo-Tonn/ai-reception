@@ -629,6 +629,8 @@ export const en = {
     readySummaryBuckets: "Financial buckets",
   },
   calendar: {
+    nextPeriod: "Next",
+    previousPeriod: "Previous",
     title: "Calendar",
     today: "Today",
     agendaView: "Agenda",
@@ -1342,7 +1344,7 @@ export const en = {
     privacyPurpose: "Purpose: preventing double bookings. Calendar IDs, an encrypted token, a pseudonymised Google account ID, the connection status and a cache of busy times are stored; disconnecting deletes them.",
     privacyLink: "Privacy policy: Google Calendar",
     manageHint: "Team members can disconnect their own calendar at any time on the page /connect-calendar/manage by signing in with Google. If the same Google account is also connected in another business, Google access for that business stays active.",
-    notConfigured: "Google Calendar is not set up for this ServiceOS installation yet. The administrator has to add the Google credentials first.",
+    notConfigured: "Google Calendar connection is coming soon. The ServiceOS team is setting it up — there is nothing you need to do.",
     demoNote: "Google Calendar is not available in demo workspaces.",
     staffTitle: "Team calendars",
     noStaff: "No active staff members yet.",

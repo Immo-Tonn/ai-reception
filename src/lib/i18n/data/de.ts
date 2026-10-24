@@ -615,6 +615,8 @@ export const de: Messages = {
     readySummaryBuckets: "Finanzkonten",
   },
   calendar: {
+    nextPeriod: "Weiter",
+    previousPeriod: "Zurück",
     title: "Kalender",
     today: "Heute",
     agendaView: "Agenda",
@@ -1318,7 +1320,7 @@ export const de: Messages = {
     privacyPurpose: "Zweck: Doppelbuchungen vermeiden. Gespeichert werden Kalenderkennungen, ein verschlüsseltes Token, eine pseudonymisierte Google-Kontokennung, der Verbindungsstatus und ein Zwischenspeicher der belegten Zeiten; beim Trennen werden sie gelöscht.",
     privacyLink: "Datenschutzerklärung: Google Kalender",
     manageHint: "Mitarbeitende können ihren eigenen Kalender jederzeit auf der Seite /connect-calendar/manage nach Anmeldung mit Google trennen. Ist dasselbe Google-Konto auch bei einem anderen Unternehmen verbunden, bleibt der Google-Zugriff dort bestehen.",
-    notConfigured: "Google Kalender ist für diese ServiceOS-Installation noch nicht eingerichtet. Zuerst müssen die Google-Zugangsdaten hinterlegt werden.",
+    notConfigured: "Die Verbindung mit Google Kalender ist bald verfügbar. Das ServiceOS-Team richtet sie gerade ein – Sie müssen nichts tun.",
     demoNote: "Google Kalender ist in Demo-Arbeitsbereichen nicht verfügbar.",
     staffTitle: "Kalender des Teams",
     noStaff: "Noch keine aktiven Mitarbeitenden.",

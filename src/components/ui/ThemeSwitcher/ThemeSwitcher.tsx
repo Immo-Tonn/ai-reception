@@ -17,7 +17,7 @@ export function ThemeSwitcher({
   labels,
 }: {
   initialTheme: Theme;
-  labels: { light: string; dark: string; system: string };
+  labels: { label: string; light: string; dark: string; system: string };
 }) {
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const router = useRouter();
@@ -35,7 +35,7 @@ export function ThemeSwitcher({
   }
 
   return (
-    <div className={styles.group} role="radiogroup" aria-label="Theme">
+    <div className={styles.group} role="radiogroup" aria-label={labels.label}>
       {options.map((option) => (
         <button
           key={option.value}

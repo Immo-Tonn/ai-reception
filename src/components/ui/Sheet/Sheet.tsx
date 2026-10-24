@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "../Icon/Icon";
+import { closeLabelFor } from "@/lib/i18n/uiLabels";
 import styles from "./Sheet.module.css";
 
 /**
@@ -63,7 +64,7 @@ export function Sheet({
             type="button"
             className={styles.closeButton}
             onClick={onClose}
-            aria-label="Close"
+            aria-label={closeLabelFor(document.documentElement.lang)}
           >
             <Icon name="close" size={16} />
           </button>
