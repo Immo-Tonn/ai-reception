@@ -29,6 +29,7 @@ import { resolveToday } from "@/lib/time/zonedTime";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency, formatDate } from "@/lib/i18n/format";
 import styles from "./page.module.css";
+import { useClientValue } from "@/lib/hooks/useClientValue";
 
 const DATE_STRIP_DAYS = 28;
 
@@ -64,13 +65,14 @@ export function BookingWizard({
 }) {
   const { identity } = useClientAuth();
   const [step, setStep] = useState<Step>("service");
+  // Bumped on every step change: entering the date / time step always asks the server again
+  // (free times change), exactly like before.
+  const [stepVisit, setStepVisit] = useState(0);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null | "any">("any");
   const [selectedDate, setSelectedDate] = useState(() => resolveToday(new Date(), timezone));
-  const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
   const [result, setResult] = useState<PublicBookingResult | null>(null);
-  const [slotsLoading, setSlotsLoading] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -92,12 +94,18 @@ export function BookingWizard({
   const dateStrip = useMemo(() => buildDateStrip(new Date(), timezone, { maxDaysAhead: DATE_STRIP_DAYS - 1 }), [timezone]);
   // Days that really have slots (server-computed with the same engine as the time step).
   // null = not known yet / could not be determined: every day stays selectable then.
-  const [availableDates, setAvailableDates] = useState<Set<string> | null>(null);
-  const [datesLoading, setDatesLoading] = useState(false);
+  // Each answer is stored WITH the request it belongs to, so "loading" is derived (no setState
+  // in an effect) and a late answer for an older request can never overwrite a newer one.
+  const datesRequest =
+    step === "date" && selectedServiceId
+      ? `${stepVisit}|${selectedServiceId}|${selectedStaffId}|${dateStrip[0]}|${dateStrip.length}`
+      : null;
+  const [datesAnswer, setDatesAnswer] = useState<{ request: string; dates: Set<string> | null } | null>(null);
+  const datesLoading = datesRequest !== null && datesAnswer?.request !== datesRequest;
+  const availableDates = datesAnswer && datesAnswer.request === datesRequest ? datesAnswer.dates : null;
   // Slots and booked times are the business's wall clock. Say so when the
   // visitor's own zone differs (detected after mount to keep SSR stable).
-  const [visitorZone, setVisitorZone] = useState<string | null>(null);
-  useEffect(() => setVisitorZone(browserTimeZone()), []);
+  const visitorZone = useClientValue(browserTimeZone, null);
   const zoneNote =
     timezone && visitorZone && visitorZone !== timezone
       ? booking.timesInBusinessZone.replace("{city}", zoneCityLabel(timezone)).replace("{zone}", timezone)
@@ -117,52 +125,60 @@ export function BookingWizard({
   // A signed-in client (see /client/login, /client/signup) doesn't have
   // to retype their details every booking — guest checkout still works
   // without ever touching this (§ booking never depends on registration).
-  useEffect(() => {
-    if (!identity) return;
+  // Adjusted during render when the identity changes (React's pattern for "state from a prop").
+  const [prefilledFrom, setPrefilledFrom] = useState<typeof identity>(null);
+  if (identity && identity !== prefilledFrom) {
+    setPrefilledFrom(identity);
     setName((current) => current || identity.name);
     setEmail((current) => current || identity.email);
     setPhone((current) => current || identity.phone);
-  }, [identity]);
+  }
 
   useEffect(() => {
-    if (step !== "date" || !selectedServiceId) return;
+    if (!datesRequest || !selectedServiceId) return;
     let cancelled = false;
-    setDatesLoading(true);
-    setAvailableDates(null);
     const staffId = selectedStaffId === "any" ? null : selectedStaffId;
     getPublicBookingService(workspaceSlug)
       .getAvailableDates(workspaceSlug, selectedServiceId, staffId, dateStrip[0], dateStrip.length)
       .then((dates) => {
-        if (!cancelled) setAvailableDates(dates ? new Set(dates) : null);
+        if (!cancelled) setDatesAnswer({ request: datesRequest, dates: dates ? new Set(dates) : null });
       })
       .catch((err) => {
         if (cancelled) return;
-        setAvailableDates(null);
+        // Unknown = every day stays selectable.
+        setDatesAnswer({ request: datesRequest, dates: null });
         if (err instanceof BookingRateLimitedError) setError(booking.rateLimitedError);
-      })
-      .finally(() => {
-        if (!cancelled) setDatesLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [step, workspaceSlug, selectedServiceId, selectedStaffId, dateStrip, booking.rateLimitedError]);
+  }, [datesRequest, workspaceSlug, selectedServiceId, selectedStaffId, dateStrip, booking.rateLimitedError]);
+
+  const slotsRequest = step === "time" && selectedServiceId ? `${stepVisit}|${selectedServiceId}|${selectedStaffId}|${selectedDate}` : null;
+  const [slotsAnswer, setSlotsAnswer] = useState<{ request: string; slots: AvailableSlot[] } | null>(null);
+  const slotsLoading = slotsRequest !== null && slotsAnswer?.request !== slotsRequest;
+  const slots = slotsAnswer && slotsAnswer.request === slotsRequest ? slotsAnswer.slots : [];
 
   useEffect(() => {
-    if (step !== "time" || !selectedServiceId) return;
-    setSlotsLoading(true);
+    if (!slotsRequest || !selectedServiceId) return;
+    let cancelled = false;
     const staffId = selectedStaffId === "any" ? null : selectedStaffId;
     getPublicBookingService(workspaceSlug)
       .getAvailableSlots(workspaceSlug, selectedServiceId, staffId, selectedDate)
       // "Any specialist" yields one slot per free specialist per time — the
       // visitor sees each time once; the assignee is resolved at booking.
-      .then((all) => setSlots(uniqueSlotTimes(all)))
-      .catch((err) => {
-        setSlots([]);
-        if (err instanceof BookingRateLimitedError) setError(booking.rateLimitedError);
+      .then((all) => {
+        if (!cancelled) setSlotsAnswer({ request: slotsRequest, slots: uniqueSlotTimes(all) });
       })
-      .finally(() => setSlotsLoading(false));
-  }, [step, workspaceSlug, selectedServiceId, selectedStaffId, selectedDate, booking.rateLimitedError]);
+      .catch((err) => {
+        if (cancelled) return;
+        setSlotsAnswer({ request: slotsRequest, slots: [] });
+        if (err instanceof BookingRateLimitedError) setError(booking.rateLimitedError);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slotsRequest, workspaceSlug, selectedServiceId, selectedStaffId, selectedDate, booking.rateLimitedError]);
 
   // Embed resizing (§3): tell the embedding page how tall we are so an
   // iframe embed can size itself instead of showing a scrollbar. Messages
@@ -203,6 +219,7 @@ export function BookingWizard({
   function goTo(next: Step) {
     setError(null);
     setStep(next);
+    setStepVisit((n) => n + 1);
   }
 
   function stepIndex(s: Step) {
@@ -236,11 +253,12 @@ export function BookingWizard({
       goTo("confirmation");
     } catch (err) {
       if (!(err instanceof BookingUnavailableError)) {
-        // eslint-disable-next-line no-console
+         
         console.error("Public booking failed", err);
       }
       setError(err instanceof BookingRateLimitedError ? booking.rateLimitedError : booking.slotTakenError);
       setStep("time");
+      setStepVisit((n) => n + 1); // reload the times: the chosen one was just taken
     } finally {
       setSubmitting(false);
     }
@@ -536,6 +554,7 @@ export function BookingWizard({
               fullWidth
               onClick={() => {
                 setStep("service");
+                setStepVisit((n) => n + 1);
                 setSelectedServiceId(null);
                 setSelectedStaffId("any");
                 setSelectedSlot(null);

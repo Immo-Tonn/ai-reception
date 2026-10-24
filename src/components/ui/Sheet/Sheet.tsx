@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "../Icon/Icon";
 import { closeLabelFor } from "@/lib/i18n/uiLabels";
 import styles from "./Sheet.module.css";
+import { useIsClient } from "@/lib/hooks/useClientValue";
 
 /**
  * Mobile-first bottom sheet: full-width sheet sliding from the bottom on
@@ -31,11 +32,7 @@ export function Sheet({
   title: string;
   children: ReactNode;
 }) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useIsClient();
 
   useEffect(() => {
     if (!open) return;

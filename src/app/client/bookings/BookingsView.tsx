@@ -28,6 +28,7 @@ import { browserTimeZone, buildDateStrip, zoneCityLabel } from "@/lib/time/dateS
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency, formatDate } from "@/lib/i18n/format";
 import styles from "./BookingsView.module.css";
+import { useClientValue } from "@/lib/hooks/useClientValue";
 
 export type BookingsViewState = "signed_out" | "ready";
 
@@ -127,11 +128,10 @@ function ReadyView({
   const [feedback, setFeedback] = useState<Feedback>(IDLE);
   const [busy, setBusy] = useState(false);
   const [claiming, setClaiming] = useState(false);
-  const [browserZone, setBrowserZone] = useState<string | null>(null);
   const claimStarted = useRef(false);
 
-  // Browser zone is only known on the client; reading it after mount keeps SSR and hydration identical.
-  useEffect(() => setBrowserZone(browserTimeZone()), []);
+  // Browser zone is only known on the client; the server render and hydration use null.
+  const browserZone = useClientValue(browserTimeZone, null);
 
   // Bookings made as a guest in this browser are linked once, right after sign-in.
   useEffect(() => {
@@ -432,36 +432,29 @@ function ReschedulePanel({
   // Days are counted from the BUSINESS "today", never the browser's.
   const dateStrip = useMemo(() => buildDateStrip(new Date(), booking.timezone), [booking.timezone]);
   const [selectedDate, setSelectedDate] = useState(dateStrip[0]);
-  const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // The answer is stored WITH the day it belongs to: "loading" is derived, and a late answer
+  // for a previously tapped day can never replace the current one.
+  const [answer, setAnswer] = useState<{ date: string; slots: AvailableSlot[]; error: string | null } | null>(null);
+  const loading = answer?.date !== selectedDate;
+  const slots = !loading && answer ? answer.slots : [];
+  const error = !loading && answer ? answer.error : null;
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setSelectedTime(null);
-    setError(null);
     getMyRescheduleSlotsAction(booking.id, selectedDate)
       .then((result) => {
         if (cancelled) return;
         if (result.ok) {
-          setSlots(uniqueSlotTimes(result.data));
+          setAnswer({ date: selectedDate, slots: uniqueSlotTimes(result.data), error: null });
         } else if (result.code === "unauthenticated") {
           onExpired();
         } else {
-          setSlots([]);
-          setError(client[clientErrorKey(result.code)]);
+          setAnswer({ date: selectedDate, slots: [], error: client[clientErrorKey(result.code)] });
         }
       })
       .catch(() => {
-        if (!cancelled) {
-          setSlots([]);
-          setError(client.errUnknown);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setAnswer({ date: selectedDate, slots: [], error: client.errUnknown });
       });
     return () => {
       cancelled = true;
@@ -482,7 +475,11 @@ function ReschedulePanel({
               type="button"
               aria-pressed={selectedDate === iso}
               className={`${styles.dateChip} ${selectedDate === iso ? styles.dateChipActive : ""}`}
-              onClick={() => setSelectedDate(iso)}
+              onClick={() => {
+                if (iso === selectedDate) return;
+                setSelectedDate(iso);
+                setSelectedTime(null);
+              }}
             >
               <span>{date.toLocaleDateString(locale, { weekday: "short" })}</span>
               <strong>{date.getDate()}</strong>

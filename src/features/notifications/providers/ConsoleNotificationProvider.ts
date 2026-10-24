@@ -24,6 +24,6 @@ export function createConsoleNotificationProvider(
 }
 
 function defaultLog(message: string, detail: unknown) {
-  // eslint-disable-next-line no-console
+   
   console.info(message, detail);
 }
