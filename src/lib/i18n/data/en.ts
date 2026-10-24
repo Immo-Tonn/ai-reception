@@ -84,6 +84,9 @@ export const en = {
     clientLink: "Book now",
   },
   client: {
+    calendarSyncAnotherDevice: "Connect another device",
+    calendarSyncConnectedShort: "✓ Your bookings appear in your calendar automatically",
+    calendarSyncConnected: "Calendar connected — your bookings appear there by themselves.",
     bookAgain: "Book again",
     myBusinessesTitle: "My businesses",
     calendarSyncInProfile: "All bookings in your calendar → Profile",
@@ -1009,6 +1012,7 @@ export const en = {
     actionConfirmedReply: "Done — the move is confirmed in this demo thread (open Calendar to actually reschedule).",
   },
   booking: {
+    calendarAutoNote: "It will appear in your calendar automatically.",
     addToCalendarFile: "Apple / Outlook",
     addToCalendarGoogle: "Google Calendar",
     addToCalendarTitle: "Add to your calendar",

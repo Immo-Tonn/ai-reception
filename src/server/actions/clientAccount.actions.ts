@@ -25,7 +25,7 @@ import { authAttemptAllowed } from "@/server/auth/authRateLimit";
 import { headers } from "next/headers";
 import { deriveServerSecret } from "@/lib/supabase/admin";
 import { getPublicBaseUrl } from "@/lib/config/publicBaseUrl";
-import { bumpFeedVersion, createFeedToken, getFeedVersion } from "@/server/clientAccount/calendarFeed";
+import { bumpFeedVersion, createFeedToken, getFeedState } from "@/server/clientAccount/calendarFeed";
 
 export interface ClientAuthState {
   error?: AuthErrorCode;
@@ -191,24 +191,29 @@ export interface MyCalendarFeed {
   webcalUrl: string;
   /** Opens Google Calendar's "add calendar from URL" with this feed. */
   googleUrl: string;
+  /** A calendar app already fetches this link (see markFeedConnected). */
+  connected: boolean;
 }
 
-async function feedFor(userId: string, version: number): Promise<MyCalendarFeed> {
+async function feedFor(userId: string, version: number, connected: boolean): Promise<MyCalendarFeed> {
   const { baseUrl } = getPublicBaseUrl((await headers()).get("host"));
   if (!baseUrl) throw new Error("public_base_url_missing"); // NEXT_PUBLIC_APP_URL not set
   const url = `${baseUrl}/api/calendar/client/${createFeedToken(deriveServerSecret("client-calendar-feed"), userId, version)}.ics`;
   const webcalUrl = url.replace(/^https?:\/\//, "webcal://");
-  return { url, webcalUrl, googleUrl: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl)}` };
+  return { url, webcalUrl, googleUrl: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl)}`, connected };
 }
 
 /** The signed-in client's personal subscription link. */
 export async function getMyCalendarFeedAction(): Promise<ClientActionResult<MyCalendarFeed>> {
-  return withUser(async (userId) => feedFor(userId, await getFeedVersion(getPublicBookingDeps().admin, userId)));
+  return withUser(async (userId) => {
+    const state = await getFeedState(getPublicBookingDeps().admin, userId);
+    return feedFor(userId, state.version, state.connected);
+  });
 }
 
 /** New link; every previously shared one stops working immediately. */
 export async function resetMyCalendarFeedAction(): Promise<ClientActionResult<MyCalendarFeed>> {
-  return withUser(async (userId) => feedFor(userId, await bumpFeedVersion(getPublicBookingDeps().admin, userId)));
+  return withUser(async (userId) => feedFor(userId, await bumpFeedVersion(getPublicBookingDeps().admin, userId), false));
 }
 
 

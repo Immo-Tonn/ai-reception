@@ -42,3 +42,45 @@ describe("bookings -> iCalendar", () => {
     expect(ics).not.toMatch(/55|EUR/);
   });
 });
+
+import { getFeedState, markFeedConnected, bumpFeedVersion } from "../calendarFeed";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+/** Minimal stand-in for admin.auth.admin (getUserById / updateUserById) that counts writes. */
+function fakeAdmin(initial: Record<string, unknown> = {}) {
+  let appMetadata: Record<string, unknown> = { ...initial };
+  let writes = 0;
+  const admin = {
+    auth: {
+      admin: {
+        getUserById: async () => ({ data: { user: { app_metadata: appMetadata } }, error: null }),
+        updateUserById: async (_id: string, attrs: { app_metadata: Record<string, unknown> }) => {
+          writes += 1;
+          appMetadata = attrs.app_metadata;
+          return { data: {}, error: null };
+        },
+      },
+    },
+  } as unknown as SupabaseClient;
+  return { admin, writes: () => writes };
+}
+
+describe("calendar connected state", () => {
+  it("is not connected until a calendar app fetched the current link, then marks it once", async () => {
+    const f = fakeAdmin();
+    expect(await getFeedState(f.admin, USER)).toEqual({ version: 0, connected: false });
+    await markFeedConnected(f.admin, USER, 0);
+    await markFeedConnected(f.admin, USER, 0); // later polls: no more writes
+    expect(f.writes()).toBe(1);
+    expect(await getFeedState(f.admin, USER)).toEqual({ version: 0, connected: true });
+  });
+
+  it("resetting the link means 'not connected' until the new link is subscribed", async () => {
+    const f = fakeAdmin({ calendar_feed_version: 2, calendar_feed_seen_version: 2 });
+    expect((await getFeedState(f.admin, USER)).connected).toBe(true);
+    expect(await bumpFeedVersion(f.admin, USER)).toBe(3);
+    expect(await getFeedState(f.admin, USER)).toEqual({ version: 3, connected: false });
+    await markFeedConnected(f.admin, USER, 3);
+    expect((await getFeedState(f.admin, USER)).connected).toBe(true);
+  });
+});
