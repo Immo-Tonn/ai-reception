@@ -30,6 +30,8 @@ import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency, formatDate } from "@/lib/i18n/format";
 import styles from "./page.module.css";
 import { useClientValue } from "@/lib/hooks/useClientValue";
+import { AddToCalendar } from "@/components/calendar/AddToCalendar";
+import { wallToInstant } from "@/lib/time/zonedTime";
 
 const DATE_STRIP_DAYS = 28;
 
@@ -550,6 +552,21 @@ export function BookingWizard({
                 </dd>
               </div>
             </dl>
+            <AddToCalendar
+              labels={{ title: booking.addToCalendarTitle, google: booking.addToCalendarGoogle, appleOutlook: booking.addToCalendarFile }}
+              event={(() => {
+                // The booked time is the BUSINESS wall clock; demo workspaces have no zone (browser-local).
+                const start = timezone ? wallToInstant(result.date, result.time, timezone) : new Date(`${result.date}T${result.time}:00`);
+                return {
+                  uid: `appointment-${result.appointmentId}@serviceos`,
+                  start,
+                  end: new Date(start.getTime() + selectedService.durationMinutes * 60_000),
+                  summary: `${getServiceLabel(selectedService, locale)} · ${branding.businessName}`,
+                  description: staffLabel(result.staffName),
+                  status: result.status === "confirmed" ? "CONFIRMED" : "TENTATIVE",
+                };
+              })()}
+            />
             <Button
               fullWidth
               onClick={() => {

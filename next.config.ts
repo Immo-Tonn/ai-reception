@@ -76,6 +76,14 @@ const nextConfig: NextConfig = {
           { key: "Cache-Control", value: "no-store" },
         ],
       },
+      // Client calendar feed: the URL itself is the secret, never leak it via Referer.
+      {
+        source: "/api/calendar/:path*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
       {
         source: "/book/:workspaceSlug/embed",
         headers: [{ key: "Content-Security-Policy", value: "frame-ancestors *" }],
