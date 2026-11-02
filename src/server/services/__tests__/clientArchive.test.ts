@@ -20,7 +20,11 @@ const clients = await import("../clients.service");
 const finance = await import("../finance.service");
 const { getServerAppointmentsRepository } = await import("@/server/repository/registry");
 const { PermissionDeniedError } = await import("@/server/permissions/roles");
-const { RepositoryNotFoundError, RepositoryConflictError } = await import("@/server/repository/errors");
+const { RepositoryNotFoundError, RepositoryConflictError, RepositoryClientArchivedError } = await import("@/server/repository/errors");
+const appointments = await import("../appointments.service");
+const { describeSaveError } = await import("@/lib/repository/describeSaveError");
+const { RemoteRepositoryError } = await import("@/lib/repository/createRemoteRepository");
+const { getMessages } = await import("@/lib/i18n");
 const { toActionError } = await import("@/server/actions/result");
 
 const OWNER = "aaaaaaaa-0000-4000-8000-000000000101";
@@ -155,5 +159,25 @@ describe("client archive service", () => {
     expect(err).toBeInstanceOf(RepositoryConflictError);
     expect(toActionError(err)).toBe("conflict"); // the UI shows repositoryErrors.clientExists (with the archive hint)
     expect((await q<{ n: number }>("select count(*)::int as n from clients where workspace_id=$1 and lower(email)='dora@t.invalid'", [wsId]))[0].n).toBe(1);
+  });
+
+  it("a new appointment for an archived client gives a clear 'restore first' message", async () => {
+    const c = await seedClient("Nora");
+    const owner = await sessionOf(OWNER);
+    await archive.archiveClient(owner, c);
+    const staffId = (await q<{ id: string }>("select id from staff_profiles where workspace_id=$1", [wsId]))[0].id;
+    const serviceId = (await q<{ id: string }>("select id from services where workspace_id=$1 limit 1", [wsId]))[0].id;
+    const err = await appointments
+      .createAppointment(owner, {
+        client: "Nora", clientId: c, service: "Cut", serviceId, staff: "You", staffId, resourceId: null,
+        date: (() => { const d = new Date(Date.now() + 40 * 86_400_000); while (d.getUTCDay() !== 1) d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })(), time: "10:00", durationMinutes: 30,
+        price: 40, currency: "EUR", notes: "", visibility: "normal", financialBucket: "main", status: "confirmed", paid: false,
+      })
+      .then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(RepositoryClientArchivedError);
+    expect(toActionError(err)).toBe("client_archived");
+    const text = describeSaveError(new RemoteRepositoryError("client_archived"), getMessages("ru").repositoryErrors);
+    expect(text).toBe("Клиент в архиве. Восстановите его, чтобы создать новую запись.");
+    for (const loc of ["en", "de", "ru", "uk"] as const) expect(getMessages(loc).repositoryErrors.clientArchived.length).toBeGreaterThan(10);
   });
 });

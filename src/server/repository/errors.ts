@@ -27,6 +27,14 @@ export class RepositoryForbiddenError extends RepositoryError {
   }
 }
 
+/** The client is archived (0032): restore it before creating a new appointment / waiting-list entry. */
+export class RepositoryClientArchivedError extends RepositoryError {
+  constructor(context: string) {
+    super(context);
+    this.name = "RepositoryClientArchivedError";
+  }
+}
+
 export class RepositoryNotFoundError extends RepositoryError {
   constructor(context: string) {
     super(context);
@@ -44,6 +52,8 @@ export function toRepositoryError(error: DbErrorLike | null | undefined, context
   const code = error?.code ?? "";
   const message = error?.message ?? "";
   if (code === "23P01" || code === "23505") return new RepositoryConflictError(context);
+  // Raised by 0032 only for a client of the caller's own workspace that the caller may view.
+  if (code === "23514" && /\bclient_archived\b/.test(message)) return new RepositoryClientArchivedError(context);
   if (code === "42501" || code === "23514" || /row-level security|permission denied|cross_workspace_reference/i.test(message)) {
     return new RepositoryForbiddenError(context);
   }

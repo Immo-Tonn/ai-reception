@@ -113,6 +113,21 @@ describe("0032 client archiving", () => {
     expect(await archivedAt(c)).not.toBeNull(); // no hidden status change
   });
 
+  it("the archive message is shown only for a client the caller may view; others get the existing errors", async () => {
+    const c = await newClient(ws, "Iris");
+    await setArchived(user(OWNER), c, true);
+    expect(await errOf(appointment(user(STAFF), c))).toMatch(/client_archived/); // staff may view clients
+    // Accountant (no clients.view): the existing RLS refusal, nothing about the archive.
+    const acc = await errOf(appointment(user(ACCOUNTANT), c));
+    expect(acc).not.toMatch(/client_archived/);
+    expect(acc).toMatch(/row-level security/);
+    // Another workspace's archived client referenced from workspace A: cross-workspace error, not the archive status.
+    const other = (await q<{ id: string }>("insert into clients (workspace_id,name,archived_at) values ($1,'Foreign', now()) returning id", [otherWs]))[0].id;
+    const cross = await errOf(appointment(user(OWNER), other));
+    expect(cross).not.toMatch(/client_archived/);
+    expect(cross).toMatch(/cross_workspace_reference/);
+  });
+
   it("public online booking by an archived client still works (same client record, stays archived)", async () => {
     const c = await newClient(ws, "Paula");
     await setArchived(user(OWNER), c, true);

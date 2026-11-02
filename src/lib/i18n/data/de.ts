@@ -248,6 +248,7 @@ export const de: Messages = {
     invalidInput: "Bitte prüfen Sie Ihre Eingaben, z. B. das E-Mail-Format.",
     conflict: "Dieser Zeitpunkt oder Wert ist bereits vergeben. Bitte wählen Sie einen anderen.",
     clientExists: "Ein Kunde mit dieser E-Mail-Adresse existiert bereits. Wenn er nicht in der Liste steht, ist er vielleicht im Archiv (Kunden → Archiv): Inhaber oder Admin können ihn dort wiederherstellen.",
+    clientArchived: "Der Kunde ist im Archiv. Stelle ihn wieder her, um einen neuen Termin anzulegen.",
     forbidden: "Dafür haben Sie keine Berechtigung.",
     unauthenticated: "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
     notFound: "Dieser Eintrag existiert nicht mehr. Bitte aktualisieren und erneut versuchen.",

@@ -14,8 +14,10 @@
 --    restored to the active list. The marker is read via to_jsonb(), so this
 --    migration works with and without 0028.
 -- 4. A business user cannot create a NEW appointment or waiting-list entry for an
---    archived client (restore it first). The public booking / client-account
---    functions run as the service role and keep working: a returning customer can
+--    archived client (restore it first; error client_archived, shown only for a
+--    client of the caller's own workspace to a member who may view clients). The
+--    public booking / client-account functions run as the service role and keep
+--    working: a returning customer can
 --    still book; the client stays archived (no hidden status change).
 --
 -- Additive: one column, one index, one permission row, triggers. No row is changed.
@@ -62,10 +64,15 @@ security definer
 set search_path = ''
 as $$
 begin
+  -- Only for a client of the SAME workspace and a caller who may view clients:
+  -- anything else falls through to the existing checks (cross_workspace_reference,
+  -- RLS), so the archive status of a client is never revealed to someone else.
   if new.client_id is not null
      and (select auth.uid()) is not null
      and (tg_op = 'INSERT' or new.client_id is distinct from old.client_id)
-     and exists (select 1 from public.clients c where c.id = new.client_id and c.archived_at is not null) then
+     and public.has_workspace_permission(new.workspace_id, 'clients.view')
+     and exists (select 1 from public.clients c
+                  where c.id = new.client_id and c.workspace_id = new.workspace_id and c.archived_at is not null) then
     raise exception 'client_archived' using errcode = '23514';
   end if;
   return new;

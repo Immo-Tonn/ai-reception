@@ -262,6 +262,7 @@ export const en = {
     invalidInput: "Please check the entered data, e.g. the e-mail format.",
     conflict: "That time or value is already taken. Please choose another.",
     clientExists: "A client with this e-mail already exists. If you cannot find them in the list, they may be in the archive (Clients → Archive): the owner or an admin can restore them there.",
+    clientArchived: "The client is in the archive. Restore them to create a new appointment.",
     forbidden: "You don't have permission to do this.",
     unauthenticated: "Your session has expired. Please sign in again.",
     notFound: "That item no longer exists. Refresh and try again.",
