@@ -14,6 +14,8 @@ interface ClientRow {
   phone: string;
   tags: string[] | null;
   notes: string;
+  /** 0028; absent before that migration is applied. */
+  anonymized_at?: string | null;
 }
 interface VisitRow {
   client_id: string | null;
@@ -42,6 +44,7 @@ export function clientFromRow(row: ClientRow, visits: VisitRow[], serviceNames: 
     upcoming: upcoming.map((x) => ({ date: x.wall.date, time: x.wall.time, service: service(x.v) })),
     history: past.map((x) => ({ date: x.wall.date, service: service(x.v), price: Number(x.v.price) })),
     notes: row.notes,
+    ...(row.anonymized_at ? { anonymizedAt: row.anonymized_at } : {}),
   };
 }
 

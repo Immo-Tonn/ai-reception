@@ -13,6 +13,7 @@ import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { StatusBadge } from "@/components/calendar/StatusBadge";
 import { activeStatuses } from "@/features/appointments/statusMeta";
 import { EditClientSheet } from "./EditClientSheet";
+import { AnonymizeClientSheet } from "./AnonymizeClientSheet";
 import { RelatedPanel } from "./RelatedPanel";
 import styles from "./page.module.css";
 
@@ -34,6 +35,7 @@ export function ClientDetailView({
   messages,
   crossModule,
   statusMessages,
+  canErase = false,
 }: {
   workspaceSlug: string;
   clientId: string;
@@ -41,16 +43,19 @@ export function ClientDetailView({
   messages: Messages["clients"];
   crossModule: Messages["crossModule"];
   statusMessages: Messages["appointmentStatus"];
+  /** Owner only (decided on the server); the action and the database check it again. */
+  canErase?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("upcoming");
   const [editing, setEditing] = useState(false);
+  const [anonymizing, setAnonymizing] = useState(false);
 
   // Client, Upcoming and History are always derived live from the same
   // repository-backed hooks the rest of the app uses (ClientPicker,
   // ClientsView, CalendarView) — never a locally duplicated copy, so a
   // client created mid-session (or an appointment booked for them) shows
   // up here immediately and again after reload.
-  const { items: clients, loaded: clientsLoaded, update: updateClient } = useClients(workspaceSlug);
+  const { items: clients, loaded: clientsLoaded, update: updateClient, refresh: refreshClients } = useClients(workspaceSlug);
   const { items: appointments, loaded: appointmentsLoaded } = useAppointments(workspaceSlug);
 
   const client = clients.find((item) => item.id === clientId) ?? null;
@@ -133,11 +138,14 @@ export function ClientDetailView({
             {client.tags.includes("new") && (
               <span className={`${styles.tag} ${styles.tagNew}`}>{messages.tagNew}</span>
             )}
+            {client.anonymizedAt && <span className={styles.tag}>{messages.anonymizedBadge}</span>}
           </div>
         </div>
-        <button type="button" className={styles.editButton} onClick={() => setEditing(true)}>
-          {messages.edit}
-        </button>
+        {!client.anonymizedAt && (
+          <button type="button" className={styles.editButton} onClick={() => setEditing(true)}>
+            {messages.edit}
+          </button>
+        )}
       </div>
 
       <div className={styles.statusCounts} aria-label={messages.statusSummaryLabel}>
@@ -253,6 +261,24 @@ export function ClientDetailView({
 
       {!isDemoWorkspaceSlug(workspaceSlug) && (
         <RelatedPanel workspaceSlug={workspaceSlug} clientId={client.id} locale={locale} messages={crossModule} />
+      )}
+
+      {canErase && !client.anonymizedAt && !isDemoWorkspaceSlug(workspaceSlug) && (
+        <>
+          <button type="button" className={`${styles.editButton} ${styles.anonymizeButton}`} onClick={() => setAnonymizing(true)}>
+            {messages.anonymizeButton}
+          </button>
+          <AnonymizeClientSheet
+            key={`${client.id}-${anonymizing}`}
+            workspaceSlug={workspaceSlug}
+            clientId={client.id}
+            clientName={client.name}
+            open={anonymizing}
+            onClose={() => setAnonymizing(false)}
+            onDone={refreshClients}
+            messages={messages}
+          />
+        </>
       )}
     </main>
   );

@@ -13,6 +13,14 @@ describe("can", () => {
     expect(can("staff", "finance.view")).toBe(false);
   });
 
+  it("lets only the owner anonymise a client", () => {
+    expect(can("owner", "clients.erase")).toBe(true);
+    for (const role of ["admin", "manager", "staff", "accountant"] as const) {
+      expect(can(role, "clients.erase")).toBe(false);
+      expect(() => assertCan(role, "clients.erase")).toThrow(PermissionDeniedError);
+    }
+  });
+
   it("denies staff and manager access to private records", () => {
     expect(can("staff", "private_records.view")).toBe(false);
     expect(can("manager", "private_records.view")).toBe(false);
