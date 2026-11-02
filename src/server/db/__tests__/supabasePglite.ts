@@ -76,6 +76,11 @@ class Query implements PromiseLike<{ data: unknown; error: PgError | null }> {
   lte(col: string, val: unknown) { return this.f(col, "<=", val); }
   is(col: string, val: unknown) { return this.f(col, val === null ? "is null" : "is", val); }
   in(col: string, vals: unknown[]) { return this.f(col, "in", vals); }
+  /** Only the form the services use: not(col, "is", null). */
+  not(col: string, op: string, val: unknown) {
+    if (op !== "is" || val !== null) throw new Error(`supabasePglite: unsupported not(${op})`);
+    return this.f(col, "is not null", null);
+  }
   order(col: string, opts?: { ascending?: boolean }) {
     this.orders.push({ col, asc: opts?.ascending !== false });
     return this;
@@ -108,6 +113,7 @@ class Query implements PromiseLike<{ data: unknown; error: PgError | null }> {
     if (this.filters.length === 0) return "";
     const parts = this.filters.map(({ col, op, val }) => {
       if (op === "is null") return `${ident(col)} is null`;
+      if (op === "is not null") return `${ident(col)} is not null`;
       if (op === "in") {
         const list = val as unknown[];
         if (list.length === 0) return "false";

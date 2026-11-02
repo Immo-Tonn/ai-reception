@@ -12,6 +12,7 @@ import { useWorkspaceToday } from "@/features/workspace/WorkspaceCatalog";
 import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { StatusBadge } from "@/components/calendar/StatusBadge";
 import { activeStatuses } from "@/features/appointments/statusMeta";
+import { ArchiveClientPanel, useArchivedClient } from "./ArchiveClientPanel";
 import { EditClientSheet } from "./EditClientSheet";
 import { RelatedPanel } from "./RelatedPanel";
 import styles from "./page.module.css";
@@ -53,7 +54,10 @@ export function ClientDetailView({
   const { items: clients, loaded: clientsLoaded, update: updateClient } = useClients(workspaceSlug);
   const { items: appointments, loaded: appointmentsLoaded } = useAppointments(workspaceSlug);
 
-  const client = clients.find((item) => item.id === clientId) ?? null;
+  const listed = clients.find((item) => item.id === clientId) ?? null;
+  // Archived clients are not in the active list; load the card's client by id (0032).
+  const archivedLookup = useArchivedClient(workspaceSlug, clientId, clientsLoaded && !listed && !isDemoWorkspaceSlug(workspaceSlug));
+  const client = listed ?? archivedLookup.client;
 
   const today = useWorkspaceToday(workspaceSlug);
   const clientAppointments = useMemo(
@@ -89,7 +93,7 @@ export function ClientDetailView({
   const appointmentHref = (a: { id: string; date: string }) =>
     `/${workspaceSlug}/calendar?date=${encodeURIComponent(a.date)}&appointment=${encodeURIComponent(a.id)}`;
 
-  const loaded = clientsLoaded && appointmentsLoaded;
+  const loaded = clientsLoaded && appointmentsLoaded && !archivedLookup.pending;
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "upcoming", label: messages.detailUpcoming },
@@ -154,6 +158,10 @@ export function ClientDetailView({
         onSave={(patch) => updateClient(client.id, patch)}
         messages={messages}
       />
+
+      {!isDemoWorkspaceSlug(workspaceSlug) && (
+        <ArchiveClientPanel workspaceSlug={workspaceSlug} client={client} upcomingCount={upcoming.length} locale={locale} messages={messages} />
+      )}
 
       <div className={styles.tabs}>
         {tabs.map((item) => (

@@ -7,6 +7,8 @@ export interface ClientCustomField {
 
 export interface ClientRecord {
   id: string;
+  /** Set when the client is archived (migration 0032): hidden from active lists and pickers; history is kept. */
+  archivedAt?: string;
   name: string;
   email: string;
   phone: string;
