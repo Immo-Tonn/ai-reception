@@ -9,6 +9,7 @@ import {
 import type { DataSubjectRequestRow, DsrStatus } from "@/server/services/clientExport.service";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatDate } from "@/lib/i18n/format";
+import { localIsoDate } from "@/lib/date/localIsoDate";
 import formStyles from "../AddClientSheet.module.css";
 import styles from "./ExportClientSheet.module.css";
 
@@ -18,7 +19,7 @@ type RequestType = keyof Messages["clients"]["exportRequestTypes"];
 function isoPlusDays(base: string, days: number) {
   const d = new Date(`${base}T00:00:00`);
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return localIsoDate(d);
 }
 
 /**
