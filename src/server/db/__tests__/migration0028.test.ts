@@ -179,6 +179,25 @@ describe("0028 client anonymisation", () => {
     expect(await errOf(run(user(OWNER), "update clients set anonymized_at=now() where id=$1", [other]))).toMatch(/client_anonymized/);
   });
 
+  it("the anonymisation status is not revealed to another workspace or a role without client access", async () => {
+    const { client } = await seedClient(ws, "Hidden Status", "hidden@t.invalid");
+    await anonymize(user(OWNER), ws, client);
+    const otherStaff = (await q<{ id: string }>("select id from staff_profiles where workspace_id=$1", [otherWs]))[0].id;
+    const otherSvc = (await q<{ id: string }>("insert into services (workspace_id,name,duration_minutes) values ($1,'Cut',30) returning id", [otherWs]))[0].id;
+    const fromOther = await errOf(run(user(OTHER_OWNER),
+      `insert into appointments (workspace_id, client_id, service_id, staff_id, status, starts_at, ends_at, timezone, created_by)
+       values ($1,$2,$3,$4,'confirmed', now() + interval '300 days', now() + interval '300 days 30 minutes', 'Europe/Berlin', $5)`,
+      [otherWs, client, otherSvc, otherStaff, OTHER_OWNER]));
+    expect(fromOther).toMatch(/cross_workspace_reference/);
+    expect(fromOther).not.toMatch(/client_anonymized/);
+    const accountant = await errOf(run(user(ACCOUNTANT),
+      `insert into appointments (workspace_id, client_id, service_id, staff_id, status, starts_at, ends_at, timezone, created_by)
+       values ($1,$2,$3,$4,'confirmed', now() + interval '301 days', now() + interval '301 days 30 minutes', 'Europe/Berlin', $5)`,
+      [ws, client, service, staff, ACCOUNTANT]));
+    expect(accountant).not.toMatch(/client_anonymized/);
+    expect(accountant).toMatch(/row-level security/);
+  });
+
   it("rolls back completely when a step fails", async () => {
     const { client, appt } = await seedClient(ws, "Rollback Client", "rollback@t.invalid");
     await db.exec(`create function public.test_fail() returns trigger language plpgsql as $$ begin raise exception 'forced_failure'; end; $$;

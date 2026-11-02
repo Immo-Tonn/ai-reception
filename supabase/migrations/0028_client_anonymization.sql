@@ -23,7 +23,9 @@
 -- Idempotent: a second call returns status 'already' and changes nothing. The client
 -- row is locked (FOR UPDATE), so parallel calls run one after another.
 -- After anonymisation the personal fields of the row are frozen and no new
--- appointment / waiting-list entry can use the client.
+-- appointment / waiting-list entry can use the client (error client_anonymized,
+-- given only for a client of the caller's own workspace to a member who may view
+-- clients; otherwise the existing cross-workspace / RLS errors answer).
 --
 -- Erasure ledger: client_erasure_ledger keeps only (workspace_id, client_id, erased_at)
 -- — ids, no names or contact data. After restoring an OLDER backup, run
@@ -226,9 +228,15 @@ security definer
 set search_path = ''
 as $$
 begin
+  -- Ownership and access first: only a client of the SAME workspace, and for API
+  -- users only a member who may view clients. Anything else falls through to the
+  -- existing checks (cross_workspace_reference, RLS), so the anonymisation status
+  -- of a client is never revealed to another workspace or a role without access.
   if new.client_id is not null
      and (tg_op = 'INSERT' or new.client_id is distinct from old.client_id)
-     and exists (select 1 from public.clients c where c.id = new.client_id and c.anonymized_at is not null) then
+     and ((select auth.uid()) is null or public.has_workspace_permission(new.workspace_id, 'clients.view'))
+     and exists (select 1 from public.clients c
+                  where c.id = new.client_id and c.workspace_id = new.workspace_id and c.anonymized_at is not null) then
     raise exception 'client_anonymized' using errcode = '23514';
   end if;
   return new;
