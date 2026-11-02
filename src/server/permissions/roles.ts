@@ -29,6 +29,8 @@ export type Permission =
   | "clients.edit"
   | "staff.manage"
   | "settings.manage"
+  /** Change the client data retention period of the workspace (GDPR). Owner only; re-checked in the database. */
+  | "retention.manage"
   | "billing.manage"
   | "audit_log.view";
 
@@ -53,6 +55,7 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "clients.edit",
     "staff.manage",
     "settings.manage",
+    "retention.manage",
     "billing.manage",
     "audit_log.view",
   ],
