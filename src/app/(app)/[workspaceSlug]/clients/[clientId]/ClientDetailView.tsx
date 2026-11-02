@@ -14,6 +14,7 @@ import { StatusBadge } from "@/components/calendar/StatusBadge";
 import { activeStatuses } from "@/features/appointments/statusMeta";
 import { EditClientSheet } from "./EditClientSheet";
 import { RelatedPanel } from "./RelatedPanel";
+import { ExportClientSheet } from "./ExportClientSheet";
 import styles from "./page.module.css";
 
 type Tab = "upcoming" | "history" | "notes" | "contact";
@@ -29,6 +30,7 @@ function initials(name: string) {
 
 export function ClientDetailView({
   workspaceSlug,
+  exportPermissions = { canExport: false, canExportInternalNotes: false },
   clientId,
   locale,
   messages,
@@ -36,6 +38,8 @@ export function ClientDetailView({
   statusMessages,
 }: {
   workspaceSlug: string;
+  /** Owner / admin (decided on the server); the export route and the database check it again. */
+  exportPermissions?: { canExport: boolean; canExportInternalNotes: boolean };
   clientId: string;
   locale: Locale;
   messages: Messages["clients"];
@@ -56,6 +60,7 @@ export function ClientDetailView({
   const client = clients.find((item) => item.id === clientId) ?? null;
 
   const today = useWorkspaceToday(workspaceSlug);
+  const [exporting, setExporting] = useState(false);
   const clientAppointments = useMemo(
     () => (client ? appointments.filter((a) => belongsToClient(a, client)) : []),
     [appointments, client],
@@ -145,6 +150,25 @@ export function ClientDetailView({
         <span className={counts.noShow > 0 ? styles.countWarning : undefined}>{messages.countNoShow.replace("{n}", String(counts.noShow))}</span>
         <span>{messages.countCancelled.replace("{n}", String(counts.cancelled))}</span>
       </div>
+
+      {exportPermissions.canExport && !isDemoWorkspaceSlug(workspaceSlug) && (
+        <>
+          <button type="button" className={`${styles.editButton} ${styles.exportButton}`} onClick={() => setExporting(true)}>
+            {messages.exportButton}
+          </button>
+          <ExportClientSheet
+            key={`${client.id}-${exporting}`}
+            workspaceSlug={workspaceSlug}
+            clientId={client.id}
+            open={exporting}
+            onClose={() => setExporting(false)}
+            canExportInternalNotes={exportPermissions.canExportInternalNotes}
+            today={today}
+            locale={locale}
+            messages={messages}
+          />
+        </>
+      )}
 
       <EditClientSheet
         key={`${client.id}-${editing}`}

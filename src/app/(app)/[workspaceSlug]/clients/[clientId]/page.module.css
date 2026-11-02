@@ -256,3 +256,9 @@ a.row {
   color: var(--panel-status-negative-text, #b42318);
   font-weight: var(--font-weight-semibold);
 }
+
+/* GDPR export (owner / admin): secondary action under the status summary. */
+.exportButton {
+  margin-inline-start: 0;
+  margin-bottom: var(--space-4);
+}
