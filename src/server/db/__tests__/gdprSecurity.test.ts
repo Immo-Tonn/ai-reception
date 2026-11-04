@@ -41,10 +41,11 @@ const FUNCTIONS: FnSpec[] = [
   { migration: "0028_client_anonymization.sql", signature: "public.reapply_client_erasures(jsonb)", security: "definer", exec: { anon: false, authenticated: false, service_role: true }, purpose: "restore procedure, service role" },
   { migration: "0028_client_anonymization.sql", signature: "public.guard_anonymized_client()", security: "definer", exec: { anon: false, authenticated: false }, purpose: "trigger" },
   { migration: "0028_client_anonymization.sql", signature: "public.guard_no_anonymized_client_ref()", security: "definer", exec: { anon: false, authenticated: false }, purpose: "trigger" },
-  { migration: "0029_client_data_export.sql", signature: "public.export_client_data(uuid,uuid,boolean,text)", security: "invoker", exec: { anon: false, authenticated: true }, purpose: "owner/admin export (caller's RLS)" },
+  { migration: "0029_client_data_export.sql", signature: "public.export_client_data(uuid,uuid,boolean,text,jsonb)", security: "invoker", exec: { anon: false, authenticated: true }, purpose: "owner/admin export (caller's RLS)" },
   { migration: "0029_client_data_export.sql", signature: "public.client_export_account_link(uuid,uuid)", security: "definer", exec: { anon: false, authenticated: true }, purpose: "count only, checked inside" },
   { migration: "0029_client_data_export.sql", signature: "public.guard_data_subject_request()", security: "definer", exec: { anon: false, authenticated: false }, purpose: "trigger" },
   { migration: "0030_retention_dry_run.sql", signature: "public.retention_dry_run(timestamp with time zone,timestamp with time zone)", security: "invoker", exec: { anon: false, authenticated: false, service_role: true }, purpose: "cron, service role" },
+  { migration: "0031_client_retention_setting.sql", signature: "public.set_client_retention_months(uuid,integer)", security: "invoker", exec: { anon: false, authenticated: true, service_role: false }, purpose: "owner setting + audit, one transaction" },
   { migration: "0031_client_retention_setting.sql", signature: "public.guard_workspace_retention_setting()", security: "definer", exec: { anon: false, authenticated: false }, purpose: "trigger" },
   { migration: "0032_client_archiving.sql", signature: "public.set_client_archived(uuid,uuid,boolean)", security: "invoker", exec: { anon: false, authenticated: true, service_role: false }, purpose: "owner/admin archive + audit, one transaction" },
   { migration: "0032_client_archiving.sql", signature: "public.guard_client_archive()", security: "definer", exec: { anon: false, authenticated: false }, purpose: "trigger" },
@@ -208,6 +209,7 @@ describe.skipIf(!complete)(`GDPR workspace isolation A/B${complete ? "" : ` — 
         [wsA, clientA, attacker]))).toMatch(/row-level security/);
       expect(await run(user(attacker), "select id from data_subject_requests where workspace_id=$1", [wsA])).toEqual([]);
       expect(await run(user(attacker), "update workspaces set client_retention_months = 12 where id=$1 returning id", [wsA])).toEqual([]);
+      expect(await errOf(run(user(attacker), "select public.set_client_retention_months($1,12)", [wsA]))).toMatch(/retention_setting_not_permitted/);
       expect(await run(user(attacker), "update appointments set internal_notes = 'x' where id=$1 returning id", [apptA])).toEqual([]);
       expect(await snapshotA()).toBe(before);
     });
@@ -244,6 +246,82 @@ describe.skipIf(!complete)(`GDPR workspace isolation A/B${complete ? "" : ` — 
       expect(await snapshotA()).toBe(before);
     });
   }
+
+  /*
+   * Attempts a signed-in API user could try against the trigger protection.
+   * NOTE: these run raw SQL as `authenticated`, which is MORE than the real API
+   * allows. Only the last test shows what raw SQL can do; whether the API exposes it
+   * must be checked on real Supabase (see the PR description).
+   */
+  describe("bypass attempts", () => {
+    it("no function an API user may call runs dynamic SQL or takes a setting name from its input", async () => {
+      const rows = await q<{ proname: string; src: string }>(
+        `select p.proname, p.prosrc as src from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and (has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('anon', p.oid, 'execute'))`);
+      expect(rows.length).toBeGreaterThan(5);
+      for (const r of rows) {
+        expect(r.src, r.proname).not.toMatch(/\bexecute\s+(format|'|\$|[a-z_]+\s*(\|\||;|using))/i);
+        for (const m of r.src.matchAll(/set_config\(([^,]+),/gi)) {
+          expect(m[1].trim(), r.proname).toMatch(/^'[a-z_.]+'$/); // literal name only
+        }
+      }
+    });
+
+    it("a user cannot change their role, the permission table or the audit trail", async () => {
+      const b = user(ADMIN_B);
+      expect(await run(b, "update workspace_members set role='owner' where profile_id=$1 returning id", [ADMIN_B]).catch(() => [])).toEqual([]);
+      expect(await errOf(run(b, "insert into workspace_members (workspace_id, profile_id, role) values ($1,$2,'owner')", [wsA, ADMIN_B]))).not.toBe("ok");
+      expect(await errOf(run(b, "insert into role_permissions (role, permission) values ('admin','clients.erase')"))).not.toBe("ok");
+      expect(await run(b, "update role_permissions set permission='x' where role='admin' returning role").catch(() => [])).toEqual([]);
+      const owner = user(OWNER_B);
+      expect(await run(owner, "update audit_logs set summary='x' where workspace_id=$1 returning id", [wsB]).catch(() => [])).toEqual([]);
+      expect(await run(owner, "delete from audit_logs where workspace_id=$1 returning id", [wsB]).catch(() => [])).toEqual([]);
+    });
+
+    it("a user cannot switch triggers off or change replication mode", async () => {
+      const owner = user(OWNER_B);
+      expect(await errOf(run(owner, "alter table public.clients disable trigger clients_guard_archive"))).toMatch(/must be owner|permission denied/);
+      expect(await errOf(run(owner, "set session_replication_role = replica"))).toMatch(/permission denied/);
+      expect(await errOf(run(owner, "drop trigger clients_guard_archive on public.clients"))).toMatch(/must be owner|permission denied/);
+    });
+
+    it("a setting left on cannot outlive the transaction", async () => {
+      const c = (await q<{ id: string }>("insert into clients (workspace_id,name) values ($1,'Flag') returning id", [wsB]))[0].id;
+      await run(user(OWNER_B), "select public.set_client_archived($1,$2,true)", [wsB, c]);
+      expect(await errOf(run(user(OWNER_B), "update clients set archived_at = null where id=$1", [c]))).toMatch(/client_archive_use_function/);
+    });
+
+    /*
+     * Documented limit, not a pass: with raw SQL as `authenticated`, set_config can
+     * turn the protection flag on, exactly as raw SQL could set
+     * request.jwt.claim.sub and impersonate anyone. The trust boundary is that the
+     * API offers no raw SQL. This test pins that fact so nobody assumes otherwise.
+     */
+    it("LIMIT: raw SQL could set the flag; the permission check still holds", async () => {
+      const c = (await q<{ id: string }>("insert into clients (workspace_id,name) values ($1,'Raw') returning id", [wsA]))[0].id;
+      const raw = (actor: Actor) => errOf(as(db, actor, async () => {
+        await db.exec("begin");
+        try {
+          await db.query("select set_config('serviceos.client_archive_change','on',true)");
+          return await db.query("update clients set archived_at = now() where id=$1 returning id", [c]);
+        } finally {
+          await db.exec("rollback");
+        }
+      }));
+      expect(await raw(user(OWNER_A))).toBe("ok"); // flag only skips "use the function"; a real API has no such call
+      expect(await errOf(as(db, user(OWNER_B), async () => {
+        await db.exec("begin");
+        try {
+          await db.query("select set_config('serviceos.client_archive_change','on',true)");
+          const r = await db.query("update clients set archived_at = now() where id=$1 returning id", [c]);
+          if (r.rows.length) throw new Error("foreign row changed");
+        } finally {
+          await db.exec("rollback");
+        }
+      }))).toBe("ok"); // another workspace: RLS still hides the row
+      expect((await q<{ a: string | null }>("select archived_at as a from clients where id=$1", [c]))[0].a).toBeNull();
+    });
+  });
 
   it("service-only GDPR functions refuse every API user (also A's own owner)", async () => {
     for (const actor of [user(OWNER_A), user(OWNER_B), { kind: "anon" } as Actor]) {
