@@ -211,7 +211,10 @@ create trigger data_subject_requests_audit
 revoke all on function public.audit_data_subject_request() from public, anon, authenticated, service_role;
 
 alter table public.data_subject_requests enable row level security;
-revoke all on table public.data_subject_requests from public, anon;
+-- Supabase grants ALL on new tables to anon and authenticated by default (DELETE,
+-- TRUNCATE, REFERENCES, TRIGGER included), so revoke from authenticated too and give
+-- back only what the app needs: the register is never deleted through the API.
+revoke all on table public.data_subject_requests from public, anon, authenticated;
 grant select, insert, update on table public.data_subject_requests to authenticated;
 grant all on table public.data_subject_requests to service_role;
 
