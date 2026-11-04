@@ -17,9 +17,18 @@
 --    not readable by business users; returns only HOW MANY of this client's
 --    appointments are linked to a client account (no account id, name or e-mail:
 --    the account belongs to the person's platform account, not to the business).
--- 4. data_subject_requests — metadata only (type, dates, status, identity checked,
---    responsible person, exported categories). Never the exported content.
---    Owner / admin of the workspace (RLS). No DELETE (a register is kept).
+-- 4. data_subject_requests — metadata only, never the exported content. Owner /
+--    admin of the workspace (RLS). No DELETE (a register is kept). Lifecycle, enforced
+--    by the database:
+--      open -> in_progress -> export_generated -> delivered -> closed
+--      closed is reachable from every state with a closure_reason (fulfilled,
+--      rejected, withdrawn, identity_not_confirmed, other) and is final.
+--    export_generated: the server produced a file. It says NOTHING about delivery.
+--    delivered: a staff member RECORDED a handover (date, channel); it is not a proof
+--    of receipt. `fulfilled` for access / portability needs a recorded handover.
+--    Only export_client_data() sets export_generated and the export fields; it
+--    writes them and the audit entry in ONE transaction. A repeated export updates
+--    the open request (export_count, last_exported_at); it never adds a duplicate.
 --
 -- Additive: two functions, one helper, one table, three permission rows.
 
@@ -38,19 +47,31 @@ create table if not exists public.data_subject_requests (
     check (request_type in ('access', 'portability', 'rectification', 'erasure', 'restriction', 'objection')),
   received_on date not null,
   due_on date not null,
-  status text not null default 'open' check (status in ('open', 'in_progress', 'completed', 'rejected')),
+  status text not null default 'open'
+    check (status in ('open', 'in_progress', 'export_generated', 'delivered', 'closed')),
   identity_verified boolean not null default false,
   responsible_profile_id uuid references public.profiles(id) on delete set null,
   exported_categories text[] not null default '{}',
-  completed_at timestamptz,
+  export_count integer not null default 0 check (export_count >= 0),
+  last_exported_at timestamptz,
+  delivered_at timestamptz,
+  delivery_channel text check (delivery_channel in ('email', 'post', 'in_person', 'portal', 'other')),
+  closure_reason text check (closure_reason in ('fulfilled', 'rejected', 'withdrawn', 'identity_not_confirmed', 'other')),
+  closed_at timestamptz,
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint data_subject_requests_dates_chk check (due_on >= received_on),
-  constraint data_subject_requests_categories_chk check (cardinality(exported_categories) <= 20)
+  constraint data_subject_requests_categories_chk check (cardinality(exported_categories) <= 20),
+  constraint data_subject_requests_closure_chk check ((status = 'closed') = (closure_reason is not null)),
+  constraint data_subject_requests_delivery_chk check ((delivered_at is null) = (delivery_channel is null))
 );
 create index if not exists idx_data_subject_requests_client
   on public.data_subject_requests (workspace_id, client_id, received_on desc);
+-- One open request per client, type and day: a repeated export cannot add a duplicate.
+create unique index if not exists idx_data_subject_requests_open
+  on public.data_subject_requests (workspace_id, client_id, request_type, received_on)
+  where status <> 'closed';
 
 create or replace function public.guard_data_subject_request()
 returns trigger
@@ -58,12 +79,51 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_export boolean := coalesce(current_setting('serviceos.dsr_export', true), '') = 'on';
 begin
-  if tg_op = 'UPDATE' and (new.workspace_id is distinct from old.workspace_id
-                           or new.client_id is distinct from old.client_id
-                           or new.created_by is distinct from old.created_by
-                           or new.created_at is distinct from old.created_at) then
-    raise exception 'data_subject_request_identity_immutable' using errcode = '23514';
+  if tg_op = 'INSERT' then
+    if not v_export and (new.status <> 'open' or new.export_count <> 0 or new.last_exported_at is not null
+                         or cardinality(new.exported_categories) > 0 or new.delivered_at is not null
+                         or new.closed_at is not null) then
+      raise exception 'data_subject_request_invalid_state' using errcode = '23514';
+    end if;
+  else
+    if new.workspace_id is distinct from old.workspace_id
+       or new.client_id is distinct from old.client_id
+       or new.request_type is distinct from old.request_type
+       or new.created_by is distinct from old.created_by
+       or new.created_at is distinct from old.created_at then
+      raise exception 'data_subject_request_identity_immutable' using errcode = '23514';
+    end if;
+    if old.status = 'closed' then
+      raise exception 'data_subject_request_closed' using errcode = '23514';
+    end if;
+    if not v_export and (new.export_count, new.last_exported_at, new.exported_categories)
+                        is distinct from (old.export_count, old.last_exported_at, old.exported_categories) then
+      raise exception 'data_subject_request_export_fields_protected' using errcode = '23514';
+    end if;
+    if (new.delivered_at, new.delivery_channel) is distinct from (old.delivered_at, old.delivery_channel)
+       and not (old.status = 'export_generated' and new.status = 'delivered') then
+      raise exception 'data_subject_request_invalid_transition' using errcode = '23514';
+    end if;
+    if new.status is distinct from old.status and not (
+         (old.status = 'open' and new.status in ('in_progress', 'closed'))
+      or (old.status = 'in_progress' and new.status = 'closed')
+      or (old.status = 'export_generated' and new.status in ('delivered', 'closed'))
+      or (old.status = 'delivered' and new.status = 'closed')
+      or (v_export and old.status in ('open', 'in_progress') and new.status = 'export_generated')) then
+      raise exception 'data_subject_request_invalid_transition' using errcode = '23514';
+    end if;
+    if new.status = 'delivered' and new.delivered_at is null then
+      raise exception 'data_subject_request_invalid_transition' using errcode = '23514';
+    end if;
+    if new.status = 'closed' then
+      if new.closure_reason = 'fulfilled' and new.request_type in ('access', 'portability') and new.delivered_at is null then
+        raise exception 'data_subject_request_not_delivered' using errcode = '23514';
+      end if;
+      new.closed_at := now();
+    end if;
   end if;
   if new.client_id is not null and not exists (
        select 1 from public.clients c where c.id = new.client_id and c.workspace_id = new.workspace_id) then
@@ -73,11 +133,6 @@ begin
        select 1 from public.workspace_members m
         where m.workspace_id = new.workspace_id and m.profile_id = new.responsible_profile_id) then
     raise exception 'cross_workspace_reference' using errcode = '23514';
-  end if;
-  if new.status = 'completed' and new.completed_at is null then
-    new.completed_at := now();
-  elsif new.status <> 'completed' then
-    new.completed_at := null;
   end if;
   new.updated_at := now();
   return new;
@@ -140,7 +195,8 @@ create or replace function public.export_client_data(
   p_workspace_id uuid,
   p_client_id uuid,
   p_include_internal_notes boolean default false,
-  p_mode text default 'admin'
+  p_mode text default 'admin',
+  p_request jsonb default null
 )
 returns jsonb
 language plpgsql
@@ -159,6 +215,10 @@ declare
   v_inbox jsonb;
   v_linked int;
   v_counts jsonb;
+  v_categories text[];
+  v_request_id uuid;
+  v_verified boolean;
+  v_request jsonb;
 begin
   if (select auth.uid()) is null or not public.has_workspace_permission(p_workspace_id, 'clients.export') then
     raise exception 'client_export_not_permitted' using errcode = '42501';
@@ -262,10 +322,61 @@ begin
     'projects', jsonb_array_length(v_projects),
     'inboxEvents', jsonb_array_length(v_inbox));
 
+  -- Request register: same transaction as the audit entry below. "Generated" only:
+  -- nothing here claims that the file reached anyone.
+  if p_mode = 'data_subject_request' then
+    if p_request is null then
+      raise exception 'invalid_input' using errcode = '22023';
+    end if;
+    select coalesce(array_agg(k order by k), '{}') into v_categories
+      from jsonb_each_text(v_counts) t(k, v) where v::int > 0;
+    v_request_id := nullif(p_request->>'requestId', '')::uuid;
+    if v_request_id is null then
+      select d.id into v_request_id
+        from public.data_subject_requests d
+       where d.workspace_id = p_workspace_id and d.client_id = p_client_id and d.status <> 'closed'
+         and d.request_type = p_request->>'type' and d.received_on = (p_request->>'receivedOn')::date;
+    end if;
+
+    perform set_config('serviceos.dsr_export', 'on', true);
+    if v_request_id is null then
+      if (p_request->>'identityVerified') is distinct from 'true' then
+        raise exception 'identity_not_verified' using errcode = '22023';
+      end if;
+      insert into public.data_subject_requests
+        (workspace_id, client_id, request_type, received_on, due_on, status, identity_verified,
+         responsible_profile_id, exported_categories, export_count, last_exported_at, created_by)
+      values (p_workspace_id, p_client_id, p_request->>'type', (p_request->>'receivedOn')::date, (p_request->>'dueOn')::date,
+              'export_generated', true, (select auth.uid()), v_categories, 1, now(), (select auth.uid()))
+      returning jsonb_build_object('id', id, 'status', status, 'exportCount', export_count) into v_request;
+    else
+      select d.identity_verified or (p_request->>'identityVerified') is not distinct from 'true' into v_verified
+        from public.data_subject_requests d
+       where d.id = v_request_id and d.workspace_id = p_workspace_id and d.client_id = p_client_id
+         and d.status <> 'closed'
+       for update;
+      if not found then
+        raise exception 'request_not_found' using errcode = 'P0002';
+      end if;
+      if not v_verified then
+        raise exception 'identity_not_verified' using errcode = '22023';
+      end if;
+      update public.data_subject_requests d
+         set exported_categories = v_categories,
+             export_count = d.export_count + 1,
+             last_exported_at = now(),
+             identity_verified = true,
+             status = case when d.status = 'delivered' then 'delivered' else 'export_generated' end
+       where d.id = v_request_id
+      returning jsonb_build_object('id', d.id, 'status', d.status, 'exportCount', d.export_count) into v_request;
+    end if;
+    perform set_config('serviceos.dsr_export', 'off', true);
+  end if;
+
   -- Audit: who / when / which client / categories and counts. No personal data.
   insert into public.audit_logs (workspace_id, actor_id, action, entity_type, entity_id, summary, source)
   values (p_workspace_id, (select auth.uid()), 'exported', 'client', p_client_id::text,
-          left('Client data exported (' || p_mode || ', internal notes '
+          left('Client data export generated (' || p_mode || ', internal notes '
                || case when p_include_internal_notes then 'included' else 'excluded' end || '): '
                || (select string_agg(k || ' ' || v, ', ' order by k) from jsonb_each_text(v_counts) t(k, v)), 500),
           'user');
@@ -282,8 +393,9 @@ begin
     'jobs', v_jobs,
     'projects', v_projects,
     'inboxEvents', v_inbox,
-    'onlineAccount', jsonb_build_object('linkedAppointments', v_linked));
+    'onlineAccount', jsonb_build_object('linkedAppointments', v_linked),
+    'request', v_request);
 end;
 $$;
-revoke all on function public.export_client_data(uuid, uuid, boolean, text) from public, anon;
-grant execute on function public.export_client_data(uuid, uuid, boolean, text) to authenticated;
+revoke all on function public.export_client_data(uuid, uuid, boolean, text, jsonb) from public, anon;
+grant execute on function public.export_client_data(uuid, uuid, boolean, text, jsonb) to authenticated;

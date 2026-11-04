@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { Button, Input, Sheet } from "@/components/ui";
 import {
+  applyDataSubjectRequestActionAction,
   listDataSubjectRequestsAction,
-  setDataSubjectRequestStatusAction,
+  registerDataSubjectRequestAction,
 } from "@/server/actions/dataSubjectRequests.actions";
-import type { DataSubjectRequestRow, DsrStatus } from "@/server/services/clientExport.service";
+import type { DataSubjectRequestRow, DsrChannel, DsrCloseReason, RequestAction } from "@/server/services/clientExport.service";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatDate } from "@/lib/i18n/format";
 import { localIsoDate } from "@/lib/date/localIsoDate";
@@ -54,7 +55,7 @@ export function ExportClientSheet({
   const [receivedOn, setReceivedOn] = useState(today);
   const [dueOn, setDueOn] = useState(isoPlusDays(today, 30));
   const [identityVerified, setIdentityVerified] = useState(false);
-  const [status, setStatus] = useState<DsrStatus>("completed");
+  const [notice, setNotice] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const [failed, setFailed] = useState(false);
   const [requests, setRequests] = useState<DataSubjectRequestRow[] | null>(null);
@@ -75,14 +76,16 @@ export function ExportClientSheet({
     (!internal || internalChecked) &&
     (mode === "admin" || (identityVerified && dueOn >= receivedOn));
 
-  async function handleExport() {
-    if (!ready) return;
+  async function reloadRequests() {
+    const r = await listDataSubjectRequestsAction(workspaceSlug, clientId);
+    if (r.ok) setRequests(r.data);
+  }
+
+  /** Produces the file. In request mode the register is written in the same database transaction. */
+  async function runExport(body: Record<string, unknown>) {
     setWorking(true);
     setFailed(false);
-    const body =
-      mode === "admin"
-        ? { mode, includeInternalNotes: internal }
-        : { mode, includeInternalNotes: internal, request: { type, receivedOn, dueOn, identityVerified: true, status } };
+    setNotice(null);
     try {
       const res = await fetch(`/api/workspaces/${encodeURIComponent(workspaceSlug)}/clients/${encodeURIComponent(clientId)}/export`, {
         method: "POST",
@@ -100,23 +103,44 @@ export function ExportClientSheet({
       link.download = name;
       link.click();
       URL.revokeObjectURL(url);
-      if (mode === "data_subject_request") {
-        const r = await listDataSubjectRequestsAction(workspaceSlug, clientId);
-        if (r.ok) setRequests(r.data);
-      }
+      if (body.mode === "data_subject_request") setNotice(messages.exportGeneratedNotice);
     } catch {
       setFailed(true);
     } finally {
+      if (body.mode === "data_subject_request") await reloadRequests();
       setWorking(false);
     }
   }
 
-  async function changeStatus(id: string, next: DsrStatus) {
-    const r = await setDataSubjectRequestStatusAction(workspaceSlug, id, next);
-    if (r.ok) setRequests((list) => (list ?? []).map((x) => (x.id === id ? { ...x, status: next } : x)));
+  function handleExport() {
+    if (!ready) return;
+    void runExport(
+      mode === "admin"
+        ? { mode, includeInternalNotes: internal }
+        : { mode, includeInternalNotes: internal, request: { type, receivedOn, dueOn, identityVerified: true } },
+    );
   }
 
-  const statusOptions = Object.entries(messages.exportStatuses) as [DsrStatus, string][];
+  async function handleRegister() {
+    if (working || dueOn < receivedOn) return;
+    setWorking(true);
+    setFailed(false);
+    setNotice(null);
+    const r = await registerDataSubjectRequestAction(workspaceSlug, clientId, { type, receivedOn, dueOn, identityVerified });
+    if (r.ok) await reloadRequests();
+    else setFailed(true);
+    setWorking(false);
+  }
+
+  async function applyAction(id: string, action: RequestAction) {
+    setWorking(true);
+    setFailed(false);
+    setNotice(null);
+    const r = await applyDataSubjectRequestActionAction(workspaceSlug, id, action);
+    if (r.ok) await reloadRequests();
+    else setFailed(true);
+    setWorking(false);
+  }
 
   return (
     <Sheet open={open} onClose={onClose} title={messages.exportTitle}>
@@ -158,16 +182,6 @@ export function ExportClientSheet({
             </label>
             <Input label={messages.exportReceivedOn} type="date" value={receivedOn} max={today} onChange={(e) => setReceivedOn(e.target.value)} />
             <Input label={messages.exportDueOn} type="date" value={dueOn} min={receivedOn} onChange={(e) => setDueOn(e.target.value)} />
-            <label className={formStyles.field}>
-              <span>{messages.exportStatus}</span>
-              <select suppressHydrationWarning className={styles.select} value={status} onChange={(e) => setStatus(e.target.value as DsrStatus)}>
-                {statusOptions.map(([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
             <label className={formStyles.checkRow}>
               <input suppressHydrationWarning type="checkbox" checked={identityVerified} onChange={(e) => setIdentityVerified(e.target.checked)} />
               <span>{messages.exportIdentityVerified}</span>
@@ -204,6 +218,11 @@ export function ExportClientSheet({
         <p className={styles.warning} role="note">
           {messages.exportConfidential}
         </p>
+        {notice ? (
+          <p role="status" className={styles.note}>
+            {notice}
+          </p>
+        ) : null}
         {failed ? (
           <p role="alert" className={formStyles.error}>
             {messages.exportError}
@@ -212,32 +231,113 @@ export function ExportClientSheet({
         <Button fullWidth onClick={handleExport} disabled={!ready}>
           {working ? messages.exportWorking : messages.exportSubmit}
         </Button>
+        {mode === "data_subject_request" ? (
+          <Button fullWidth variant="secondary" onClick={() => void handleRegister()} disabled={working || dueOn < receivedOn}>
+            {messages.exportRegister}
+          </Button>
+        ) : null}
 
         <section className={styles.section}>
           <h3 className={styles.label}>{messages.exportRequestsTitle}</h3>
           {requests && requests.length === 0 ? <p className={styles.note}>{messages.exportRequestsEmpty}</p> : null}
           {(requests ?? []).map((r) => (
-            <div key={r.id} className={styles.request}>
-              <span>
-                {messages.exportRequestTypes[r.requestType]} · {formatDate(new Date(`${r.receivedOn}T00:00:00`), locale, { dateStyle: "medium" })} ·{" "}
-                {messages.exportRequestDue.replace("{date}", formatDate(new Date(`${r.dueOn}T00:00:00`), locale, { dateStyle: "medium" }))}
-              </span>
-              <select suppressHydrationWarning
-                className={styles.select}
-                aria-label={messages.exportStatus}
-                value={r.status}
-                onChange={(e) => void changeStatus(r.id, e.target.value as DsrStatus)}
-              >
-                {statusOptions.map(([key, label]) => (
+            <RequestRow
+              key={r.id}
+              request={r}
+              locale={locale}
+              messages={messages}
+              busy={working}
+              onAction={(action) => void applyAction(r.id, action)}
+              onExport={() => void runExport({ mode: "data_subject_request", includeInternalNotes: false, requestId: r.id })}
+            />
+          ))}
+        </section>
+      </div>
+    </Sheet>
+  );
+}
+
+/** One request: its state and only the steps the database allows next. */
+function RequestRow({
+  request: r,
+  locale,
+  messages,
+  busy,
+  onAction,
+  onExport,
+}: {
+  request: DataSubjectRequestRow;
+  locale: Locale;
+  messages: Messages["clients"];
+  busy: boolean;
+  onAction: (action: RequestAction) => void;
+  onExport: () => void;
+}) {
+  const [channel, setChannel] = useState<DsrChannel>("email");
+  const [reason, setReason] = useState<DsrCloseReason>("fulfilled");
+  const date = (iso: string) => formatDate(new Date(iso), locale, { dateStyle: "medium" });
+  const closed = r.status === "closed";
+  return (
+    <div className={styles.request}>
+      <span>
+        {messages.exportRequestTypes[r.requestType]} · {date(`${r.receivedOn}T00:00:00`)} ·{" "}
+        {messages.exportRequestDue.replace("{date}", date(`${r.dueOn}T00:00:00`))}
+      </span>
+      <strong>
+        {messages.exportStatuses[r.status]}
+        {r.closureReason ? ` · ${messages.exportCloseReasons[r.closureReason]}` : ""}
+      </strong>
+      {r.exportCount > 0 ? <span className={styles.note}>{messages.exportCount.replace("{n}", String(r.exportCount))}</span> : null}
+      {r.deliveredAt && r.deliveryChannel ? (
+        <span className={styles.note}>
+          {messages.exportDeliveredNote.replace("{date}", date(r.deliveredAt)).replace("{channel}", messages.exportChannels[r.deliveryChannel])}
+        </span>
+      ) : null}
+      {closed ? null : (
+        <div className={styles.requestActions}>
+          {!r.identityVerified ? (
+            <Button variant="secondary" onClick={() => onAction({ kind: "verify_identity" })} disabled={busy}>
+              {messages.exportIdentityVerified}
+            </Button>
+          ) : null}
+          {r.status === "open" ? (
+            <Button variant="secondary" onClick={() => onAction({ kind: "start" })} disabled={busy}>
+              {messages.exportStart}
+            </Button>
+          ) : null}
+          {r.identityVerified ? (
+            <Button variant="secondary" onClick={onExport} disabled={busy}>
+              {r.exportCount > 0 ? messages.exportAgain : messages.exportGenerate}
+            </Button>
+          ) : null}
+          {r.status === "export_generated" ? (
+            <div className={styles.requestStep}>
+              <select suppressHydrationWarning className={styles.select} aria-label={messages.exportChannelLabel} value={channel} onChange={(e) => setChannel(e.target.value as DsrChannel)}>
+                {(Object.entries(messages.exportChannels) as [DsrChannel, string][]).map(([key, label]) => (
                   <option key={key} value={key}>
                     {label}
                   </option>
                 ))}
               </select>
+              <Button variant="secondary" onClick={() => onAction({ kind: "record_delivery", channel })} disabled={busy}>
+                {messages.exportRecordDelivery}
+              </Button>
             </div>
-          ))}
-        </section>
-      </div>
-    </Sheet>
+          ) : null}
+          <div className={styles.requestStep}>
+            <select suppressHydrationWarning className={styles.select} aria-label={messages.exportCloseLabel} value={reason} onChange={(e) => setReason(e.target.value as DsrCloseReason)}>
+              {(Object.entries(messages.exportCloseReasons) as [DsrCloseReason, string][]).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <Button variant="secondary" onClick={() => onAction({ kind: "close", reason })} disabled={busy}>
+              {messages.exportClose}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

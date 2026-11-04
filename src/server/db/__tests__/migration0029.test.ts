@@ -27,8 +27,8 @@ const run = <T = Record<string, unknown>>(actor: Actor, sql: string, p: unknown[
   as(db, actor, async () => (await db.query<T>(sql, p)).rows);
 const errOf = async (p: Promise<unknown>) => p.then(() => "ok", (e: { message?: string }) => e.message ?? "error");
 type Export = Record<string, unknown> & { meta: { counts: Record<string, number>; internalNotesIncluded: boolean } };
-const exportAs = (actor: Actor, workspace: string, id: string, internal = false, mode = "admin") =>
-  run<{ r: Export }>(actor, "select public.export_client_data($1,$2,$3,$4) as r", [workspace, id, internal, mode]).then((r) => r[0].r);
+const exportAs = (actor: Actor, workspace: string, id: string, internal = false, mode = "admin", request: Record<string, unknown> | null = null) =>
+  run<{ r: Export }>(actor, "select public.export_client_data($1,$2,$3,$4,$5::jsonb) as r", [workspace, id, internal, mode, request ? JSON.stringify(request) : null]).then((r) => r[0].r);
 const snapshot = () =>
   q<{ s: string }>(`select md5(string_agg(t, '' order by t)) as s from (
      select to_jsonb(c)::text t from clients c union all select to_jsonb(a)::text from appointments a
@@ -122,12 +122,12 @@ describe("0029 client data export", () => {
   it("does not change any data; the audit entry has categories and counts only", async () => {
     const before = await snapshot();
     await exportAs(user(OWNER), ws, client);
-    await exportAs(user(OWNER), ws, client, false, "data_subject_request");
+    await exportAs(user(OWNER), ws, client, false, "data_subject_request", { type: "portability", receivedOn: "2026-10-01", dueOn: "2026-10-31", identityVerified: true });
     expect(await snapshot()).toBe(before);
     const audit = await q<{ summary: string; actor_id: string; action: string }>(
       "select summary, actor_id, action from audit_logs where entity_id=$1 and action='exported' order by created_at desc limit 1", [client]);
     expect(audit[0]).toMatchObject({ actor_id: OWNER, action: "exported" });
-    expect(audit[0].summary).toMatch(/^Client data exported \(data_subject_request, internal notes excluded\): appointments 1/);
+    expect(audit[0].summary).toMatch(/^Client data export generated \(data_subject_request, internal notes excluded\): appointments 1/);
     for (const pii of ["Anna", "anna@", "+49", "client note", "lead note", "INTERNAL", "mornings"]) expect(audit[0].summary).not.toContain(pii);
   });
 
@@ -137,33 +137,130 @@ describe("0029 client data export", () => {
 });
 
 describe("0029 data_subject_requests", () => {
-  const insert = (actor: Actor, workspace: string, id: string | null, extra = "") =>
-    run<{ id: string }>(actor,
-      `insert into data_subject_requests (workspace_id, client_id, received_on, due_on, identity_verified, created_by${extra ? ", status" : ""})
-       values ($1, $2, current_date, current_date + 30, true, (select auth.uid())${extra ? `, '${extra}'` : ""}) returning id`, [workspace, id]);
+  let day = 0;
+  /** A fresh request of `client`, status open. */
+  const register = async (actor: Actor = user(OWNER), workspace = ws, id: string | null = client, type = "access") =>
+    (await run<{ id: string }>(actor,
+      `insert into data_subject_requests (workspace_id, client_id, request_type, received_on, due_on, identity_verified, created_by)
+       values ($1, $2, $3, current_date - $4::int, current_date + 30, true, (select auth.uid())) returning id`, [workspace, id, type, day++]))[0].id;
+  const generate = (requestId: string, actor: Actor = user(OWNER), workspace = ws, id = client) =>
+    exportAs(actor, workspace, id, false, "data_subject_request", { requestId });
+  const row = (id: string) => q<Record<string, unknown>>("select * from data_subject_requests where id=$1", [id]).then((r) => r[0]);
+  const update = (id: string, set: string, actor: Actor = user(OWNER)) =>
+    run(actor, `update data_subject_requests set ${set} where id=$1 returning id`, [id]);
 
-  it("owner and admin register and read requests; other roles see nothing and cannot insert", async () => {
-    const [{ id }] = await insert(user(OWNER), ws, client);
-    await insert(user(ADMIN), ws, client, "completed");
-    expect((await run(user(ADMIN), "select id from data_subject_requests where workspace_id=$1", [ws])).length).toBe(2);
+  it("owner and admin register and read requests; other roles see nothing and cannot insert; no delete", async () => {
+    const id = await register();
+    await register(user(ADMIN));
+    expect((await run(user(ADMIN), "select id from data_subject_requests where workspace_id=$1", [ws])).length).toBeGreaterThanOrEqual(2);
     for (const r of [MANAGER, STAFF, ACCOUNTANT, OTHER_OWNER]) {
       expect(await run(user(r), "select id from data_subject_requests"), r).toEqual([]);
-      expect(await errOf(insert(user(r), ws, client)), r).toMatch(/row-level security/);
+      expect(await errOf(register(user(r))), r).toMatch(/row-level security/);
     }
-    const [done] = await q<{ completed_at: string | null }>("select completed_at from data_subject_requests where status='completed'");
-    expect(done.completed_at).not.toBeNull();
-    // Status update by the owner; deletion is not possible for API roles.
-    await run(user(OWNER), "update data_subject_requests set status='in_progress' where id=$1", [id]);
     expect(await errOf(run(user(OWNER), "delete from data_subject_requests where id=$1", [id]))).toMatch(/permission denied/);
   });
 
-  it("refuses a client or responsible person of another workspace and identity changes", async () => {
-    expect(await errOf(insert(user(OWNER), ws, otherClient))).toMatch(/cross_workspace_reference/);
+  it("a generated file is not a delivery; handover is a separate recorded step; closing needs a reason", async () => {
+    const id = await register();
+    await update(id, "status='in_progress'");
+    const first = await generate(id);
+    expect(first.request).toMatchObject({ id, status: "export_generated", exportCount: 1 });
+    expect(await row(id)).toMatchObject({ status: "export_generated", delivered_at: null, delivery_channel: null, export_count: 1 });
+
+    expect(await errOf(update(id, "status='closed', closure_reason='fulfilled'"))).toMatch(/data_subject_request_not_delivered/);
+    expect(await errOf(update(id, "status='delivered'"))).toMatch(/invalid_transition|delivery_chk/);
+    await update(id, "status='delivered', delivered_at=now(), delivery_channel='post'");
+    await update(id, "status='closed', closure_reason='fulfilled'");
+    const closed = await row(id);
+    expect(closed).toMatchObject({ status: "closed", closure_reason: "fulfilled", delivery_channel: "post" });
+    expect(closed.closed_at).not.toBeNull();
+  });
+
+  it("a repeated export updates the same request: no duplicate, a recorded handover stays", async () => {
+    const id = await register();
+    await generate(id);
+    await generate(id);
+    expect(await row(id)).toMatchObject({ status: "export_generated", export_count: 2 });
+    await update(id, "status='delivered', delivered_at=now(), delivery_channel='email'");
+    await generate(id);
+    expect(await row(id)).toMatchObject({ status: "delivered", export_count: 3, delivery_channel: "email" });
+    // Without a request id: same client, type and date finds the open request.
+    const details = { type: "erasure", receivedOn: "2026-09-01", dueOn: "2026-10-01", identityVerified: true };
+    const a = await exportAs(user(OWNER), ws, client, false, "data_subject_request", details);
+    const b = await exportAs(user(ADMIN), ws, client, false, "data_subject_request", details);
+    expect((b.request as { id: string }).id).toBe((a.request as { id: string }).id);
+    expect((b.request as { exportCount: number }).exportCount).toBe(2);
+    expect((await q<{ n: number }>("select count(*)::int as n from data_subject_requests where client_id=$1 and request_type='erasure' and received_on='2026-09-01'", [client]))[0].n).toBe(1);
+  });
+
+  it("closing on other grounds works without a delivery; a closed request is final", async () => {
+    const rejected = await register();
+    await update(rejected, "status='closed', closure_reason='rejected'");
+    const withdrawn = await register();
+    await generate(withdrawn);
+    await update(withdrawn, "status='closed', closure_reason='withdrawn'");
+    const rectification = await register(user(OWNER), ws, client, "rectification");
+    await update(rectification, "status='closed', closure_reason='fulfilled'"); // nothing to hand over
+    expect(await errOf(update(rejected, "status='open', closure_reason=null"))).toMatch(/data_subject_request_closed/);
+    expect(await errOf(generate(rejected))).toMatch(/request_not_found/);
+    expect(await errOf(update(await register(), "status='closed'"))).toMatch(/closure_chk/);
+  });
+
+  it("the export step cannot be faked through the API", async () => {
+    const id = await register();
+    expect(await errOf(update(id, "status='export_generated'"))).toMatch(/invalid_transition/);
+    expect(await errOf(update(id, "export_count=5"))).toMatch(/export_fields_protected/);
+    expect(await errOf(update(id, "last_exported_at=now()"))).toMatch(/export_fields_protected/);
+    expect(await errOf(update(id, "status='delivered', delivered_at=now(), delivery_channel='post'"))).toMatch(/invalid_transition/);
     expect(await errOf(run(user(OWNER),
-      "insert into data_subject_requests (workspace_id, client_id, received_on, due_on, responsible_profile_id, created_by) values ($1,$2,current_date,current_date+30,$3,$4)",
+      "insert into data_subject_requests (workspace_id, client_id, received_on, due_on, status, created_by) values ($1,$2,current_date,current_date+30,'export_generated',$3)",
+      [ws, thirdParty, OWNER]))).toMatch(/invalid_state/);
+    expect(await row(id)).toMatchObject({ status: "open", export_count: 0 });
+  });
+
+  it("identity must be confirmed before a file is generated for a request", async () => {
+    const id = (await run<{ id: string }>(user(OWNER),
+      "insert into data_subject_requests (workspace_id, client_id, request_type, received_on, due_on, created_by) values ($1,$2,'portability',current_date - 90,current_date,$3) returning id",
+      [ws, client, OWNER]))[0].id;
+    expect(await errOf(generate(id))).toMatch(/identity_not_verified/);
+    expect(await errOf(exportAs(user(OWNER), ws, client, false, "data_subject_request", { type: "access", receivedOn: "2026-08-01", dueOn: "2026-09-01", identityVerified: false }))).toMatch(/identity_not_verified/);
+    expect(await row(id)).toMatchObject({ status: "open", export_count: 0 });
+    await update(id, "identity_verified=true");
+    expect((await generate(id)).request).toMatchObject({ status: "export_generated" });
+  });
+
+  it("a failed audit entry rolls everything back: no request, no count, no status change", async () => {
+    const id = await register();
+    await db.exec(`create function public.test_audit_fail() returns trigger language plpgsql as $$ begin raise exception 'forced_audit_failure'; end; $$;
+      create trigger test_audit_fail before insert on public.audit_logs for each row execute function public.test_audit_fail();`);
+    try {
+      expect(await errOf(generate(id))).toMatch(/forced_audit_failure/);
+      expect(await errOf(exportAs(user(OWNER), ws, client, false, "data_subject_request", { type: "objection", receivedOn: "2026-07-01", dueOn: "2026-08-01", identityVerified: true }))).toMatch(/forced_audit_failure/);
+    } finally {
+      await db.exec("drop trigger test_audit_fail on public.audit_logs; drop function public.test_audit_fail();");
+    }
+    expect(await row(id)).toMatchObject({ status: "open", export_count: 0, last_exported_at: null });
+    expect((await q<{ n: number }>("select count(*)::int as n from data_subject_requests where request_type='objection'"))[0].n).toBe(0);
+  });
+
+  it("no request of another client or workspace can be touched; the register holds no exported content", async () => {
+    const id = await register();
+    expect(await errOf(generate(id, user(OWNER), ws, thirdParty))).toMatch(/request_not_found/);
+    expect(await errOf(generate(id, user(OTHER_OWNER), otherWs, otherClient))).toMatch(/request_not_found/);
+    expect(await errOf(generate(id, user(OTHER_OWNER), ws, client))).toMatch(/client_export_not_permitted/);
+    expect(await update(id, "status='in_progress'", user(OTHER_OWNER))).toEqual([]);
+    await generate(id);
+    const text = JSON.stringify(await row(id));
+    for (const pii of ["Anna", "anna@", "+49", "client note", "INTERNAL"]) expect(text).not.toContain(pii);
+  });
+
+  it("refuses a client or responsible person of another workspace and identity changes", async () => {
+    expect(await errOf(register(user(OWNER), ws, otherClient))).toMatch(/cross_workspace_reference/);
+    expect(await errOf(run(user(OWNER),
+      "insert into data_subject_requests (workspace_id, client_id, received_on, due_on, responsible_profile_id, created_by) values ($1,$2,current_date - 200,current_date,$3,$4)",
       [ws, client, OTHER_OWNER, OWNER]))).toMatch(/cross_workspace_reference/);
-    const [{ id }] = await insert(user(OWNER), ws, client);
-    expect(await errOf(run(user(OWNER), "update data_subject_requests set client_id=$2 where id=$1", [id, thirdParty]))).toMatch(/identity_immutable/);
+    const id = await register();
+    expect(await errOf(update(id, `client_id='${thirdParty}'`))).toMatch(/identity_immutable/);
   });
 
   it("security: functions pin search_path; EXECUTE not granted to PUBLIC / anon", async () => {

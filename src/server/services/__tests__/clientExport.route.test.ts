@@ -110,10 +110,18 @@ describe("client export route", () => {
     const res = await post(slug, client, { mode: "data_subject_request", request: { ...request, identityVerified: true } });
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.dataSubjectRequest).toMatchObject({ status: "draft", purposes: "Needs legal review", type: "access", identityVerified: true });
+    expect(body.dataSubjectRequest).toMatchObject({ status: "draft", purposes: "Needs legal review" });
+    expect(body.request).toMatchObject({ status: "export_generated", exportCount: 1 });
     const [row] = await q<Record<string, unknown>>("select * from data_subject_requests where client_id=$1", [client]);
-    expect(row).toMatchObject({ request_type: "access", status: "completed", identity_verified: true, responsible_profile_id: OWNER, created_by: OWNER });
+    // Generated, not delivered: nothing claims the file reached anyone.
+    expect(row).toMatchObject({ request_type: "access", status: "export_generated", identity_verified: true, responsible_profile_id: OWNER, created_by: OWNER, delivered_at: null, export_count: 1 });
     expect(JSON.stringify(row)).not.toMatch(/Dana|dana@|\+49/);
+
+    // A repeated export of the same request: one row, count 2.
+    const again = await post(slug, client, { mode: "data_subject_request", requestId: row.id });
+    expect(again.status).toBe(200);
+    const rows = await q<{ export_count: number }>("select export_count from data_subject_requests where client_id=$1", [client]);
+    expect(rows).toEqual([{ export_count: 2 }]);
   });
 
   it("logs nothing personal; invalid input is a 400", async () => {
