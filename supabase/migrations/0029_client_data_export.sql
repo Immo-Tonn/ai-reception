@@ -29,6 +29,10 @@
 --    Only export_client_data() sets export_generated and the export fields; it
 --    writes them and the audit entry in ONE transaction. A repeated export updates
 --    the open request (export_count, last_exported_at); it never adds a duplicate.
+--    Every registration, status change and identity confirmation writes an audit
+--    entry from a trigger on the table: same transaction (a failed audit rolls the
+--    step back), whichever path made the change. Who: actor_id; when: created_at;
+--    what: fixed codes only (status, channel, reason), never personal data.
 --
 -- Additive: two functions, one helper, one table, three permission rows.
 
@@ -143,6 +147,44 @@ create trigger data_subject_requests_guard
   before insert or update on public.data_subject_requests
   for each row execute function public.guard_data_subject_request();
 revoke all on function public.guard_data_subject_request() from public, anon, authenticated;
+
+create or replace function public.audit_data_subject_request()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor uuid := (select auth.uid());
+  v_action text;
+  v_summary text;
+begin
+  if tg_op = 'INSERT' then
+    v_action := 'created';
+    v_summary := 'Data subject request registered: ' || new.request_type || ', status ' || new.status;
+  elsif new.status is distinct from old.status then
+    v_action := 'statusChanged';
+    v_summary := 'Data subject request: ' || old.status || ' -> ' || new.status
+      || case when new.status = 'delivered' then ' (' || new.delivery_channel || ')'
+              when new.status = 'closed' then ' (' || new.closure_reason || ')'
+              else '' end;
+  elsif new.identity_verified and not old.identity_verified then
+    v_action := 'updated';
+    v_summary := 'Data subject request: identity marked as verified';
+  else
+    return null; -- no step happened (e.g. a repeated export): nothing to record here
+  end if;
+  insert into public.audit_logs (workspace_id, actor_id, action, entity_type, entity_id, summary, source)
+  values (new.workspace_id, v_actor, v_action, 'dataSubjectRequest', new.id::text, v_summary,
+          case when v_actor is null then 'automation' else 'user' end);
+  return null;
+end;
+$$;
+drop trigger if exists data_subject_requests_audit on public.data_subject_requests;
+create trigger data_subject_requests_audit
+  after insert or update on public.data_subject_requests
+  for each row execute function public.audit_data_subject_request();
+revoke all on function public.audit_data_subject_request() from public, anon, authenticated, service_role;
 
 alter table public.data_subject_requests enable row level security;
 revoke all on table public.data_subject_requests from public, anon;

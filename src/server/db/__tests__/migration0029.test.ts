@@ -254,6 +254,83 @@ describe("0029 data_subject_requests", () => {
     for (const pii of ["Anna", "anna@", "+49", "client note", "INTERNAL"]) expect(text).not.toContain(pii);
   });
 
+  describe("audit of steps", () => {
+    const steps = (id: string) =>
+      q<{ action: string; summary: string; actor_id: string | null; source: string }>(
+        "select action, summary, actor_id, source from audit_logs where entity_type='dataSubjectRequest' and entity_id=$1 order by created_at, summary", [id]);
+
+    it("every step is recorded once: who, what, in which workspace; no personal data", async () => {
+      const id = await register(user(ADMIN));
+      await update(id, "status='in_progress'", user(OWNER));
+      await generate(id);
+      await update(id, "status='delivered', delivered_at=now(), delivery_channel='post'", user(ADMIN));
+      await update(id, "status='closed', closure_reason='fulfilled'");
+      const rows = await steps(id);
+      expect(rows.map((r) => r.summary)).toEqual([
+        "Data subject request registered: access, status open",
+        "Data subject request: open -> in_progress",
+        "Data subject request: in_progress -> export_generated",
+        "Data subject request: export_generated -> delivered (post)",
+        "Data subject request: delivered -> closed (fulfilled)",
+      ]);
+      expect(rows.map((r) => r.actor_id)).toEqual([ADMIN, OWNER, OWNER, ADMIN, OWNER]);
+      expect(rows.every((r) => r.source === "user")).toBe(true);
+      const [{ w }] = await q<{ w: string }>("select workspace_id as w from audit_logs where entity_id=$1 limit 1", [id]);
+      expect(w).toBe(ws);
+      for (const pii of ["Anna", "anna@", "+49", "note"]) expect(JSON.stringify(rows)).not.toContain(pii);
+    });
+
+    it("a request with no step behind it writes nothing: same status, repeated export, refused step", async () => {
+      const id = await register();
+      await update(id, "status='in_progress'");
+      await generate(id);
+      const before = (await steps(id)).length;
+      await update(id, "due_on = due_on + 1");
+      await update(id, "status='export_generated'");
+      await generate(id); // repeated export: its own 'exported' entry, no step
+      expect(await errOf(update(id, "status='open'"))).toMatch(/invalid_transition/);
+      expect((await steps(id)).length).toBe(before);
+    });
+
+    it("identity confirmation is recorded; a refused role or workspace leaves no trace", async () => {
+      const id = (await run<{ id: string }>(user(OWNER),
+        "insert into data_subject_requests (workspace_id, client_id, request_type, received_on, due_on, created_by) values ($1,$2,'restriction',current_date - 120,current_date,$3) returning id",
+        [ws, client, OWNER]))[0].id;
+      await update(id, "identity_verified=true", user(ADMIN));
+      expect((await steps(id)).at(-1)).toMatchObject({ summary: "Data subject request: identity marked as verified", actor_id: ADMIN });
+      const before = (await steps(id)).length;
+      for (const r of [MANAGER, STAFF, ACCOUNTANT, OTHER_OWNER]) {
+        expect(await update(id, "status='in_progress'", user(r)), r).toEqual([]);
+      }
+      expect((await steps(id)).length).toBe(before);
+      expect(await row(id)).toMatchObject({ status: "open" });
+    });
+
+    it("a failed audit entry rolls the step back: registration, status change and closing", async () => {
+      const id = await register();
+      await db.exec(`create function public.test_audit_fail() returns trigger language plpgsql as $$ begin raise exception 'forced_audit_failure'; end; $$;
+        create trigger test_audit_fail before insert on public.audit_logs for each row execute function public.test_audit_fail();`);
+      try {
+        expect(await errOf(update(id, "status='in_progress'"))).toMatch(/forced_audit_failure/);
+        expect(await errOf(update(id, "status='closed', closure_reason='rejected'"))).toMatch(/forced_audit_failure/);
+        expect(await errOf(register(user(OWNER), ws, client, "objection"))).toMatch(/forced_audit_failure/);
+      } finally {
+        await db.exec("drop trigger test_audit_fail on public.audit_logs; drop function public.test_audit_fail();");
+      }
+      expect(await row(id)).toMatchObject({ status: "open", closure_reason: null, closed_at: null });
+      expect((await q<{ n: number }>("select count(*)::int as n from data_subject_requests where request_type='objection' and status='open'"))[0].n).toBe(0);
+    });
+
+    it("the audit trigger function cannot be called by API roles", async () => {
+      const [f] = await q<{ config: string[]; anon: boolean; auth: boolean; svc: boolean; definer: boolean }>(
+        `select prosecdef as definer, proconfig as config, has_function_privilege('anon', oid, 'execute') as anon,
+                has_function_privilege('authenticated', oid, 'execute') as auth, has_function_privilege('service_role', oid, 'execute') as svc
+           from pg_proc where proname='audit_data_subject_request'`);
+      expect(f).toMatchObject({ definer: true, anon: false, auth: false, svc: false });
+      expect(f.config).toContain('search_path=""');
+    });
+  });
+
   it("refuses a client or responsible person of another workspace and identity changes", async () => {
     expect(await errOf(register(user(OWNER), ws, otherClient))).toMatch(/cross_workspace_reference/);
     expect(await errOf(run(user(OWNER),
