@@ -46,6 +46,7 @@ const FUNCTIONS: FnSpec[] = [
   { migration: "0029_client_data_export.sql", signature: "public.guard_data_subject_request()", security: "definer", exec: { anon: false, authenticated: false }, purpose: "trigger" },
   { migration: "0030_retention_dry_run.sql", signature: "public.retention_dry_run(timestamp with time zone,timestamp with time zone)", security: "invoker", exec: { anon: false, authenticated: false, service_role: true }, purpose: "cron, service role" },
   { migration: "0031_client_retention_setting.sql", signature: "public.guard_workspace_retention_setting()", security: "definer", exec: { anon: false, authenticated: false }, purpose: "trigger" },
+  { migration: "0032_client_archiving.sql", signature: "public.set_client_archived(uuid,uuid,boolean)", security: "invoker", exec: { anon: false, authenticated: true, service_role: false }, purpose: "owner/admin archive + audit, one transaction" },
   { migration: "0032_client_archiving.sql", signature: "public.guard_client_archive()", security: "definer", exec: { anon: false, authenticated: false }, purpose: "trigger" },
   { migration: "0032_client_archiving.sql", signature: "public.guard_no_archived_client_ref()", security: "definer", exec: { anon: false, authenticated: false }, purpose: "trigger" },
   // Public online booking / client account: called by the server with the service role only. Must keep it.
@@ -192,6 +193,9 @@ describe.skipIf(!complete)(`GDPR workspace isolation A/B${complete ? "" : ` — 
 
     it(`${who}: archiving / restoring A's clients changes nothing`, async () => {
       const before = await snapshotA();
+      expect(await errOf(run(user(attacker), "select public.set_client_archived($1,$2,true)", [wsA, clientA]))).toMatch(/client_archive_not_permitted/);
+      expect(await errOf(run(user(attacker), "select public.set_client_archived($1,$2,false)", [wsA, archivedA]))).toMatch(/client_archive_not_permitted/);
+      expect(await errOf(run(user(attacker), "select public.set_client_archived($1,$2,true)", [wsB, clientA]))).toMatch(/client_not_found/);
       expect(await run(user(attacker), "update clients set archived_at = now() where id=$1 returning id", [clientA])).toEqual([]);
       expect(await run(user(attacker), "update clients set archived_at = null where id=$1 returning id", [archivedA])).toEqual([]);
       expect(await snapshotA()).toBe(before);
@@ -225,6 +229,9 @@ describe.skipIf(!complete)(`GDPR workspace isolation A/B${complete ? "" : ` — 
           await errOf(run(user(attacker), "select public.export_client_data($1,$2,false,'admin')", [wsB, id])),
           await errOf(run(user(attacker), "select public.anonymize_client($1,$2)", [wsA, id])),
           await errOf(run(user(attacker), "select public.anonymize_client($1,$2)", [wsB, id])),
+          await errOf(run(user(attacker), "select public.set_client_archived($1,$2,true)", [wsA, id])),
+          await errOf(run(user(attacker), "select public.set_client_archived($1,$2,false)", [wsA, id])),
+          await errOf(run(user(attacker), "select public.set_client_archived($1,$2,true)", [wsB, id])),
           JSON.stringify(await run(user(attacker), "update clients set archived_at = now() where id=$1 returning id", [id])),
           JSON.stringify(await run(user(attacker), "update clients set archived_at = null where id=$1 returning id", [id])),
         ];
