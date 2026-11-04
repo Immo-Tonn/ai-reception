@@ -3,6 +3,18 @@
   padding: 0 var(--space-4) var(--space-8);
 }
 
+/* Archive status and action (owner / admin). */
+.archiveStatus {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-small);
+  color: var(--text-secondary);
+}
+
+.archiveButton {
+  margin-inline-start: 0;
+  margin-bottom: var(--space-4);
+}
+
 @media (min-width: 768px) {
   .page {
     padding: 0 var(--space-8) var(--space-10);

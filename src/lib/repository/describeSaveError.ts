@@ -23,6 +23,8 @@ export function describeSaveError(
       return messages.invalidStatus;
     case "delete_blocked":
       return messages.deleteBlocked;
+    case "client_archived":
+      return messages.clientArchived;
     case "forbidden":
       return messages.forbidden;
     case "unauthenticated":
