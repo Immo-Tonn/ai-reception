@@ -745,6 +745,10 @@ export const ru: Messages = {
     rescheduled: "Перенесено",
   },
   quickActions: {
+    clientArchivedNotice: "Клиент в архиве",
+    restoreClient: "Восстановить клиента",
+    clientRestored: "Клиент восстановлен.",
+    restoreFailed: "Не удалось восстановить клиента. Он остаётся в архиве.",
     correctionManagerOnly: "Исправить записанный результат может только менеджер, администратор или владелец.",
     title: "Запись",
     edit: "Редактировать",
@@ -1074,6 +1078,9 @@ export const ru: Messages = {
     closeModal: "Закрыть",
   },
   inbox: {
+    clientArchivedBadge: "клиент в архиве",
+    restoreClient: "Восстановить клиента",
+    restoreClientFailed: "Не удалось восстановить клиента. Он остаётся в архиве.",
     title: "Входящие",
     searchPlaceholder: "Поиск по переписке",
     filterAll: "Все",

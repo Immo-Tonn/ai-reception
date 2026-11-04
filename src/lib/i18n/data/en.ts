@@ -769,6 +769,10 @@ export const en = {
     rescheduled: "Rescheduled",
   },
   quickActions: {
+    clientArchivedNotice: "Client in the archive",
+    restoreClient: "Restore client",
+    clientRestored: "The client has been restored.",
+    restoreFailed: "Could not restore the client. They remain in the archive.",
     correctionManagerOnly: "Only a manager, admin or owner can correct a recorded result.",
     title: "Appointment",
     edit: "Edit",
@@ -1098,6 +1102,9 @@ export const en = {
     closeModal: "Close",
   },
   inbox: {
+    clientArchivedBadge: "Client in the archive",
+    restoreClient: "Restore client",
+    restoreClientFailed: "Could not restore the client. They remain in the archive.",
     title: "Inbox",
     searchPlaceholder: "Search conversations",
     filterAll: "All",
