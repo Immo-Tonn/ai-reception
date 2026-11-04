@@ -745,6 +745,10 @@ export const uk: Messages = {
     rescheduled: "Перенесено",
   },
   quickActions: {
+    clientArchivedNotice: "Клієнт в архіві",
+    restoreClient: "Відновити клієнта",
+    clientRestored: "Клієнта відновлено.",
+    restoreFailed: "Не вдалося відновити клієнта. Він залишається в архіві.",
     correctionManagerOnly: "Виправити записаний результат може лише менеджер, адміністратор або власник.",
     title: "Запис",
     edit: "Редагувати",
@@ -1074,6 +1078,9 @@ export const uk: Messages = {
     closeModal: "Закрити",
   },
   inbox: {
+    clientArchivedBadge: "клієнт в архіві",
+    restoreClient: "Відновити клієнта",
+    restoreClientFailed: "Не вдалося відновити клієнта. Він залишається в архіві.",
     title: "Вхідні",
     searchPlaceholder: "Пошук розмов",
     filterAll: "Усі",

@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import type { Session } from "@/server/auth/session";
-import { assertCan } from "@/server/permissions/roles";
+import { assertCan, can } from "@/server/permissions/roles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { toRepositoryError } from "@/server/repository/errors";
 import { clientFromRow } from "@/server/repository/clientsSupabaseRepository";
@@ -51,4 +51,29 @@ export async function listArchivedClients(session: Session): Promise<ClientRecor
   if (error) throw toRepositoryError(error, "clients.listArchived");
   const now = new Date();
   return ((data ?? []) as Parameters<typeof clientFromRow>[0][]).map((r) => clientFromRow(r, [], new Map(), now));
+}
+
+/**
+ * Which of `clientIds` are archived, and may this viewer restore them? Read with
+ * the caller's RLS inside the own workspace: a client the viewer may not read is
+ * simply absent, so nothing is revealed. `canRestore` is false for an anonymised
+ * client (the database refuses that restore as well).
+ */
+export async function archivedClientAccess(session: Session, clientIds: string[]): Promise<Map<string, { canRestore: boolean }>> {
+  const result = new Map<string, { canRestore: boolean }>();
+  if (clientIds.length === 0 || !can(session.role, "clients.view")) return result;
+  const db = await createSupabaseServerClient();
+  // select("*"): anonymized_at exists only once 0028 is applied. Only booleans leave this function.
+  const { data, error } = await db
+    .from("clients")
+    .select("*")
+    .eq("workspace_id", session.workspaceId)
+    .in("id", clientIds)
+    .not("archived_at", "is", null);
+  if (error) throw toRepositoryError(error, "clients.archivedAccess");
+  const mayArchive = can(session.role, "clients.archive");
+  for (const row of (data ?? []) as { id: string; anonymized_at?: string | null }[]) {
+    result.set(row.id, { canRestore: mayArchive && !row.anonymized_at });
+  }
+  return result;
 }

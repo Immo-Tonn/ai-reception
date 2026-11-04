@@ -47,6 +47,8 @@ export interface Appointment {
   clientId?: string;
   serviceId?: string;
   staffId?: string;
+  /** The client is archived (0032). Set only when the viewer may read the client (RLS). */
+  clientArchived?: boolean;
   resourceId: string | null;
   date: string; // ISO date, e.g. "2026-09-22"
   time: string; // "HH:mm"
