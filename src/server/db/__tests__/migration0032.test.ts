@@ -5,7 +5,8 @@ import type { PGlite } from "@electric-sql/pglite";
 import { as, createMigratedDb, migrationsDir, type Actor } from "./pg";
 
 /**
- * 0032: clients.archived_at — owner / admin only (trigger, also against direct
+ * 0032: clients.archived_at — set_client_archived() only: owner / admin, status and
+ * audit in one transaction (trigger refuses direct
  * API updates), archiving changes nothing else, no new business booking for an
  * archived client (public booking path still works), an anonymised client is
  * never restored. PGlite, synthetic data.
@@ -26,8 +27,11 @@ const run = <T = Record<string, unknown>>(actor: Actor, sql: string, p: unknown[
   as(db, actor, async () => (await db.query<T>(sql, p)).rows);
 const errOf = async (p: Promise<unknown>) => p.then(() => "ok", (e: { message?: string }) => e.message ?? "error");
 const archivedAt = async (id: string) => (await q<{ a: string | null }>("select archived_at as a from clients where id=$1", [id]))[0].a;
-const setArchived = (actor: Actor, id: string, on: boolean) =>
+const setArchived = (actor: Actor, id: string, on: boolean, workspace = ws) =>
+  run<{ r: { status: string; archivedAt: string | null } }>(actor, "select public.set_client_archived($1,$2,$3) as r", [workspace, id, on]).then((rows) => rows[0].r);
+const directUpdate = (actor: Actor, id: string, on: boolean) =>
   run<{ id: string }>(actor, `update clients set archived_at = ${on ? "now()" : "null"} where id = $1 returning id`, [id]);
+const auditCount = async (id: string) => (await q<{ n: number }>("select count(*)::int as n from audit_logs where entity_id=$1 and entity_type='client'", [id]))[0].n;
 
 let day = 3;
 async function appointment(actor: Actor, client: string, status = "confirmed") {
@@ -81,13 +85,82 @@ describe("0032 client archiving", () => {
 
   it("manager, staff, accountant and another workspace cannot change the archive status (also directly)", async () => {
     const c = await newClient(ws, "Mia");
-    expect(await errOf(setArchived(user(MANAGER), c, true))).toMatch(/client_archive_not_permitted/);
+    for (const id of [MANAGER, STAFF, ACCOUNTANT, OTHER_OWNER]) {
+      expect(await errOf(setArchived(user(id), c, true)), id).toMatch(/client_archive_not_permitted/);
+    }
+    expect(await errOf(setArchived({ kind: "anon" }, c, true))).toMatch(/permission denied/);
+    expect(await errOf(setArchived(svc, c, true))).toMatch(/permission denied/);
+    expect(await errOf(directUpdate(user(MANAGER), c, true))).toMatch(/client_archive_not_permitted/);
     for (const id of [STAFF, ACCOUNTANT, OTHER_OWNER]) {
-      expect(await setArchived(user(id), c, true), id).toEqual([]); // RLS: the row is not even visible for update
+      expect(await directUpdate(user(id), c, true), id).toEqual([]); // RLS: the row is not even visible for update
     }
     expect(await archivedAt(c)).toBeNull();
+    expect(await auditCount(c)).toBe(0);
     // The manager may still edit the client otherwise (no regression of clients.edit).
     await run(user(MANAGER), "update clients set notes='updated' where id=$1", [c]);
+  });
+
+  it("a direct UPDATE of archived_at is refused even for owner and admin (it would leave no audit entry)", async () => {
+    const c = await newClient(ws, "Direct");
+    for (const id of [OWNER, ADMIN]) {
+      expect(await errOf(directUpdate(user(id), c, true)), id).toMatch(/client_archive_use_function/);
+    }
+    expect(await archivedAt(c)).toBeNull();
+    // The setting cannot be left on by the function for a later direct update in the same session.
+    await setArchived(user(OWNER), c, true);
+    expect(await errOf(directUpdate(user(OWNER), c, false))).toMatch(/client_archive_use_function/);
+  });
+
+  it("another workspace: its own workspace id with our client is a plain not-found, and nothing changes", async () => {
+    const c = await newClient(ws, "Tenant");
+    expect(await errOf(setArchived(user(OTHER_OWNER), c, true, otherWs))).toMatch(/client_not_found/);
+    expect(await errOf(setArchived(user(OWNER), "00000000-0000-4000-8000-000000000000", true))).toMatch(/client_not_found/);
+    expect(await archivedAt(c)).toBeNull();
+  });
+
+  it("repeated calls change nothing and write no second audit entry", async () => {
+    const c = await newClient(ws, "Twice");
+    expect(await setArchived(user(OWNER), c, false)).toMatchObject({ status: "unchanged", archivedAt: null });
+    expect(await auditCount(c)).toBe(0);
+    expect((await setArchived(user(OWNER), c, true)).status).toBe("archived");
+    const at = await archivedAt(c);
+    expect((await setArchived(user(ADMIN), c, true)).status).toBe("unchanged");
+    expect(await archivedAt(c)).toEqual(at);
+    expect(await auditCount(c)).toBe(1);
+    expect((await setArchived(user(OWNER), c, false)).status).toBe("restored");
+    expect((await setArchived(user(OWNER), c, false)).status).toBe("unchanged");
+    expect(await auditCount(c)).toBe(2);
+    const [row] = await q<{ summary: string; source: string; actor_id: string }>("select summary, source, actor_id from audit_logs where entity_id=$1 order by created_at limit 1", [c]);
+    expect(row).toEqual({ summary: "Client archived", source: "user", actor_id: OWNER });
+  });
+
+  it("a failed audit entry rolls the status back, in both directions", async () => {
+    const c = await newClient(ws, "Rollback");
+    await db.exec(`create function public.test_audit_fail() returns trigger language plpgsql as $$ begin raise exception 'forced_audit_failure'; end; $$;
+      create trigger test_audit_fail before insert on public.audit_logs for each row execute function public.test_audit_fail();`);
+    try {
+      expect(await errOf(setArchived(user(OWNER), c, true))).toMatch(/forced_audit_failure/);
+      expect(await archivedAt(c)).toBeNull();
+      await q("update clients set archived_at = now() where id=$1", [c]);
+      const at = await archivedAt(c);
+      expect(await errOf(setArchived(user(OWNER), c, false))).toMatch(/forced_audit_failure/);
+      expect(await archivedAt(c)).toEqual(at);
+    } finally {
+      await db.exec("drop trigger test_audit_fail on public.audit_logs; drop function public.test_audit_fail();");
+    }
+    expect((await setArchived(user(OWNER), c, false)).status).toBe("restored"); // works again afterwards
+  });
+
+  it("a role with clients.archive but without clients.edit gets an error, not a silent no-op", async () => {
+    const c = await newClient(ws, "NoEdit");
+    await q("insert into role_permissions (role, permission) values ('staff','clients.archive') on conflict do nothing");
+    try {
+      expect(await errOf(setArchived(user(STAFF), c, true))).toMatch(/client_not_found|client_archive_not_permitted/);
+      expect(await archivedAt(c)).toBeNull();
+      expect(await auditCount(c)).toBe(0);
+    } finally {
+      await q("delete from role_permissions where role='staff' and permission='clients.archive'");
+    }
   });
 
   it("archiving changes nothing but archived_at: appointments (also future), statuses and invoices stay", async () => {
@@ -155,6 +228,18 @@ describe("0032 client archiving", () => {
     await setArchived(user(OWNER), c, true);
     expect(await errOf(setArchived(user(OWNER), c, false))).toMatch(/client_anonymized/);
     expect(await archivedAt(c)).not.toBeNull();
+  });
+
+  it("set_client_archived: invoker, search_path pinned, EXECUTE for authenticated only", async () => {
+    const [f] = await q<{ definer: boolean; config: string[]; pub: boolean; anon: boolean; auth: boolean; svc: boolean }>(
+      `select p.prosecdef as definer, p.proconfig as config,
+              exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0 and a.privilege_type = 'EXECUTE') as pub,
+              has_function_privilege('anon', p.oid, 'execute') as anon,
+              has_function_privilege('authenticated', p.oid, 'execute') as auth,
+              has_function_privilege('service_role', p.oid, 'execute') as svc
+         from pg_proc p where p.oid = to_regprocedure('public.set_client_archived(uuid,uuid,boolean)')`);
+    expect(f).toMatchObject({ definer: false, pub: false, anon: false, auth: true, svc: false });
+    expect(f.config).toContain('search_path=""');
   });
 
   it("security: trigger functions pin search_path and are not executable by API roles", async () => {
