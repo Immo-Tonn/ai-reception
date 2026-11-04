@@ -4,7 +4,7 @@ import type { Session } from "@/server/auth/session";
 import { can } from "@/server/permissions/roles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { RepositoryNotFoundError, toRepositoryError } from "@/server/repository/errors";
-import { assertCanRead, assertCanWrite, audit } from "./schedulingShared";
+import { assertCanRead, assertCanWrite } from "./schedulingShared";
 
 /**
  * Client data retention period of the workspace (migration 0031,
@@ -59,18 +59,12 @@ export async function getRetentionSettings(session: Session): Promise<RetentionS
   return toSettings(session, data as Record<string, unknown>);
 }
 
+/** One database transaction: value and audit entry together (0031, set_client_retention_months). */
 export async function updateClientRetentionMonths(session: Session, input: number): Promise<RetentionSettings> {
   assertCanWrite(session, "retention.manage");
   const months = clientRetentionMonthsSchema.parse(input);
   const client = await createSupabaseServerClient();
-  const { data, error } = await client
-    .from("workspaces")
-    .update({ client_retention_months: months, updated_at: new Date().toISOString() })
-    .eq("id", session.workspaceId)
-    .select("name,client_retention_months")
-    .maybeSingle();
+  const { error } = await client.rpc("set_client_retention_months", { p_workspace_id: session.workspaceId, p_months: months });
   if (error) throw toRepositoryError(error, "retentionSettings.update");
-  if (!data) throw new RepositoryNotFoundError("retentionSettings.update");
-  await audit(session, "updated", "workspace", session.workspaceId, `Client data retention period set to ${months} months`);
-  return toSettings(session, data as Record<string, unknown>);
+  return getRetentionSettings(session);
 }

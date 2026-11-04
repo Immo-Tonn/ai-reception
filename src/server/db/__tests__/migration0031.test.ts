@@ -25,7 +25,10 @@ const run = <T = Record<string, unknown>>(actor: Actor, sql: string, p: unknown[
 const errOf = async (p: Promise<unknown>) => p.then(() => "ok", (e: { message?: string }) => e.message ?? "error");
 const months = async (w: string) => (await q<{ m: number }>("select client_retention_months as m from workspaces where id=$1", [w]))[0].m;
 const setMonths = (actor: Actor, w: string, m: unknown) =>
+  run<{ r: { status: string; months: number } }>(actor, "select public.set_client_retention_months($1,$2) as r", [w, m]).then((rows) => rows[0].r);
+const directUpdate = (actor: Actor, w: string, m: number) =>
   run<{ id: string }>(actor, "update workspaces set client_retention_months = $2 where id = $1 returning id", [w, m]);
+const auditCount = async (w: string) => (await q<{ n: number }>("select count(*)::int as n from audit_logs where workspace_id=$1 and summary like 'Client data retention%'", [w]))[0].n;
 
 beforeAll(async () => {
   db = await createMigratedDb();
@@ -57,7 +60,7 @@ describe("0031 client retention setting", () => {
   });
 
   it("the owner saves a new period and reads it back", async () => {
-    expect(await setMonths(user(OWNER), ws, 48)).toHaveLength(1);
+    expect(await setMonths(user(OWNER), ws, 48)).toEqual({ status: "changed", months: 48 });
     expect(await months(ws)).toBe(48);
     expect((await run<{ m: number }>(user(OWNER), "select client_retention_months as m from workspaces where id=$1", [ws]))[0].m).toBe(48);
   });
@@ -65,19 +68,59 @@ describe("0031 client retention setting", () => {
   it("admin may read but not change it (even directly); other settings stay editable for the admin", async () => {
     expect((await run<{ m: number }>(user(ADMIN), "select client_retention_months as m from workspaces where id=$1", [ws]))[0].m).toBe(48);
     expect(await errOf(setMonths(user(ADMIN), ws, 24))).toMatch(/retention_setting_not_permitted/);
+    expect(await errOf(directUpdate(user(ADMIN), ws, 24))).toMatch(/retention_setting_not_permitted/);
     await run(user(ADMIN), "update workspaces set min_notice_minutes = 30 where id = $1", [ws]); // no regression
     expect(await months(ws)).toBe(48);
   });
 
-  it("manager, staff, accountant and another workspace's owner cannot change it", async () => {
+  it("manager, staff, accountant, another workspace's owner, anon and the service role cannot use it", async () => {
     for (const id of [MANAGER, STAFF, ACCOUNTANT, OTHER_OWNER]) {
-      const r = await errOf(setMonths(user(id), ws, 24));
-      // RLS hides the row (0 rows updated) or the trigger refuses — either way nothing changes.
-      expect(r === "ok" || /not_permitted|row-level security/.test(r), id).toBe(true);
+      expect(await errOf(setMonths(user(id), ws, 24)), id).toMatch(/retention_setting_not_permitted/);
+      expect(await directUpdate(user(id), ws, 24), id).toEqual([]); // RLS: the row is not updatable
     }
-    expect(await errOf(setMonths({ kind: "anon" }, ws, 24))).toMatch(/permission denied|ok/);
+    expect(await errOf(setMonths({ kind: "anon" }, ws, 24))).toMatch(/permission denied/);
+    expect(await errOf(setMonths(svc, ws, 24))).toMatch(/permission denied/);
     expect(await months(ws)).toBe(48);
     expect(await months(otherWs)).toBe(36);
+  });
+
+  it("a direct UPDATE is refused even for the owner (it would leave no audit entry)", async () => {
+    expect(await errOf(directUpdate(user(OWNER), ws, 24))).toMatch(/retention_setting_use_function/);
+    expect(await months(ws)).toBe(48);
+  });
+
+  it("the same value writes nothing; a change writes exactly one entry without personal data", async () => {
+    const before = await auditCount(ws);
+    expect(await setMonths(user(OWNER), ws, 48)).toEqual({ status: "unchanged", months: 48 });
+    expect(await auditCount(ws)).toBe(before);
+    await setMonths(user(OWNER), ws, 60);
+    expect(await auditCount(ws)).toBe(before + 1);
+    const [row] = await q<{ summary: string; actor_id: string; source: string }>("select summary, actor_id, source from audit_logs where workspace_id=$1 and summary like 'Client data retention%' order by created_at desc limit 1", [ws]);
+    expect(row).toEqual({ summary: "Client data retention period changed from 48 to 60 months", actor_id: OWNER, source: "user" });
+    await setMonths(user(OWNER), ws, 48);
+  });
+
+  it("a failed audit entry rolls the value back", async () => {
+    await db.exec(`create function public.test_audit_fail() returns trigger language plpgsql as $$ begin raise exception 'forced_audit_failure'; end; $$;
+      create trigger test_audit_fail before insert on public.audit_logs for each row execute function public.test_audit_fail();`);
+    try {
+      expect(await errOf(setMonths(user(OWNER), ws, 24))).toMatch(/forced_audit_failure/);
+    } finally {
+      await db.exec("drop trigger test_audit_fail on public.audit_logs; drop function public.test_audit_fail();");
+    }
+    expect(await months(ws)).toBe(48);
+  });
+
+  it("set_client_retention_months: invoker, search_path pinned, EXECUTE for authenticated only", async () => {
+    const [f] = await q<{ definer: boolean; config: string[]; pub: boolean; anon: boolean; auth: boolean; svc: boolean }>(
+      `select p.prosecdef as definer, p.proconfig as config,
+              exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0 and a.privilege_type = 'EXECUTE') as pub,
+              has_function_privilege('anon', p.oid, 'execute') as anon,
+              has_function_privilege('authenticated', p.oid, 'execute') as auth,
+              has_function_privilege('service_role', p.oid, 'execute') as svc
+         from pg_proc p where p.oid = to_regprocedure('public.set_client_retention_months(uuid,integer)')`);
+    expect(f).toMatchObject({ definer: false, pub: false, anon: false, auth: true, svc: false });
+    expect(f.config).toContain('search_path=""');
   });
 
   it("rejects zero, negative, out-of-range and fractional values", async () => {

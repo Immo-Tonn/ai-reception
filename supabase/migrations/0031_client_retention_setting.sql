@@ -13,14 +13,17 @@
 --    never deletes or anonymises anything.
 -- 2. Permission retention.manage — owner only. The workspaces UPDATE policy lets
 --    owner AND admin change settings (settings.manage), so a trigger refuses a
---    change of this column by anyone without retention.manage (also a direct API
---    call). The service role (no auth.uid()) is not restricted.
+--    change of this column by anyone without retention.manage. API users change it
+--    ONLY through set_client_retention_months(): value and audit entry are one
+--    transaction, so a failed audit rolls the value back. A direct UPDATE, even by
+--    the owner, is refused (it would leave no audit entry). The service role (no
+--    auth.uid()) is not restricted.
 -- 3. retention_dry_run (0030) is redefined with the SAME signature and output, with
 --    one change: the client cutoff is now per workspace
 --    (now() - client_retention_months); p_client_cutoff stays as a fallback only.
 --    Output gains clients.periodSource = 'workspace_setting'. Still counts only.
 --
--- Additive: one column with a default, one permission row, one trigger; the dry-run
+-- Additive: one column with a default, one permission row, one trigger, one function; the dry-run
 -- function is replaced in place (no data change).
 
 alter table public.workspaces
@@ -46,9 +49,13 @@ set search_path = ''
 as $$
 begin
   if new.client_retention_months is distinct from old.client_retention_months
-     and (select auth.uid()) is not null
-     and not public.has_workspace_permission(new.id, 'retention.manage') then
-    raise exception 'retention_setting_not_permitted' using errcode = '42501';
+     and (select auth.uid()) is not null then
+    if not public.has_workspace_permission(new.id, 'retention.manage') then
+      raise exception 'retention_setting_not_permitted' using errcode = '42501';
+    end if;
+    if coalesce(current_setting('serviceos.retention_setting_change', true), '') <> 'on' then
+      raise exception 'retention_setting_use_function' using errcode = '42501';
+    end if;
   end if;
   return new;
 end;
@@ -58,6 +65,62 @@ create trigger workspaces_guard_retention_setting
   before update of client_retention_months on public.workspaces
   for each row execute function public.guard_workspace_retention_setting();
 revoke all on function public.guard_workspace_retention_setting() from public, anon, authenticated;
+
+-- The only way for an API user to change the period. SECURITY INVOKER on purpose: the
+-- caller's RLS applies to the workspace row (settings.manage) and to audit_logs, and
+-- the trigger above runs as well; retention.manage is checked explicitly because
+-- RLS alone would allow an admin. One plpgsql call = one transaction.
+create or replace function public.set_client_retention_months(p_workspace_id uuid, p_months integer)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_old integer;
+  v_new integer;
+begin
+  if (select auth.uid()) is null
+     or not public.has_workspace_permission(p_workspace_id, 'retention.manage') then
+    raise exception 'retention_setting_not_permitted' using errcode = '42501';
+  end if;
+  if p_months is null then
+    raise exception 'invalid_input' using errcode = '22023';
+  end if;
+
+  select w.client_retention_months into v_old
+    from public.workspaces w
+   where w.id = p_workspace_id
+   for update;
+  if not found then
+    raise exception 'retention_setting_not_permitted' using errcode = '42501';
+  end if;
+
+  if v_old = p_months then
+    return jsonb_build_object('status', 'unchanged', 'months', v_old);
+  end if;
+
+  perform set_config('serviceos.retention_setting_change', 'on', true);
+  update public.workspaces w
+     set client_retention_months = p_months, updated_at = now()
+   where w.id = p_workspace_id
+  returning w.client_retention_months into v_new;
+  -- RLS can skip the row silently (a role with retention.manage but no settings.manage).
+  if not found then
+    raise exception 'retention_setting_not_permitted' using errcode = '42501';
+  end if;
+  perform set_config('serviceos.retention_setting_change', 'off', true);
+
+  -- No personal data: fixed text, ids and the two numbers.
+  insert into public.audit_logs (workspace_id, actor_id, action, entity_type, entity_id, summary, source)
+  values (p_workspace_id, (select auth.uid()), 'updated', 'workspace', p_workspace_id::text,
+          'Client data retention period changed from ' || v_old || ' to ' || v_new || ' months', 'user');
+
+  return jsonb_build_object('status', 'changed', 'months', v_new);
+end;
+$$;
+revoke all on function public.set_client_retention_months(uuid, integer) from public, anon, service_role;
+grant execute on function public.set_client_retention_months(uuid, integer) to authenticated;
 
 create or replace function public.retention_dry_run(p_client_cutoff timestamptz, p_inbox_cutoff timestamptz)
 returns jsonb

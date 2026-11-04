@@ -53,7 +53,7 @@ describe("retention settings service", () => {
     expect((await service.getRetentionSettings(session)).clientRetentionMonths).toBe(48);
     expect(await q("select md5(string_agg(to_jsonb(t)::text, '')) as s from (select * from clients union all select * from clients) t")).toEqual(before);
     const [audit] = await q<{ summary: string }>("select summary from audit_logs where workspace_id=$1 and entity_type='workspace' order by created_at desc limit 1", [wsId]);
-    expect(audit.summary).toBe("Client data retention period set to 48 months");
+    expect(audit.summary).toBe("Client data retention period changed from 36 to 48 months");
   });
 
   it("rejects invalid values on the server before the database", async () => {
