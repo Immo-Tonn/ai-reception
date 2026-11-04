@@ -3,8 +3,7 @@ import { z } from "zod";
 import type { Session } from "@/server/auth/session";
 import { assertCan } from "@/server/permissions/roles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getServerAuditLogRepository } from "@/server/repository/registry";
-import { RepositoryNotFoundError, toRepositoryError } from "@/server/repository/errors";
+import { toRepositoryError } from "@/server/repository/errors";
 import { clientFromRow } from "@/server/repository/clientsSupabaseRepository";
 import type { ClientRecord } from "@/features/clients/types";
 
@@ -17,40 +16,18 @@ import type { ClientRecord } from "@/features/clients/types";
  */
 export type ArchiveResult = { status: "archived" | "restored" | "unchanged"; archivedAt: string | null };
 
+/** One database transaction: status and audit entry together (0032, set_client_archived). */
 async function setArchived(session: Session, clientId: string, archive: boolean): Promise<ArchiveResult> {
   assertCan(session.role, "clients.archive");
   const id = z.string().uuid().parse(clientId);
   const db = await createSupabaseServerClient();
-  // Only a row in the opposite state is changed: a repeated call is a no-op (no second audit entry).
-  const base = db
-    .from("clients")
-    .update({ archived_at: archive ? new Date().toISOString() : null })
-    .eq("workspace_id", session.workspaceId)
-    .eq("id", id);
-  const { data: updated, error } = await (archive ? base.is("archived_at", null) : base.not("archived_at", "is", null)).select("archived_at");
+  const { data, error } = await db.rpc("set_client_archived", {
+    p_workspace_id: session.workspaceId,
+    p_client_id: id,
+    p_archive: archive,
+  });
   if (error) throw toRepositoryError(error, archive ? "clients.archive" : "clients.restore");
-  if (updated && updated.length === 1) {
-    await getServerAuditLogRepository(session.workspaceId).create({
-      id: crypto.randomUUID(),
-      timestamp: new Date().toISOString(),
-      action: "updated",
-      entityType: "client",
-      entityId: id,
-      summary: archive ? "Client archived" : "Client restored from archive",
-      source: "user",
-    });
-    return { status: archive ? "archived" : "restored", archivedAt: (updated[0] as { archived_at: string | null }).archived_at };
-  }
-  // Nothing changed: already in the requested state, or not a client of this workspace.
-  const { data: row, error: readError } = await db
-    .from("clients")
-    .select("archived_at")
-    .eq("workspace_id", session.workspaceId)
-    .eq("id", id)
-    .maybeSingle();
-  if (readError) throw toRepositoryError(readError, "clients.archiveState");
-  if (!row) throw new RepositoryNotFoundError("clients.archive");
-  return { status: "unchanged", archivedAt: (row as { archived_at: string | null }).archived_at };
+  return data as ArchiveResult;
 }
 
 export function archiveClient(session: Session, clientId: string): Promise<ArchiveResult> {
