@@ -38,6 +38,8 @@ describe("assertCan", () => {
     expect(can("admin", "clients.export")).toBe(true);
     expect(can("owner", "clients.export_internal_notes")).toBe(true);
     expect(can("admin", "clients.export_internal_notes")).toBe(false);
+    for (const role of ["owner", "admin"] as const) expect(can(role, "clients.reopen_request")).toBe(true);
+    for (const role of ["manager", "staff", "accountant"] as const) expect(can(role, "clients.reopen_request")).toBe(false);
     for (const role of ["manager", "staff", "accountant"] as const) {
       expect(() => assertCan(role, "clients.export")).toThrow(PermissionDeniedError);
     }

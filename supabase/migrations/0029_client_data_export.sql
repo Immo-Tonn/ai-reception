@@ -22,7 +22,11 @@
 --    by the database:
 --      open -> in_progress -> export_generated -> delivered -> closed
 --      closed is reachable from every state with a closure_reason (fulfilled,
---      rejected, withdrawn, identity_not_confirmed, other) and is final.
+--      rejected, withdrawn, identity_not_confirmed, other). It is final EXCEPT for
+--      reopen_data_subject_request(): owner / admin (clients.reopen_request) may
+--      reopen it (closed -> in_progress) with a reason from a fixed list; the history
+--      of the closure stays in the audit trail, delivery and export history stay on
+--      the row, and a client may not have two open requests of the same type.
 --    export_generated: the server produced a file. It says NOTHING about delivery.
 --    delivered: a staff member RECORDED a handover (date, channel); it is not a proof
 --    of receipt. `fulfilled` for access / portability needs a recorded handover.
@@ -37,7 +41,8 @@
 -- Additive: two functions, one helper, one table, three permission rows.
 
 insert into public.role_permissions (role, permission) values
-  ('owner', 'clients.export'), ('admin', 'clients.export'), ('owner', 'clients.export_internal_notes')
+  ('owner', 'clients.export'), ('admin', 'clients.export'), ('owner', 'clients.export_internal_notes'),
+  ('owner', 'clients.reopen_request'), ('admin', 'clients.reopen_request')
 on conflict do nothing;
 
 -- ---------------------------------------------------------------------------
@@ -62,6 +67,8 @@ create table if not exists public.data_subject_requests (
   delivery_channel text check (delivery_channel in ('email', 'post', 'in_person', 'portal', 'other')),
   closure_reason text check (closure_reason in ('fulfilled', 'rejected', 'withdrawn', 'identity_not_confirmed', 'other')),
   closed_at timestamptz,
+  reopen_count integer not null default 0 check (reopen_count >= 0),
+  last_reopen_reason text check (last_reopen_reason in ('closed_by_mistake', 'new_information', 'requester_contact', 'other')),
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -85,11 +92,12 @@ set search_path = ''
 as $$
 declare
   v_export boolean := coalesce(current_setting('serviceos.dsr_export', true), '') = 'on';
+  v_reopen boolean := coalesce(current_setting('serviceos.dsr_reopen', true), '') = 'on';
 begin
   if tg_op = 'INSERT' then
     if not v_export and (new.status <> 'open' or new.export_count <> 0 or new.last_exported_at is not null
                          or cardinality(new.exported_categories) > 0 or new.delivered_at is not null
-                         or new.closed_at is not null) then
+                         or new.closed_at is not null or new.reopen_count <> 0 or new.last_reopen_reason is not null) then
       raise exception 'data_subject_request_invalid_state' using errcode = '23514';
     end if;
   else
@@ -101,7 +109,17 @@ begin
       raise exception 'data_subject_request_identity_immutable' using errcode = '23514';
     end if;
     if old.status = 'closed' then
-      raise exception 'data_subject_request_closed' using errcode = '23514';
+      -- Final, except through reopen_data_subject_request().
+      if not (v_reopen and new.status = 'in_progress' and new.last_reopen_reason is not null) then
+        raise exception 'data_subject_request_closed' using errcode = '23514';
+      end if;
+      if (select auth.uid()) is not null
+         and not public.has_workspace_permission(new.workspace_id, 'clients.reopen_request') then
+        raise exception 'data_subject_request_reopen_not_permitted' using errcode = '42501';
+      end if;
+    end if;
+    if not v_reopen and (new.reopen_count, new.last_reopen_reason) is distinct from (old.reopen_count, old.last_reopen_reason) then
+      raise exception 'data_subject_request_reopen_fields_protected' using errcode = '23514';
     end if;
     if not v_export and (new.export_count, new.last_exported_at, new.exported_categories)
                         is distinct from (old.export_count, old.last_exported_at, old.exported_categories) then
@@ -116,6 +134,7 @@ begin
       or (old.status = 'in_progress' and new.status = 'closed')
       or (old.status = 'export_generated' and new.status in ('delivered', 'closed'))
       or (old.status = 'delivered' and new.status = 'closed')
+      or (v_reopen and old.status = 'closed' and new.status = 'in_progress')
       or (v_export and old.status in ('open', 'in_progress') and new.status = 'export_generated')) then
       raise exception 'data_subject_request_invalid_transition' using errcode = '23514';
     end if;
@@ -164,10 +183,15 @@ begin
     v_summary := 'Data subject request registered: ' || new.request_type || ', status ' || new.status;
   elsif new.status is distinct from old.status then
     v_action := 'statusChanged';
-    v_summary := 'Data subject request: ' || old.status || ' -> ' || new.status
-      || case when new.status = 'delivered' then ' (' || new.delivery_channel || ')'
-              when new.status = 'closed' then ' (' || new.closure_reason || ')'
-              else '' end;
+    v_summary := case
+      when old.status = 'closed' then
+        'Data subject request reopened: closed (' || old.closure_reason || ') -> in_progress (' || new.last_reopen_reason || ')'
+      else
+        'Data subject request: ' || old.status || ' -> ' || new.status
+          || case when new.status = 'delivered' then ' (' || new.delivery_channel || ')'
+                  when new.status = 'closed' then ' (' || new.closure_reason || ')'
+                  else '' end
+      end;
   elsif new.identity_verified and not old.identity_verified then
     v_action := 'updated';
     v_summary := 'Data subject request: identity marked as verified';
@@ -205,6 +229,67 @@ create policy data_subject_requests_update on public.data_subject_requests
   for update to authenticated
   using (public.has_workspace_permission(workspace_id, 'clients.export'))
   with check (public.has_workspace_permission(workspace_id, 'clients.export'));
+
+-- ---------------------------------------------------------------------------
+-- Reopen a closed request (owner / admin)
+-- ---------------------------------------------------------------------------
+-- SECURITY INVOKER: the caller's RLS applies (update needs clients.export) and the
+-- guard trigger runs too; clients.reopen_request is checked explicitly. One call =
+-- one transaction: the audit entry (trigger) is part of it, a failed audit rolls the
+-- reopening back. Fixed reasons only, no free text.
+create or replace function public.reopen_data_subject_request(p_workspace_id uuid, p_request_id uuid, p_reason text)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_row public.data_subject_requests%rowtype;
+  v_count integer;
+begin
+  if (select auth.uid()) is null
+     or not public.has_workspace_permission(p_workspace_id, 'clients.reopen_request') then
+    raise exception 'data_subject_request_reopen_not_permitted' using errcode = '42501';
+  end if;
+  if p_reason is null or p_reason not in ('closed_by_mistake', 'new_information', 'requester_contact', 'other') then
+    raise exception 'invalid_input' using errcode = '22023';
+  end if;
+
+  select * into v_row
+    from public.data_subject_requests d
+   where d.id = p_request_id and d.workspace_id = p_workspace_id
+   for update;
+  if not found then
+    raise exception 'request_not_found' using errcode = 'P0002';
+  end if;
+  if v_row.status <> 'closed' then
+    raise exception 'data_subject_request_not_closed' using errcode = '23514';
+  end if;
+  -- One open request per client and type; unique_violation maps to "conflict".
+  if v_row.client_id is not null and exists (
+       select 1 from public.data_subject_requests o
+        where o.workspace_id = p_workspace_id and o.client_id = v_row.client_id
+          and o.request_type = v_row.request_type and o.status <> 'closed' and o.id <> v_row.id) then
+    raise exception 'data_subject_request_conflict' using errcode = '23505';
+  end if;
+
+  perform set_config('serviceos.dsr_reopen', 'on', true);
+  update public.data_subject_requests d
+     set status = 'in_progress', closure_reason = null, closed_at = null,
+         reopen_count = d.reopen_count + 1, last_reopen_reason = p_reason
+   where d.id = p_request_id and d.workspace_id = p_workspace_id
+  returning d.reopen_count into v_count;
+  -- RLS can skip the row silently.
+  if not found then
+    raise exception 'data_subject_request_reopen_not_permitted' using errcode = '42501';
+  end if;
+  perform set_config('serviceos.dsr_reopen', 'off', true);
+
+  return jsonb_build_object('status', 'in_progress', 'reopenCount', v_count);
+end;
+$$;
+revoke all on function public.reopen_data_subject_request(uuid, uuid, text) from public, anon, service_role;
+grant execute on function public.reopen_data_subject_request(uuid, uuid, text) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Account link (count only)

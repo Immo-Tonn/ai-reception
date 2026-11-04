@@ -21,6 +21,8 @@ export const DSR_TYPES = ["access", "portability", "rectification", "erasure", "
 export const DSR_STATUSES = ["open", "in_progress", "export_generated", "delivered", "closed"] as const;
 export const DSR_CHANNELS = ["email", "post", "in_person", "portal", "other"] as const;
 export const DSR_CLOSE_REASONS = ["fulfilled", "rejected", "withdrawn", "identity_not_confirmed", "other"] as const;
+export const DSR_REOPEN_REASONS = ["closed_by_mistake", "new_information", "requester_contact", "other"] as const;
+export type DsrReopenReason = (typeof DSR_REOPEN_REASONS)[number];
 export type DsrStatus = (typeof DSR_STATUSES)[number];
 export type DsrChannel = (typeof DSR_CHANNELS)[number];
 export type DsrCloseReason = (typeof DSR_CLOSE_REASONS)[number];
@@ -104,10 +106,11 @@ export interface DataSubjectRequestRow {
   deliveryChannel: DsrChannel | null;
   closureReason: DsrCloseReason | null;
   closedAt: string | null;
+  reopenCount: number;
 }
 
 const COLUMNS =
-  "id,request_type,received_on,due_on,status,identity_verified,exported_categories,export_count,last_exported_at,delivered_at,delivery_channel,closure_reason,closed_at";
+  "id,request_type,received_on,due_on,status,identity_verified,exported_categories,export_count,last_exported_at,delivered_at,delivery_channel,closure_reason,closed_at,reopen_count";
 
 function fromRow(r: Record<string, unknown>): DataSubjectRequestRow {
   return {
@@ -124,6 +127,7 @@ function fromRow(r: Record<string, unknown>): DataSubjectRequestRow {
     deliveryChannel: (r.delivery_channel as DsrChannel | null) ?? null,
     closureReason: (r.closure_reason as DsrCloseReason | null) ?? null,
     closedAt: (r.closed_at as string | null) ?? null,
+    reopenCount: (r.reopen_count as number | null) ?? 0,
   };
 }
 
@@ -176,6 +180,8 @@ export const requestActionSchema = z.discriminatedUnion("kind", [
   /** Records a handover by staff. It is not a proof that the person received the file. */
   z.object({ kind: z.literal("record_delivery"), channel: z.enum(DSR_CHANNELS) }),
   z.object({ kind: z.literal("close"), reason: z.enum(DSR_CLOSE_REASONS) }),
+  /** Owner / admin; the reason comes from a fixed list and the step is audited. */
+  z.object({ kind: z.literal("reopen"), reason: z.enum(DSR_REOPEN_REASONS) }),
 ]);
 export type RequestAction = z.input<typeof requestActionSchema>;
 
@@ -184,6 +190,22 @@ export async function applyDataSubjectRequestAction(session: Session, requestId:
   assertCan(session.role, "clients.export");
   const id = z.string().uuid().parse(requestId);
   const action = requestActionSchema.parse(input);
+  if (action.kind === "reopen") {
+    assertCan(session.role, "clients.reopen_request");
+    const supabase = await createSupabaseServerClient();
+    // One database transaction: reopening and its audit entry.
+    const { error } = await supabase.rpc("reopen_data_subject_request", {
+      p_workspace_id: session.workspaceId,
+      p_request_id: id,
+      p_reason: action.reason,
+    });
+    if (error) throw toRepositoryError(error, "dataSubjectRequests.reopen");
+    const { data: reopened, error: readError } = await supabase.from("data_subject_requests").select(COLUMNS).eq("workspace_id", session.workspaceId).eq("id", id);
+    if (readError) throw toRepositoryError(readError, "dataSubjectRequests.reopen");
+    const reopenedRow = (reopened as Record<string, unknown>[] | null)?.[0];
+    if (!reopenedRow) throw new RepositoryNotFoundError("dataSubjectRequests.reopen");
+    return fromRow(reopenedRow);
+  }
   const patch =
     action.kind === "start"
       ? { status: "in_progress" }

@@ -254,6 +254,133 @@ describe("0029 data_subject_requests", () => {
     for (const pii of ["Anna", "anna@", "+49", "client note", "INTERNAL"]) expect(text).not.toContain(pii);
   });
 
+  describe("reopening a closed request", () => {
+    const reopen = (id: string, reason: string | null, actor: Actor = user(OWNER), workspace = ws) =>
+      run<{ r: { status: string; reopenCount: number } }>(actor, "select public.reopen_data_subject_request($1,$2,$3) as r", [workspace, id, reason]).then((rows) => rows[0].r);
+    /** A fresh client, so open requests of other tests cannot conflict. */
+    const freshClient = async (name: string) =>
+      (await q<{ id: string }>("insert into clients (workspace_id,name) values ($1,$2) returning id", [ws, name]))[0].id;
+    const closedRequest = async (clientId: string, type = "access", reason = "rejected", actor: Actor = user(OWNER)) => {
+      const id = await register(actor, ws, clientId, type);
+      await update(id, `status='closed', closure_reason='${reason}'`, actor);
+      return id;
+    };
+    const audit = (id: string) =>
+      q<{ summary: string; actor_id: string }>("select summary, actor_id from audit_logs where entity_type='dataSubjectRequest' and entity_id=$1 order by created_at, summary", [id]);
+
+    it("owner and admin reopen with a reason: closed -> in_progress; closure cleared, history kept", async () => {
+      const c = await freshClient("Reopen A");
+      const id = await register(user(ADMIN), ws, c);
+      await update(id, "status='in_progress'");
+      await generate(id, user(OWNER), ws, c);
+      await update(id, "status='delivered', delivered_at=now(), delivery_channel='post'");
+      await update(id, "status='closed', closure_reason='fulfilled'", user(OWNER));
+      expect(await reopen(id, "new_information", user(ADMIN))).toEqual({ status: "in_progress", reopenCount: 1 });
+      expect(await row(id)).toMatchObject({ status: "in_progress", closure_reason: null, closed_at: null, reopen_count: 1, last_reopen_reason: "new_information", delivery_channel: "post", export_count: 1 });
+      expect((await row(id)).delivered_at).not.toBeNull();
+      // Reopened by the owner a second time after another closure.
+      await update(id, "status='closed', closure_reason='withdrawn'", user(ADMIN));
+      expect((await reopen(id, "requester_contact", user(OWNER))).reopenCount).toBe(2);
+      // The history of closures and reopenings with their actors stays in the audit trail.
+      const trail = await audit(id);
+      expect(trail.map((t) => t.summary)).toEqual(expect.arrayContaining([
+        "Data subject request: delivered -> closed (fulfilled)",
+        "Data subject request reopened: closed (fulfilled) -> in_progress (new_information)",
+        "Data subject request: in_progress -> closed (withdrawn)",
+        "Data subject request reopened: closed (withdrawn) -> in_progress (requester_contact)",
+      ]));
+      expect(trail.find((t) => t.summary.includes("closed (fulfilled) -> in_progress"))?.actor_id).toBe(ADMIN);
+      expect(trail.find((t) => t.summary.includes("closed (withdrawn) -> in_progress"))?.actor_id).toBe(OWNER);
+      for (const pii of ["Reopen A", "anna@", "+49"]) expect(JSON.stringify(trail)).not.toContain(pii);
+    });
+
+    it("manager, staff, accountant, anon, the service role and another workspace are refused; nothing changes", async () => {
+      const id = await closedRequest(await freshClient("Reopen B"));
+      const before = await audit(id);
+      for (const r of [MANAGER, STAFF, ACCOUNTANT, OTHER_OWNER]) {
+        expect(await errOf(reopen(id, "other", user(r))), r).toMatch(/data_subject_request_reopen_not_permitted/);
+      }
+      expect(await errOf(reopen(id, "other", { kind: "anon" }))).toMatch(/permission denied/);
+      expect(await errOf(reopen(id, "other", svc))).toMatch(/permission denied/);
+      // Another workspace's owner with ITS OWN workspace id cannot even see the request.
+      expect(await errOf(reopen(id, "other", user(OTHER_OWNER), otherWs))).toMatch(/request_not_found/);
+      expect(await row(id)).toMatchObject({ status: "closed", reopen_count: 0 });
+      expect(await audit(id)).toEqual(before);
+    });
+
+    it("a reason from the fixed list is required", async () => {
+      const id = await closedRequest(await freshClient("Reopen C"));
+      for (const bad of [null, "", "because", "OTHER"]) {
+        expect(await errOf(reopen(id, bad)), String(bad)).toMatch(/invalid_input/);
+      }
+      expect(await row(id)).toMatchObject({ status: "closed", reopen_count: 0 });
+    });
+
+    it("only a closed request can be reopened; a repeat is refused and counts once", async () => {
+      const id = await closedRequest(await freshClient("Reopen D"));
+      await reopen(id, "closed_by_mistake");
+      expect(await errOf(reopen(id, "closed_by_mistake"))).toMatch(/data_subject_request_not_closed/);
+      expect(await row(id)).toMatchObject({ status: "in_progress", reopen_count: 1 });
+      expect(await errOf(reopen(await register(), "other"))).toMatch(/data_subject_request_not_closed/);
+    });
+
+    it("another open request of the same client and type blocks it; another type or client does not", async () => {
+      const c = await freshClient("Reopen E");
+      const closed = await closedRequest(c, "access");
+      const open = await register(user(OWNER), ws, c, "access");
+      expect(await errOf(reopen(closed, "new_information"))).toMatch(/data_subject_request_conflict/);
+      expect(await row(closed)).toMatchObject({ status: "closed", reopen_count: 0 });
+      await update(open, "status='closed', closure_reason='withdrawn'"); // the other one is closed: no conflict
+      expect((await reopen(closed, "new_information")).status).toBe("in_progress");
+      // A different type of the same client does not conflict.
+      const other = await register(user(OWNER), ws, c, "rectification");
+      const closedAccess = await closedRequest(await freshClient("Reopen F"), "access");
+      await register(user(OWNER), ws, await freshClient("Reopen G"), "access");
+      expect((await reopen(closedAccess, "other")).status).toBe("in_progress");
+      expect(await row(other)).toMatchObject({ status: "open" });
+    });
+
+    it("a closed request cannot be reopened any other way (direct update, even by the owner)", async () => {
+      const id = await closedRequest(await freshClient("Reopen H"));
+      for (const set of ["status='in_progress'", "status='open', closure_reason=null", "status='in_progress', closure_reason=null, last_reopen_reason='other'"]) {
+        expect(await errOf(update(id, set)), set).toMatch(/data_subject_request_closed|closure_chk/);
+      }
+      expect(await errOf(update(await register(), "reopen_count = 3"))).toMatch(/reopen_fields_protected/);
+      expect(await errOf(update(await register(), "last_reopen_reason = 'other'"))).toMatch(/reopen_fields_protected/);
+      expect(await errOf(run(user(OWNER),
+        "insert into data_subject_requests (workspace_id, client_id, received_on, due_on, reopen_count, created_by) values ($1,$2,current_date - 300,current_date,2,$3)",
+        [ws, client, OWNER]))).toMatch(/invalid_state/);
+      expect(await row(id)).toMatchObject({ status: "closed", reopen_count: 0 });
+    });
+
+    it("a failed audit entry rolls the reopening back", async () => {
+      const id = await closedRequest(await freshClient("Reopen I"));
+      await db.exec(`create function public.test_audit_fail() returns trigger language plpgsql as $$ begin raise exception 'forced_audit_failure'; end; $$;
+        create trigger test_audit_fail before insert on public.audit_logs for each row execute function public.test_audit_fail();`);
+      try {
+        expect(await errOf(reopen(id, "closed_by_mistake"))).toMatch(/forced_audit_failure/);
+      } finally {
+        await db.exec("drop trigger test_audit_fail on public.audit_logs; drop function public.test_audit_fail();");
+      }
+      expect(await row(id)).toMatchObject({ status: "closed", closure_reason: "rejected", reopen_count: 0, last_reopen_reason: null });
+      expect((await reopen(id, "closed_by_mistake")).status).toBe("in_progress"); // works again afterwards
+    });
+
+    it("reopen_data_subject_request: invoker, search_path pinned, EXECUTE for authenticated only", async () => {
+      const [f] = await q<{ definer: boolean; config: string[]; pub: boolean; anon: boolean; auth: boolean; svc: boolean }>(
+        `select p.prosecdef as definer, p.proconfig as config,
+                exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0 and a.privilege_type = 'EXECUTE') as pub,
+                has_function_privilege('anon', p.oid, 'execute') as anon,
+                has_function_privilege('authenticated', p.oid, 'execute') as auth,
+                has_function_privilege('service_role', p.oid, 'execute') as svc
+           from pg_proc p where p.oid = to_regprocedure('public.reopen_data_subject_request(uuid,uuid,text)')`);
+      expect(f).toMatchObject({ definer: false, pub: false, anon: false, auth: true, svc: false });
+      expect(f.config).toContain('search_path=""');
+      const roles = await q<{ role: string }>("select role::text as role from role_permissions where permission='clients.reopen_request' order by role");
+      expect(roles.map((r) => r.role)).toEqual(["admin", "owner"]);
+    });
+  });
+
   describe("audit of steps", () => {
     const steps = (id: string) =>
       q<{ action: string; summary: string; actor_id: string | null; source: string }>(
@@ -266,14 +393,15 @@ describe("0029 data_subject_requests", () => {
       await update(id, "status='delivered', delivered_at=now(), delivery_channel='post'", user(ADMIN));
       await update(id, "status='closed', closure_reason='fulfilled'");
       const rows = await steps(id);
-      expect(rows.map((r) => r.summary)).toEqual([
-        "Data subject request registered: access, status open",
-        "Data subject request: open -> in_progress",
-        "Data subject request: in_progress -> export_generated",
-        "Data subject request: export_generated -> delivered (post)",
-        "Data subject request: delivered -> closed (fulfilled)",
-      ]);
-      expect(rows.map((r) => r.actor_id)).toEqual([ADMIN, OWNER, OWNER, ADMIN, OWNER]);
+      // Entries made within one clock tick have equal timestamps: compare without relying on their order.
+      const pairs = rows.map((r) => `${r.summary} | ${r.actor_id}`).sort();
+      expect(pairs).toEqual([
+        `Data subject request registered: access, status open | ${ADMIN}`,
+        `Data subject request: open -> in_progress | ${OWNER}`,
+        `Data subject request: in_progress -> export_generated | ${OWNER}`,
+        `Data subject request: export_generated -> delivered (post) | ${ADMIN}`,
+        `Data subject request: delivered -> closed (fulfilled) | ${OWNER}`,
+      ].sort());
       expect(rows.every((r) => r.source === "user")).toBe(true);
       const [{ w }] = await q<{ w: string }>("select workspace_id as w from audit_logs where entity_id=$1 limit 1", [id]);
       expect(w).toBe(ws);

@@ -34,7 +34,9 @@ export type Permission =
   /** Export one client's data (GDPR access / portability). Owner and admin; re-checked in the database. */
   | "clients.export"
   /** Include appointment internal notes in an export. Owner only, after a legal assessment. */
-  | "clients.export_internal_notes";
+  | "clients.export_internal_notes"
+  /** Reopen a closed data subject request (reason required, audited). Owner and admin; re-checked in the database. */
+  | "clients.reopen_request";
 
 /**
  * Role → granted permissions. A permission not listed for a role is
@@ -61,6 +63,7 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "audit_log.view",
     "clients.export",
     "clients.export_internal_notes",
+    "clients.reopen_request",
   ],
   admin: [
     "appointments.view",
@@ -77,6 +80,7 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "settings.manage",
     "audit_log.view",
     "clients.export",
+    "clients.reopen_request",
   ],
   manager: [
     "appointments.view",

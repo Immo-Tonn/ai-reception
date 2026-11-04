@@ -7,7 +7,7 @@ import {
   listDataSubjectRequestsAction,
   registerDataSubjectRequestAction,
 } from "@/server/actions/dataSubjectRequests.actions";
-import type { DataSubjectRequestRow, DsrChannel, DsrCloseReason, RequestAction } from "@/server/services/clientExport.service";
+import type { DataSubjectRequestRow, DsrChannel, DsrCloseReason, DsrReopenReason, RequestAction } from "@/server/services/clientExport.service";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatDate } from "@/lib/i18n/format";
 import { localIsoDate } from "@/lib/date/localIsoDate";
@@ -275,6 +275,7 @@ function RequestRow({
 }) {
   const [channel, setChannel] = useState<DsrChannel>("email");
   const [reason, setReason] = useState<DsrCloseReason>("fulfilled");
+  const [reopenReason, setReopenReason] = useState<DsrReopenReason>("closed_by_mistake");
   const date = (iso: string) => formatDate(new Date(iso), locale, { dateStyle: "medium" });
   const closed = r.status === "closed";
   return (
@@ -293,7 +294,21 @@ function RequestRow({
           {messages.exportDeliveredNote.replace("{date}", date(r.deliveredAt)).replace("{channel}", messages.exportChannels[r.deliveryChannel])}
         </span>
       ) : null}
-      {closed ? null : (
+      {r.reopenCount > 0 ? <span className={styles.note}>{messages.exportReopenedCount.replace("{n}", String(r.reopenCount))}</span> : null}
+      {closed ? (
+        <div className={styles.requestStep}>
+          <select suppressHydrationWarning className={styles.select} aria-label={messages.exportReopenLabel} value={reopenReason} onChange={(e) => setReopenReason(e.target.value as DsrReopenReason)}>
+            {(Object.entries(messages.exportReopenReasons) as [DsrReopenReason, string][]).map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <Button variant="secondary" onClick={() => onAction({ kind: "reopen", reason: reopenReason })} disabled={busy}>
+            {messages.exportReopen}
+          </Button>
+        </div>
+      ) : (
         <div className={styles.requestActions}>
           {!r.identityVerified ? (
             <Button variant="secondary" onClick={() => onAction({ kind: "verify_identity" })} disabled={busy}>
