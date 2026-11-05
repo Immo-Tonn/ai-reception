@@ -12,6 +12,7 @@ import {
   createCheckoutUrl,
   createPortalUrl,
   getStripeConfig,
+  setCancelAtPeriodEnd,
   type StripeConfig,
 } from "@/server/billing/stripe";
 
@@ -66,4 +67,27 @@ export async function openBillingPortalAction(workspaceSlug: string): Promise<vo
     logFailure(error);
   }
   redirect(target);
+}
+
+async function changeCancellation(workspaceSlug: string, cancel: boolean): Promise<void> {
+  const page = `/${workspaceSlug}/settings/billing`;
+  let target = `${page}?status=error`;
+  try {
+    const { config, workspaceId } = await billingContext(workspaceSlug);
+    const subscription = await getCurrentSubscription(config, workspaceId);
+    if (subscription) await setCancelAtPeriodEnd(config, subscription.subscriptionId, cancel);
+    target = page;
+  } catch (error) {
+    logFailure(error);
+  }
+  redirect(target);
+}
+
+/** The plan stays active until the end of the paid period, then Stripe ends it (the webhook records that). */
+export async function cancelSubscriptionAction(workspaceSlug: string): Promise<void> {
+  await changeCancellation(workspaceSlug, true);
+}
+
+export async function resumeSubscriptionAction(workspaceSlug: string): Promise<void> {
+  await changeCancellation(workspaceSlug, false);
 }

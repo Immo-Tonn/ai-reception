@@ -23,6 +23,7 @@ export interface StripeConfig {
 }
 
 export interface WorkspaceSubscription {
+  subscriptionId: string;
   customerId: string;
   /** `null`: active, but on a price that is not one of our three plans. */
   planId: BillingPlanId | null;
@@ -83,7 +84,7 @@ export async function findWorkspaceSubscription(
   fetchImpl: FetchLike = fetch,
 ): Promise<WorkspaceSubscription | null> {
   const { data } = await stripeRequest<{
-    data: { status: string; customer: string; items: { data: { price: { id: string } }[] } }[];
+    data: { id: string; status: string; customer: string; items: { data: { price: { id: string } }[] } }[];
   }>(
     config,
     "/subscriptions/search",
@@ -93,7 +94,7 @@ export async function findWorkspaceSubscription(
   );
   const current = data.find((subscription) => OCCUPYING_STATUSES.has(subscription.status));
   if (!current) return null;
-  return { customerId: current.customer, planId: planOfPrice(config, current.items.data[0]?.price.id) };
+  return { subscriptionId: current.id, customerId: current.customer, planId: planOfPrice(config, current.items.data[0]?.price.id) };
 }
 
 function planOfPrice(config: StripeConfig, priceId: string | undefined): BillingPlanId | null {
@@ -105,8 +106,11 @@ export function isOccupyingStatus(status: string): boolean {
 }
 
 export interface StripeSubscriptionState extends WorkspaceSubscription {
-  subscriptionId: string;
   status: string;
+  /** Cancellation is scheduled: the subscription ends at the close of the paid period. */
+  cancelScheduled: boolean;
+  /** Unix seconds when it ends, if Stripe reports it. */
+  cancelAt: number | null;
   /** `null`: not one of ours (no workspace in its metadata). */
   workspaceId: string | null;
 }
@@ -122,15 +126,33 @@ export async function fetchSubscription(
     status: string;
     customer: string;
     metadata?: { workspace_id?: string };
-    items: { data: { price: { id: string } }[] };
+    cancel_at_period_end?: boolean;
+    cancel_at?: number | null;
+    current_period_end?: number;
+    items: { data: { price: { id: string }; current_period_end?: number }[] };
   }>(config, `/subscriptions/${encodeURIComponent(subscriptionId)}`, {}, "GET", fetchImpl);
+  const cancelScheduled = Boolean(subscription.cancel_at_period_end || subscription.cancel_at);
+  // Stripe moved the period end from the subscription to its items in newer API versions.
+  const periodEnd = subscription.current_period_end ?? subscription.items.data[0]?.current_period_end ?? null;
   return {
     subscriptionId: subscription.id,
     status: subscription.status,
     customerId: subscription.customer,
     workspaceId: subscription.metadata?.workspace_id ?? null,
+    cancelScheduled,
+    cancelAt: cancelScheduled ? (subscription.cancel_at ?? periodEnd) : null,
     planId: planOfPrice(config, subscription.items.data[0]?.price.id),
   };
+}
+
+/** Schedules the end of the subscription at the close of the paid period, or takes that back. */
+export async function setCancelAtPeriodEnd(
+  config: StripeConfig,
+  subscriptionId: string,
+  cancel: boolean,
+  fetchImpl: FetchLike = fetch,
+): Promise<void> {
+  await stripeRequest(config, `/subscriptions/${encodeURIComponent(subscriptionId)}`, { cancel_at_period_end: String(cancel) }, "POST", fetchImpl);
 }
 
 export interface StripeEvent {

@@ -94,12 +94,12 @@ describe("getCurrentSubscription", () => {
   it("answers from the stored row without asking Stripe", async () => {
     await syncSubscriptionFromEvent(event("customer.subscription.updated", { id: "sub_1" }), config, client, stripeReturning(stripeSubscription()));
     const fetchImpl = fromStripe([]);
-    await expect(getCurrentSubscription(config, workspaceId, () => client, fetchImpl)).resolves.toEqual({ customerId: "cus_1", planId: "business" });
+    await expect(getCurrentSubscription(config, workspaceId, () => client, fetchImpl)).resolves.toEqual({ subscriptionId: "sub_1", customerId: "cus_1", planId: "business" });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("asks Stripe while the webhook hasn't arrived yet", async () => {
-    await expect(getCurrentSubscription(config, workspaceId, () => client, fromStripe([stripeSubscription()]))).resolves.toEqual({ customerId: "cus_1", planId: "business" });
+    await expect(getCurrentSubscription(config, workspaceId, () => client, fromStripe([stripeSubscription()]))).resolves.toEqual({ subscriptionId: "sub_1", customerId: "cus_1", planId: "business" });
   });
 
   it("asks Stripe when the stored subscription has ended, and allows a new purchase", async () => {
@@ -112,7 +112,7 @@ describe("getCurrentSubscription", () => {
     const noClient = () => {
       throw new Error("not configured");
     };
-    await expect(getCurrentSubscription(config, workspaceId, noClient, fromStripe([stripeSubscription()]))).resolves.toEqual({ customerId: "cus_1", planId: "business" });
+    await expect(getCurrentSubscription(config, workspaceId, noClient, fromStripe([stripeSubscription()]))).resolves.toEqual({ subscriptionId: "sub_1", customerId: "cus_1", planId: "business" });
     error.mockRestore();
   });
 });

@@ -28,13 +28,13 @@ export function defaultBillingClient(): SupabaseClient {
 async function readStoredSubscription(client: SupabaseClient, workspaceId: string): Promise<WorkspaceSubscription | null> {
   const { data, error } = await client
     .from("workspace_subscriptions")
-    .select("stripe_customer_id, plan, status")
+    .select("stripe_subscription_id, stripe_customer_id, plan, status")
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (error) throw new Error(`stored subscription: ${error.code ?? "unknown"}`);
-  const row = data as { stripe_customer_id: string; plan: string | null; status: string } | null;
+  const row = data as { stripe_subscription_id: string; stripe_customer_id: string; plan: string | null; status: string } | null;
   if (!row || !isOccupyingStatus(row.status)) return null;
-  return { customerId: row.stripe_customer_id, planId: row.plan && isBillingPlanId(row.plan) ? row.plan : null };
+  return { subscriptionId: row.stripe_subscription_id, customerId: row.stripe_customer_id, planId: row.plan && isBillingPlanId(row.plan) ? row.plan : null };
 }
 
 /**

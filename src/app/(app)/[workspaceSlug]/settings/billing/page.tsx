@@ -4,14 +4,20 @@ import { BILLING_PLANS } from "@/features/billing/plans";
 import { getWorkspaceConfig, isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
-import { openBillingPortalAction, startCheckoutAction } from "@/server/actions/billing.actions";
+import {
+  cancelSubscriptionAction,
+  openBillingPortalAction,
+  resumeSubscriptionAction,
+  startCheckoutAction,
+} from "@/server/actions/billing.actions";
 import { getSession } from "@/server/auth/session";
-import { getStripeConfig, type WorkspaceSubscription } from "@/server/billing/stripe";
+import { fetchSubscription, getStripeConfig, type StripeSubscriptionState, type WorkspaceSubscription } from "@/server/billing/stripe";
 import { getCurrentSubscription } from "@/server/billing/subscriptions";
 import { can } from "@/server/permissions/roles";
 import { getBusinessProfile } from "@/server/services/businessProfile.service";
 import { SettingsHeader } from "../SettingsHeader";
 import schedulingStyles from "../scheduling.module.css";
+import { CancelSubscription } from "./CancelSubscription";
 import { PendingButton } from "./PendingButton";
 import styles from "./billing.module.css";
 
@@ -31,6 +37,7 @@ export default async function BillingPage({
   let businessName: string;
   let blockedNotice: string | null = null;
   let subscription: WorkspaceSubscription | null = null;
+  let live: StripeSubscriptionState | null = null;
 
   if (isDemoWorkspaceSlug(workspaceSlug)) {
     businessName = getWorkspaceConfig(workspaceSlug).name;
@@ -50,6 +57,7 @@ export default async function BillingPage({
     } else {
       try {
         subscription = await getCurrentSubscription(config, session.workspaceId);
+        if (subscription) live = await fetchSubscription(config, subscription.subscriptionId);
       } catch (error) {
         console.error("[billing]", error instanceof Error ? error.message : "unknown failure");
         // Unknown state: selling a plan now could charge the workspace twice.
@@ -61,6 +69,7 @@ export default async function BillingPage({
   const statusNotice =
     status === "success" ? m.successNotice : status === "canceled" ? m.canceledNotice : status === "error" ? m.errorNotice : null;
   const price = new Intl.NumberFormat(locale, { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+  const endDate = live?.cancelAt ? new Intl.DateTimeFormat(locale, { dateStyle: "long", timeZone: "UTC" }).format(new Date(live.cancelAt * 1000)) : null;
 
   return (
     <main className={`${schedulingStyles.page} ${styles.wide}`}>
@@ -77,6 +86,11 @@ export default async function BillingPage({
 
       {statusNotice && statusNotice !== blockedNotice && <p className={schedulingStyles.notice} role="status">{statusNotice}</p>}
       {blockedNotice && <p className={schedulingStyles.notice} role="status">{blockedNotice}</p>}
+      {live?.cancelScheduled && (
+        <p className={schedulingStyles.notice} role="status">
+          {endDate ? m.cancelScheduledOnNotice.replace("{date}", endDate) : m.cancelScheduledNotice}
+        </p>
+      )}
 
       <div className={styles.plans}>
         {BILLING_PLANS.map((plan) => {
@@ -115,6 +129,13 @@ export default async function BillingPage({
       {subscription && (
         <form suppressHydrationWarning action={openBillingPortalAction.bind(null, workspaceSlug)} className={schedulingStyles.actions} style={{ marginTop: "var(--space-4)" }}>
           <PendingButton variant="secondary" label={m.manage} pendingLabel={m.redirecting} />
+        </form>
+      )}
+
+      {live && !live.cancelScheduled && <CancelSubscription action={cancelSubscriptionAction.bind(null, workspaceSlug)} messages={m} />}
+      {live?.cancelScheduled && (
+        <form suppressHydrationWarning action={resumeSubscriptionAction.bind(null, workspaceSlug)} className={schedulingStyles.actions} style={{ marginTop: "var(--space-3)" }}>
+          <PendingButton variant="secondary" label={m.resume} pendingLabel={m.resuming} />
         </form>
       )}
     </main>
