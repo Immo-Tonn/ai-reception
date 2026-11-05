@@ -1,13 +1,16 @@
 import "server-only";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { BillingPlanId } from "@/features/billing/plans";
 
 /**
- * Stripe adapter (hosted Checkout + Customer Portal): plain `fetch`, no SDK
- * dependency. Nothing is stored on our side: a subscription carries
- * `metadata.workspace_id`, and Stripe is asked for it when needed.
+ * Stripe adapter (hosted Checkout + Customer Portal + webhook signatures):
+ * plain `fetch`, no SDK dependency. A subscription carries
+ * `metadata.workspace_id`, which ties it to the workspace.
  */
 const API_BASE = "https://api.stripe.com/v1";
 const REQUEST_TIMEOUT_MS = 10_000;
+/** Stripe's default: a signed event older than this is treated as a replay. */
+const SIGNATURE_TOLERANCE_SECONDS = 300;
 
 /** A subscription in these states still occupies the workspace: never sell a second one. */
 const OCCUPYING_STATUSES = new Set(["active", "trialing", "past_due", "unpaid"]);
@@ -90,9 +93,75 @@ export async function findWorkspaceSubscription(
   );
   const current = data.find((subscription) => OCCUPYING_STATUSES.has(subscription.status));
   if (!current) return null;
-  const priceId = current.items.data[0]?.price.id;
-  const planId = (Object.keys(config.prices) as BillingPlanId[]).find((id) => config.prices[id] === priceId) ?? null;
-  return { customerId: current.customer, planId };
+  return { customerId: current.customer, planId: planOfPrice(config, current.items.data[0]?.price.id) };
+}
+
+function planOfPrice(config: StripeConfig, priceId: string | undefined): BillingPlanId | null {
+  return (Object.keys(config.prices) as BillingPlanId[]).find((id) => config.prices[id] === priceId) ?? null;
+}
+
+export function isOccupyingStatus(status: string): boolean {
+  return OCCUPYING_STATUSES.has(status);
+}
+
+export interface StripeSubscriptionState extends WorkspaceSubscription {
+  subscriptionId: string;
+  status: string;
+  /** `null`: not one of ours (no workspace in its metadata). */
+  workspaceId: string | null;
+}
+
+/** The subscription as Stripe has it right now. */
+export async function fetchSubscription(
+  config: StripeConfig,
+  subscriptionId: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<StripeSubscriptionState> {
+  const subscription = await stripeRequest<{
+    id: string;
+    status: string;
+    customer: string;
+    metadata?: { workspace_id?: string };
+    items: { data: { price: { id: string } }[] };
+  }>(config, `/subscriptions/${encodeURIComponent(subscriptionId)}`, {}, "GET", fetchImpl);
+  return {
+    subscriptionId: subscription.id,
+    status: subscription.status,
+    customerId: subscription.customer,
+    workspaceId: subscription.metadata?.workspace_id ?? null,
+    planId: planOfPrice(config, subscription.items.data[0]?.price.id),
+  };
+}
+
+export interface StripeEvent {
+  type: string;
+  data: { object: { id?: string; subscription?: string | null } };
+}
+
+/**
+ * The event, if `Stripe-Signature` proves it came from Stripe (HMAC-SHA256 of
+ * `<timestamp>.<raw body>` with the endpoint's signing secret), else `null`.
+ */
+export function parseSignedEvent(rawBody: string, signatureHeader: string | null, secret: string, nowSeconds = Date.now() / 1000): StripeEvent | null {
+  if (!signatureHeader) return null;
+  const parts = signatureHeader.split(",").map((part) => part.trim().split("=") as [string, string]);
+  const timestamp = parts.find(([key]) => key === "t")?.[1];
+  if (!timestamp || !/^\d+$/.test(timestamp) || Math.abs(nowSeconds - Number(timestamp)) > SIGNATURE_TOLERANCE_SECONDS) return null;
+
+  const expected = createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest();
+  // Stripe may send several v1 values while a signing secret is being rolled.
+  const valid = parts.some(([key, value]) => {
+    if (key !== "v1" || !value) return false;
+    const given = Buffer.from(value, "hex");
+    return given.length === expected.length && timingSafeEqual(given, expected);
+  });
+  if (!valid) return null;
+
+  try {
+    return JSON.parse(rawBody) as StripeEvent;
+  } catch {
+    return null;
+  }
 }
 
 /** URL of the Stripe-hosted payment page for one plan. */

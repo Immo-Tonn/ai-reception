@@ -6,7 +6,8 @@ import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { openBillingPortalAction, startCheckoutAction } from "@/server/actions/billing.actions";
 import { getSession } from "@/server/auth/session";
-import { findWorkspaceSubscription, getStripeConfig, type WorkspaceSubscription } from "@/server/billing/stripe";
+import { getStripeConfig, type WorkspaceSubscription } from "@/server/billing/stripe";
+import { getCurrentSubscription } from "@/server/billing/subscriptions";
 import { can } from "@/server/permissions/roles";
 import { getBusinessProfile } from "@/server/services/businessProfile.service";
 import { SettingsHeader } from "../SettingsHeader";
@@ -48,7 +49,7 @@ export default async function BillingPage({
       blockedNotice = m.notConfiguredNotice;
     } else {
       try {
-        subscription = await findWorkspaceSubscription(config, session.workspaceId);
+        subscription = await getCurrentSubscription(config, session.workspaceId);
       } catch (error) {
         console.error("[billing]", error instanceof Error ? error.message : "unknown failure");
         // Unknown state: selling a plan now could charge the workspace twice.

@@ -7,10 +7,10 @@ import { isBillingPlanId } from "@/features/billing/plans";
 import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { getSession } from "@/server/auth/session";
 import { assertCan } from "@/server/permissions/roles";
+import { getCurrentSubscription } from "@/server/billing/subscriptions";
 import {
   createCheckoutUrl,
   createPortalUrl,
-  findWorkspaceSubscription,
   getStripeConfig,
   type StripeConfig,
 } from "@/server/billing/stripe";
@@ -41,7 +41,7 @@ export async function startCheckoutAction(workspaceSlug: string, planId: string)
     if (!isBillingPlanId(planId)) throw new Error("unknown plan");
     const { config, workspaceId, pageUrl } = await billingContext(workspaceSlug);
     // Already subscribed (e.g. a stale tab): show the current plan instead of charging twice.
-    target = (await findWorkspaceSubscription(config, workspaceId))
+    target = (await getCurrentSubscription(config, workspaceId))
       ? page
       : await createCheckoutUrl(config, {
           planId,
@@ -60,7 +60,7 @@ export async function openBillingPortalAction(workspaceSlug: string): Promise<vo
   let target = `${page}?status=error`;
   try {
     const { config, workspaceId, pageUrl } = await billingContext(workspaceSlug);
-    const subscription = await findWorkspaceSubscription(config, workspaceId);
+    const subscription = await getCurrentSubscription(config, workspaceId);
     target = subscription ? await createPortalUrl(config, { customerId: subscription.customerId, returnUrl: pageUrl }) : page;
   } catch (error) {
     logFailure(error);
