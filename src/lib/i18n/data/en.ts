@@ -491,6 +491,40 @@ export const en = {
     keepEditing: "Keep editing",
     demoNote: "Demo workspace: this is example data and read-only. Open your own business to edit it.",
   },
+  billing: {
+    title: "Plan and billing",
+    subtitle: "Choose a plan. Payment is handled securely by Stripe.",
+    businessLabel: "Business",
+    perMonth: "/ month",
+    choose: "Choose plan",
+    redirecting: "Opening Stripe…",
+    currentBadge: "Your plan",
+    manage: "Manage subscription",
+    taxNote: "The final amount, including any taxes, is shown on the Stripe payment page before you pay.",
+    successNotice: "Payment complete, thank you. Your plan will appear here within about a minute.",
+    canceledNotice: "Payment canceled. You have not been charged.",
+    errorNotice: "Billing isn't available right now. Please try again later.",
+    notConfiguredNotice: "Online payment isn't set up yet.",
+    forbiddenNotice: "Only the business owner can manage the plan.",
+    demoNotice: "This is a demo business, so plans can't be purchased here.",
+    plans: {
+      start: {
+        name: "Start",
+        features: ["Calendar and appointments", "Client records", "Online booking: link, QR code and website widget"],
+        support: "Email support: reply within 48 hours",
+      },
+      business: {
+        name: "Business",
+        features: ["Everything in Start", "Jobs and waiting list", "Staff, resources and working hours", "Google Calendar busy times"],
+        support: "Email support: reply within 24 hours",
+      },
+      pro: {
+        name: "Pro",
+        features: ["Everything in Business", "Finance", "Analytics"],
+        support: "Priority support: reply within 4 business hours",
+      },
+    },
+  },
   settings: {
     businessProfile: {
       label: "Business profile",
@@ -515,6 +549,10 @@ export const en = {
     booking: {
       label: "Booking rules",
       description: "Auto-confirm, notice, booking window, start times.",
+    },
+    billing: {
+      label: "Plan and billing",
+      description: "Your plan, payment and invoices.",
     },
     integrations: {
       label: "Google Calendar",
