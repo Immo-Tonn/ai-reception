@@ -10,6 +10,7 @@
  */
 export const en = {
   common: {
+    healthDataWarning: "Do not enter health information.",
     saveStatus: { unsaved: "Unsaved changes", saving: "Saving…", saved: "Saved" },
     appName: "ServiceOS",
     showPassword: "Show password",
