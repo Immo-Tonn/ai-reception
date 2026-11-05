@@ -4,6 +4,24 @@
 
 ---
 
+## 2026-11-05 — Подтянуты обновления из `main`
+
+- В ветку `Artur` влита `origin/main` (коммит `3f15681`, PR #23), конфликтов не было.
+- Новое из `main`: подсказка о данных о здоровье в формах (`HealthDataHint`), проверка
+  безопасности GDPR (`gdprSecurity.test.ts`) и документация по GDPR.
+- Зависимости не менялись, `npm install` не нужен.
+
+**Проверка:** `npm test` — 1179 тестов прошло, 4 упало, 20 пропущено. Все 4 падения связаны
+с запуском на Windows, а не со слиянием (код ветки совпадает с `main`, кроме `AGENTS.md` и этого журнала):
+- `touchInteractivity`, `typographyWordBreak`, `teamStagingDiscovery` — тесты ждут пути с `/`,
+  а на Windows получают `\`;
+- `security.static` (`.env.example lists names only`) — по виду из-за окончаний строк CRLF
+  в `.env.example` при `core.autocrlf=true`.
+
+Тесты не исправлялись.
+
+---
+
 ## 2026-10-26 — Подтянуты обновления из `main`
 
 - Ветка `Artur` перемотана вперёд (fast-forward) до `origin/main` (коммит `f73ccb2`,
