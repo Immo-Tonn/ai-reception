@@ -8,6 +8,7 @@ import {
   RECOVERY_COOKIE_MAX_AGE_S,
   RECOVERY_FLAG_COOKIE,
 } from "@/lib/auth/recoveryFlag";
+import { parseRecoveryAudience, recoveryLoginPath, withAudience } from "@/lib/auth/recoveryAudience";
 import type { AuthErrorCode } from "@/server/auth/businessAuth";
 import {
   completePasswordReset,
@@ -33,9 +34,10 @@ export async function requestPasswordResetAction(_prev: ResetState, formData: Fo
   const parsed = resetEmailSchema.safeParse({ email: typed });
   if (!parsed.success) return { error: "invalid_input", email: typed };
 
+  const audience = parseRecoveryAudience(formData.get("audience"));
   const result = await requestPasswordResetCode(parsed.data.email);
   if (!result.ok) return { error: result.code, email: typed };
-  redirect(`/reset-password?email=${encodeURIComponent(parsed.data.email)}`);
+  redirect(withAudience("/reset-password", audience, { email: parsed.data.email }));
 }
 
 /** Step 2: check the code. A correct code opens a session and starts the strict window for the new password. */
@@ -57,18 +59,19 @@ export async function verifyResetCodeAction(_prev: ResetState, formData: FormDat
     path: "/",
     maxAge: RECOVERY_COOKIE_MAX_AGE_S,
   });
-  redirect("/reset-password/new");
+  redirect(withAudience("/reset-password/new", parseRecoveryAudience(formData.get("audience"))));
 }
 
 /** Step 3: set the new password inside the window. Success ends every session; the person signs in again. */
 export async function setNewPasswordAction(_prev: ResetState, formData: FormData): Promise<ResetState> {
   const store = await cookies();
+  const audience = parseRecoveryAudience(formData.get("audience"));
   const flag = store.get(RECOVERY_FLAG_COOKIE)?.value;
-  if (flag === undefined || !(await getCurrentUserSafe())) redirect("/forgot-password");
+  if (flag === undefined || !(await getCurrentUserSafe())) redirect(withAudience("/forgot-password", audience));
   if (isRecoveryFlagExpired(flag)) {
     await getBusinessAuth().signOut();
     store.delete(RECOVERY_FLAG_COOKIE);
-    redirect("/forgot-password?expired=1");
+    redirect(withAudience("/forgot-password", audience, { expired: "1" }));
   }
 
   const password = String(formData.get("password") ?? "");
@@ -80,12 +83,13 @@ export async function setNewPasswordAction(_prev: ResetState, formData: FormData
   if (!result.ok) return { error: result.code };
 
   store.delete(RECOVERY_FLAG_COOKIE);
-  redirect("/login?reset=done");
+  redirect(`${recoveryLoginPath(audience)}?reset=done`);
 }
 
 /** Leaves the reset: ends the recovery session and removes the lock. Also the way out after the window ran out. */
-export async function cancelPasswordResetAction(): Promise<void> {
+export async function cancelPasswordResetAction(formData?: FormData): Promise<void> {
+  const audience = parseRecoveryAudience(formData?.get("audience"));
   await getBusinessAuth().signOut();
   (await cookies()).delete(RECOVERY_FLAG_COOKIE);
-  redirect("/forgot-password");
+  redirect(withAudience("/forgot-password", audience));
 }

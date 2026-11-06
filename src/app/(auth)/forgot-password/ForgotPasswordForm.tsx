@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { Button, Input } from "@/components/ui";
+import type { RecoveryAudience } from "@/lib/auth/recoveryAudience";
 import type { Messages } from "@/lib/i18n";
 import { requestPasswordResetAction, type ResetState } from "@/server/actions/passwordReset.actions";
 import { resetErrorText } from "../_components/resetErrorText";
@@ -12,15 +13,18 @@ const initialState: ResetState = {};
 export function ForgotPasswordForm({
   messages,
   errors,
+  audience,
 }: {
   messages: Messages["passwordReset"];
   errors: Messages["authErrors"];
+  audience: RecoveryAudience;
 }) {
   const [state, formAction, isPending] = useActionState(requestPasswordResetAction, initialState);
 
   return (
     // suppressHydrationWarning: Chrome for iOS adds `__gcruniqueid` to forms before hydration.
     <form className={styles.form} action={formAction} suppressHydrationWarning>
+      <input type="hidden" name="audience" value={audience} suppressHydrationWarning />
       <Input
         label={messages.emailLabel}
         type="email"

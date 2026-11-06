@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { Button, Input } from "@/components/ui";
+import { withAudience, type RecoveryAudience } from "@/lib/auth/recoveryAudience";
 import type { Messages } from "@/lib/i18n";
 import { verifyResetCodeAction, type ResetState } from "@/server/actions/passwordReset.actions";
 import { resetErrorText } from "../_components/resetErrorText";
@@ -14,10 +15,12 @@ export function ResetCodeForm({
   initialEmail,
   messages,
   errors,
+  audience,
 }: {
   initialEmail: string;
   messages: Messages["passwordReset"];
   errors: Messages["authErrors"];
+  audience: RecoveryAudience;
 }) {
   const [state, formAction, isPending] = useActionState(verifyResetCodeAction, initialState);
   const email = state.email ?? initialEmail;
@@ -25,6 +28,7 @@ export function ResetCodeForm({
   return (
     // suppressHydrationWarning: Chrome for iOS adds `__gcruniqueid` to forms before hydration.
     <form className={styles.form} action={formAction} suppressHydrationWarning>
+      <input type="hidden" name="audience" value={audience} suppressHydrationWarning />
       <Input
         label={messages.emailLabel}
         type="email"
@@ -51,7 +55,7 @@ export function ResetCodeForm({
         {isPending ? messages.verifying : messages.verify}
       </Button>
       <p className={styles.signupPrompt}>
-        <Link className={styles.signupLink} href="/forgot-password">
+        <Link className={styles.signupLink} href={withAudience("/forgot-password", audience)}>
           {messages.requestNew}
         </Link>
       </p>

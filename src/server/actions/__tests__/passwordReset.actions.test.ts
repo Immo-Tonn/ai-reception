@@ -143,3 +143,37 @@ describe("cancel", () => {
     expect(store.delete).toHaveBeenCalledWith(RECOVERY_FLAG_COOKIE);
   });
 });
+
+describe("client audience (same flow, different way back)", () => {
+  const open = () => jar.set(RECOVERY_FLAG_COOKIE, String(Date.now() + 60_000));
+
+  it("the code page and the new-password page remember the client audience", async () => {
+    provider.requestPasswordResetCode.mockResolvedValue({ ok: true });
+    await expect(actions.requestPasswordResetAction({}, form({ email: "a@x.test", audience: "client" }))).rejects.toThrow("REDIRECT:/reset-password?email=a%40x.test&for=client");
+    provider.verifyPasswordResetCode.mockResolvedValue({ ok: true });
+    await expect(actions.verifyResetCodeAction({}, form({ email: "a@x.test", code: "123456", audience: "client" }))).rejects.toThrow("REDIRECT:/reset-password/new?for=client");
+  });
+
+  it("success returns to the CLIENT sign-in", async () => {
+    open();
+    provider.completePasswordReset.mockResolvedValue({ ok: true });
+    await expect(actions.setNewPasswordAction({}, form({ password: "new-password-1", confirm: "new-password-1", audience: "client" }))).rejects.toThrow("REDIRECT:/client/login?reset=done");
+  });
+
+  it("an expired window and a missing flag go back to the client start", async () => {
+    await expect(actions.setNewPasswordAction({}, form({ password: "new-password-1", confirm: "new-password-1", audience: "client" }))).rejects.toThrow("REDIRECT:/forgot-password?for=client");
+    jar.set(RECOVERY_FLAG_COOKIE, String(Date.now() - 1));
+    await expect(actions.setNewPasswordAction({}, form({ password: "new-password-1", confirm: "new-password-1", audience: "client" }))).rejects.toThrow("REDIRECT:/forgot-password?expired=1&for=client");
+  });
+
+  it("cancel keeps the audience", async () => {
+    await expect(actions.cancelPasswordResetAction(form({ audience: "client" }))).rejects.toThrow("REDIRECT:/forgot-password?for=client");
+    expect(provider.signOut).toHaveBeenCalled();
+  });
+
+  it("an unknown audience value can never choose where the person goes: it counts as business", async () => {
+    open();
+    provider.completePasswordReset.mockResolvedValue({ ok: true });
+    await expect(actions.setNewPasswordAction({}, form({ password: "new-password-1", confirm: "new-password-1", audience: "//evil.example" }))).rejects.toThrow("REDIRECT:/login?reset=done");
+  });
+});
