@@ -67,6 +67,8 @@ afterAll(async () => {
 describe("0032 client archiving", () => {
   it("is idempotent as a migration; owner and admin hold clients.archive", async () => {
     await db.exec(readFileSync(path.join(migrationsDir, "0032_client_archiving.sql"), "utf8"));
+    // 0033 replaces the function bodies of this migration: replay in order
+    await db.exec(readFileSync(path.join(migrationsDir, "0033_audit_log_protection.sql"), "utf8"));
     const roles = await q<{ role: string }>("select role::text from role_permissions where permission='clients.archive' order by role");
     expect(roles.map((r) => r.role).sort()).toEqual(["admin", "owner"]);
   });
@@ -136,17 +138,26 @@ describe("0032 client archiving", () => {
 
   it("a failed audit entry rolls the status back, in both directions", async () => {
     const c = await newClient(ws, "Rollback");
-    await db.exec(`create function public.test_audit_fail() returns trigger language plpgsql as $$ begin raise exception 'forced_audit_failure'; end; $$;
-      create trigger test_audit_fail before insert on public.audit_logs for each row execute function public.test_audit_fail();`);
+    const failOn = () =>
+      db.exec(`create function public.test_audit_fail() returns trigger language plpgsql as $$ begin raise exception 'forced_audit_failure'; end; $$;
+        create trigger test_audit_fail before insert on public.audit_logs for each row execute function public.test_audit_fail();`);
+    const failOff = () => db.exec("drop trigger test_audit_fail on public.audit_logs; drop function public.test_audit_fail();");
+    // The audit entry is now written by a trigger in the same transaction: a failing insert still rolls the status back.
+    await failOn();
     try {
       expect(await errOf(setArchived(user(OWNER), c, true))).toMatch(/forced_audit_failure/);
       expect(await archivedAt(c)).toBeNull();
-      await q("update clients set archived_at = now() where id=$1", [c]);
-      const at = await archivedAt(c);
+    } finally {
+      await failOff();
+    }
+    await q("update clients set archived_at = now() where id=$1", [c]);
+    const at = await archivedAt(c);
+    await failOn();
+    try {
       expect(await errOf(setArchived(user(OWNER), c, false))).toMatch(/forced_audit_failure/);
       expect(await archivedAt(c)).toEqual(at);
     } finally {
-      await db.exec("drop trigger test_audit_fail on public.audit_logs; drop function public.test_audit_fail();");
+      await failOff();
     }
     expect((await setArchived(user(OWNER), c, false)).status).toBe("restored"); // works again afterwards
   });
