@@ -773,6 +773,10 @@ export const de: Messages = {
     rescheduled: "Verschoben",
   },
   quickActions: {
+    clientArchivedNotice: "Kunde im Archiv",
+    restoreClient: "Kunden wiederherstellen",
+    clientRestored: "Der Kunde wurde wiederhergestellt.",
+    restoreFailed: "Der Kunde konnte nicht wiederhergestellt werden und bleibt im Archiv.",
     correctionManagerOnly: "Ein erfasstes Ergebnis können nur Manager, Admin oder Inhaber korrigieren.",
     title: "Termin",
     edit: "Bearbeiten",
@@ -1160,6 +1164,9 @@ export const de: Messages = {
     closeModal: "Schließen",
   },
   inbox: {
+    clientArchivedBadge: "Kunde im Archiv",
+    restoreClient: "Kunden wiederherstellen",
+    restoreClientFailed: "Der Kunde konnte nicht wiederhergestellt werden und bleibt im Archiv.",
     title: "Posteingang",
     searchPlaceholder: "Unterhaltungen durchsuchen",
     filterAll: "Alle",
