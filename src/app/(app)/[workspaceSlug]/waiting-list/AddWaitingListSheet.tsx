@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { HealthDataHint } from "@/components/privacy/HealthDataHint";
 import { Button, Input, Sheet } from "@/components/ui";
 import { getServiceLabel } from "@/features/services/label";
 import { getStaffLabel } from "@/features/staff/label";
@@ -282,7 +283,9 @@ function WaitingListForm({
         value={notes}
         onChange={(event) => setNotes(event.target.value)}
         maxLength={1000}
+        aria-describedby="waiting-list-notes-health-hint"
       />
+      <HealthDataHint id="waiting-list-notes-health-hint" />
 
       {error ? (
         <p role="alert" className={styles.error}>
