@@ -46,6 +46,7 @@ After an explicit disconnect the normal working schedule applies.
 | Schedule | `vercel.json`: `17 3 * * *` (daily, 03:17 UTC). Hobby plan: once per day max, run time ±59 min |
 | Auth | `Authorization: Bearer <CRON_SECRET>` (Vercel sends it when `CRON_SECRET` is set); timing-safe compare; **closed** (401) when no secret or a secret shorter than 16 chars is configured |
 | Steps | 1. clear busy caches not refreshed for 24 h · 2. delete used links older than 30 days · 3. delete unused links expired > 30 days · 4. remove connections of inactive staff |
+| GDPR retention steps (stage 3, after the calendar steps, independent) | 5. delete booking claims that were **never claimed** and expired > 30 days ago (30 days provisional, needs approval; max 500 per run; claimed or still valid claims and claims of a still open appointment are kept) · 6. **dry run only**: count anonymisation candidates (36 months after the last completed visit, with blockers) and Inbox notifications older than 12 months — nothing is changed; `AUTO_ANONYMIZE_ENABLED` / `INBOX_RETENTION_DELETE_ENABLED` activate nothing yet. Periods provisional (Needs legal review). See GDPR_IMPLEMENTATION_PLAN.md |
 | Idempotent | yes — a repeated or late run deletes nothing twice |
 | Failures | each step independent; a failing step is listed by name in `failedSteps`, the others still run; HTTP 500 if any step failed |
 | Logging | `[calendar cleanup] {"staleCachesCleared":n,…}` — counts only |
