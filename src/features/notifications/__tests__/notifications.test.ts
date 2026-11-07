@@ -6,7 +6,6 @@ import type { Appointment } from "@/features/appointments/types";
 import {
   createNotificationService,
   notificationService,
-  type NotificationService,
 } from "../notificationService";
 import { createConsoleNotificationProvider } from "../providers/ConsoleNotificationProvider";
 import { defaultNotificationPreferences } from "../preferences";
