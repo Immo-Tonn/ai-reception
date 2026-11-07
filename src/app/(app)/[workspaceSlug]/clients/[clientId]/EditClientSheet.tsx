@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button, Input, Sheet } from "@/components/ui";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { HealthDataHint } from "@/components/privacy/HealthDataHint";
 import { describeSaveError } from "@/lib/repository/describeSaveError";
 import type { Messages } from "@/lib/i18n";
 import type { ClientRecord } from "@/features/clients/types";
@@ -72,7 +73,9 @@ export function EditClientSheet({
             maxLength={2000}
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
+            aria-describedby="client-notes-health-hint"
           />
+          <HealthDataHint id="client-notes-health-hint" />
         </label>
         <label className={styles.checkRow}>
           <input suppressHydrationWarning type="checkbox" checked={vip} onChange={(event) => setVip(event.target.checked)} />

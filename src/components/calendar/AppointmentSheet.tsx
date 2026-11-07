@@ -26,6 +26,7 @@ import { getResourceLabel } from "@/features/resources/label";
 import type { WorkingHoursProfile } from "@/features/workingHours/types";
 import type { Locale, Messages } from "@/lib/i18n";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { HealthDataHint } from "@/components/privacy/HealthDataHint";
 import { describeSaveError } from "@/lib/repository/describeSaveError";
 import styles from "./AppointmentSheet.module.css";
 import { newLocalId } from "@/lib/browser";
@@ -610,7 +611,9 @@ export function AppointmentSheet({
             placeholder={messages.notesPlaceholder}
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
+            aria-describedby="appointment-notes-health-hint"
           />
+          <HealthDataHint id="appointment-notes-health-hint" />
         </div>
 
         <div className={styles.section}>
