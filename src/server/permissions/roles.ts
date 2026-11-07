@@ -14,6 +14,8 @@ export const roles: Role[] = ["owner", "admin", "manager", "staff", "accountant"
 
 export type Permission =
   | "appointments.view"
+  /** Archive / restore a client (reversible). Owner and admin; re-checked in the database. */
+  | "clients.archive"
   | "appointments.create"
   | "appointments.edit"
   | "appointments.cancel"
@@ -49,6 +51,7 @@ export type Permission =
 export const rolePermissions: Record<Role, Permission[]> = {
   owner: [
     "appointments.view",
+    "clients.archive",
     "appointments.create",
     "appointments.edit",
     "appointments.cancel",
@@ -73,6 +76,7 @@ export const rolePermissions: Record<Role, Permission[]> = {
   ],
   admin: [
     "appointments.view",
+    "clients.archive",
     "appointments.create",
     "appointments.edit",
     "appointments.cancel",
