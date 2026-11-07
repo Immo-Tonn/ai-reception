@@ -2,6 +2,7 @@ import type { Messages } from "../index";
 
 export const ru: Messages = {
   common: {
+    healthDataWarning: "Не вносите сведения о здоровье.",
     saveStatus: { unsaved: "Есть несохранённые изменения", saving: "Сохраняем…", saved: "Сохранено" },
     appName: "ServiceOS",
     showPassword: "Показать пароль",

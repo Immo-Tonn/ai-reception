@@ -87,3 +87,24 @@ to a new project goes through "Duplicate project".
 - [ ] Where encrypted backups live (off-laptop location) and who holds the password (2 people)
 - [ ] Backup retention period (Needs legal review) and when to delete the local unencrypted copies
 - [ ] Restore drill schedule
+
+## 7. Re-applying anonymisations after a restore (erasure ledger, GDPR stage 1)
+A restored backup brings back personal data of clients that were anonymised after the backup was made.
+Migration 0028 keeps `client_erasure_ledger` (only `workspace_id`, `client_id`, `erased_at` — no names or contacts)
+and the function `reapply_client_erasures(entries jsonb)` (service role only).
+
+**Procedure after a restore (not automated):**
+1. Before the restore, export the current ledger (service role):
+   `select workspace_id, client_id from client_erasure_ledger` → JSON array (ids only).
+2. Restore the backup (§3).
+3. Call `select public.reapply_client_erasures('<the JSON array>'::jsonb)` with the service role. It anonymises
+   every listed client again (idempotent) and returns `reapplied` / `already` / `missing` counts.
+4. Check the counts; `missing` means the client did not exist in the backup (nothing to do).
+
+**Limitation / team decision:** the ledger lives inside the same database. If the database itself is lost and
+an older backup is restored, the ledger rows written after that backup are lost too. A **copy of the ledger
+outside the database** is needed (e.g. a regular export of the ids to the same secure location as the encrypted
+backups). Where and how often — team decision; not implemented.
+
+- [ ] Decide the off-database copy of the erasure ledger (location, frequency, who has access)
+- [ ] Add the re-apply step to the restore drill

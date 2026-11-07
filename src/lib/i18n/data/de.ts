@@ -2,6 +2,7 @@ import type { Messages } from "../index";
 
 export const de: Messages = {
   common: {
+    healthDataWarning: "Bitte keine Gesundheitsdaten eintragen.",
     saveStatus: { unsaved: "Ungespeicherte Änderungen", saving: "Wird gespeichert…", saved: "Gespeichert" },
     appName: "ServiceOS",
     showPassword: "Passwort anzeigen",
