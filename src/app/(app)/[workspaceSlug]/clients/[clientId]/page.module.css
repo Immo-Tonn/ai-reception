@@ -225,6 +225,13 @@
   cursor: pointer;
 }
 
+/* GDPR erasure (owner only): a quiet secondary action at the end of the card. */
+.anonymizeButton {
+  margin-inline-start: 0;
+  margin-top: var(--space-6);
+  color: var(--text-secondary);
+}
+
 /* History rows open the appointment in the calendar (status changes and corrections live there). */
 a.row {
   color: inherit;
