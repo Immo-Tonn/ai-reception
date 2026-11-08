@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import type { KeyboardEvent } from "react";
 import { Icon } from "@/components/ui";
 import { useAppointments } from "@/features/appointments/useAppointments";
 import { useInvoices } from "@/features/finance/useInvoices";
+import { useFeatureEnabled } from "@/features/workspace/FeatureFlags";
 import { calculateOutstanding } from "@/features/finance/calculations";
 import { isOpenInvoice } from "@/features/finance/status";
 import { useWorkspaceConfig, useWorkspaceToday } from "@/features/workspace/WorkspaceCatalog";
@@ -21,7 +23,7 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-/** Every attention/schedule row is a real link — <a> gives native Enter
+/** Every attention/schedule row is a real link — <Link> gives native Enter
  * handling, click-to-open-in-new-tab, and crawlable hrefs "for free";
  * browsers just don't fire it on Space the way they do for <button>, so
  * this one handler (shared by every row below) adds that back. */
@@ -51,7 +53,8 @@ export function TodayView({
   dashboard: Messages["dashboard"];
 }) {
   const { items: appointments } = useAppointments(workspaceSlug);
-  const { items: invoices } = useInvoices(workspaceSlug);
+  const financeOn = useFeatureEnabled("finance");
+  const { items: invoices } = useInvoices(workspaceSlug, financeOn);
   const workspaceServices = useWorkspaceConfig(workspaceSlug).services;
 
   const todayIso = useWorkspaceToday(workspaceSlug);
@@ -105,40 +108,28 @@ export function TodayView({
         <p className={styles.subtitle}>{dashboard.subtitle}</p>
       </header>
 
-      <a
-        href={`/${workspaceSlug}/assistant`}
-        className={styles.assistantEntry}
-        onKeyDown={activateOnSpace}
-      >
-        <span className={styles.assistantEntryIcon}>
-          <Icon name="assistant" size={18} />
-        </span>
-        <span className={styles.assistantEntryBody}>
-          <span className={styles.assistantEntryTitle}>{dashboard.askAssistant}</span>
-          <span className={styles.assistantEntryHint}>{dashboard.askAssistantHint}</span>
-        </span>
-        <Icon name="chevronRight" size={18} />
-      </a>
-
-      <section className={styles.metrics}>
-        <div className={styles.metricCard} style={{ background: "var(--tint-blue)", color: "var(--color-accent-blue)" }}>
+      {/* Neutral cards: colour is reserved for the one number that needs attention. */}
+      <section className={`${styles.metrics} ${financeOn ? styles.metricsFour : ""}`}>
+        <div className={styles.metricCard}>
           <span className={styles.metricLabel}>{dashboard.cardToday}</span>
           <span className={styles.metricValue}>{todayAppointments.length}</span>
           <span className={styles.metricMeta}>{dashboard.cardBookings}</span>
         </div>
-        <div className={styles.metricCard} style={{ background: "var(--tint-mint)", color: "var(--color-accent-mint)" }}>
+        <div className={`${styles.metricCard} ${styles.metricWide}`}>
           <span className={styles.metricLabel}>{dashboard.cardRevenue}</span>
           <span className={styles.metricValue}>{formatCurrency(revenueToday, "EUR", locale)}</span>
         </div>
-        <div className={styles.metricCard} style={{ background: "var(--tint-peach)", color: "var(--color-accent-peach)" }}>
+        <div className={styles.metricCard}>
           <span className={styles.metricLabel}>{dashboard.cardRequests}</span>
-          <span className={styles.metricValue}>{pendingToday.length}</span>
+          <span className={`${styles.metricValue} ${pendingToday.length > 0 ? styles.metricValueAttention : ""}`}>{pendingToday.length}</span>
           <span className={styles.metricMeta}>{dashboard.cardRequestsNew}</span>
         </div>
-        <div className={styles.metricCard} style={{ background: "var(--tint-lavender)", color: "var(--color-accent-lavender)" }}>
-          <span className={styles.metricLabel}>{dashboard.cardOutstanding}</span>
-          <span className={styles.metricValue}>{formatCurrency(outstanding, "EUR", locale)}</span>
-        </div>
+        {financeOn ? (
+          <div className={styles.metricCard}>
+            <span className={styles.metricLabel}>{dashboard.cardOutstanding}</span>
+            <span className={styles.metricValue}>{formatCurrency(outstanding, "EUR", locale)}</span>
+          </div>
+        ) : null}
       </section>
 
       {attentionItems.length > 0 && (
@@ -146,7 +137,7 @@ export function TodayView({
           <h2 className={styles.sectionTitle}>{dashboard.needsAttention}</h2>
           <div className={styles.attentionList}>
             {attentionItems.map((item) => (
-              <a
+              <Link
                 key={item.id}
                 href={item.href}
                 className={styles.attentionItem}
@@ -159,7 +150,7 @@ export function TodayView({
                 <span className={styles.attentionAction} aria-hidden="true">
                   <Icon name="chevronRight" size={16} />
                 </span>
-              </a>
+              </Link>
             ))}
           </div>
         </section>
@@ -176,7 +167,7 @@ export function TodayView({
             {todayAppointments.map((item) => {
               const isPrivate = item.visibility === "private";
               return (
-                <a
+                <Link
                   key={item.id}
                   href={`/${workspaceSlug}/calendar`}
                   className={styles.scheduleRow}
@@ -213,12 +204,28 @@ export function TodayView({
                       </span>
                     )}
                   </div>
-                </a>
+                </Link>
               );
             })}
           </div>
         )}
       </section>
+
+      {/* Secondary: the day's schedule comes first. */}
+      <Link
+        href={`/${workspaceSlug}/assistant`}
+        className={styles.assistantEntry}
+        onKeyDown={activateOnSpace}
+      >
+        <span className={styles.assistantEntryIcon}>
+          <Icon name="assistant" size={18} />
+        </span>
+        <span className={styles.assistantEntryBody}>
+          <span className={styles.assistantEntryTitle}>{dashboard.askAssistant}</span>
+          <span className={styles.assistantEntryHint}>{dashboard.askAssistantHint}</span>
+        </span>
+        <Icon name="chevronRight" size={18} />
+      </Link>
     </main>
   );
 }

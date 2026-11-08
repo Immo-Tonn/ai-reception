@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Repository } from "./types";
+import { trackBusy } from "@/lib/ui/busy";
 
 /**
  * Generic client hook over a Repository. Components use the per-feature
@@ -11,13 +12,16 @@ import type { Repository } from "./types";
 export function useRepositoryCollection<T extends { id: string }>(
   repository: Repository<T>,
 ) {
-  const [items, setItems] = useState<T[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  // Items are stored WITH the repository they came from: `loaded` is derived
+  // (false right after the repository changes) and a late answer from a
+  // previous repository can never overwrite the current one.
+  const [state, setState] = useState<{ source: Repository<T> | null; items: T[] }>({ source: null, items: [] });
+  const items = state.items;
+  const loaded = state.source === repository;
 
   const refresh = useCallback(async () => {
     const list = await repository.list();
-    setItems(list);
-    setLoaded(true);
+    setState({ source: repository, items: list });
   }, [repository]);
 
   // Re-fetch whenever `repository` itself changes (not just on mount) —
@@ -26,35 +30,53 @@ export function useRepositoryCollection<T extends { id: string }>(
   // mounted across a client-side navigation between workspace slugs
   // (Next.js reuses the layout/page instance for a dynamic segment
   // change), so a mount-only effect would keep showing the previous
-  // workspace's data. `loaded` resets too, so consumers gating on it
-  // (e.g. ClientDetailView) don't flash stale content while this loads.
+  // workspace's data. `loaded` is false until THIS repository answered, so
+  // consumers gating on it (e.g. ClientDetailView) don't flash stale content.
   useEffect(() => {
-    setLoaded(false);
-    refresh();
-  }, [refresh]);
+    let cancelled = false;
+    void repository.list().then((list) => {
+      if (!cancelled) setState({ source: repository, items: list });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [repository]);
 
   const create = useCallback(
     async (item: T) => {
-      const created = await repository.create(item);
-      await refresh();
-      return created;
+      // The whole change (save + reload) shows the app-wide busy bar.
+      return trackBusy(
+        (async () => {
+          const created = await repository.create(item);
+          await refresh();
+          return created;
+        })(),
+      );
     },
     [repository, refresh],
   );
 
   const update = useCallback(
     async (id: string, patch: Partial<T>) => {
-      const updated = await repository.update(id, patch);
-      await refresh();
-      return updated;
+      return trackBusy(
+        (async () => {
+          const updated = await repository.update(id, patch);
+          await refresh();
+          return updated;
+        })(),
+      );
     },
     [repository, refresh],
   );
 
   const remove = useCallback(
     async (id: string) => {
-      await repository.remove(id);
-      await refresh();
+      await trackBusy(
+        (async () => {
+          await repository.remove(id);
+          await refresh();
+        })(),
+      );
     },
     [repository, refresh],
   );

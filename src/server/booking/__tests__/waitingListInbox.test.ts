@@ -239,7 +239,8 @@ describe("Inbox: appointment triggers", () => {
     expect(ev.preview.startsWith("Guest · Cut · ")).toBe(true);
     expect(JSON.stringify(ev)).not.toMatch(/Jones|guest\.jones|secret/);
     expect(ev.client_id).toBeTruthy();
-    expect(ev.dedupe_key).toMatch(/^appointment:[0-9a-f-]{36}:pending:\d+$/);
+    // 0027: one event per (appointment, event code, transaction).
+    expect(ev.dedupe_key).toMatch(/^appointment:[0-9a-f-]{36}:booking\.created:\d+$/);
     expect(ev.entity_id).toBeTruthy();
   });
 
@@ -296,12 +297,13 @@ describe("Inbox: appointment triggers", () => {
     expect(await n()).toBe(before);
     // 2. plain duplicate insert violates the unique key
     await expect(q(`insert into inbox_events (workspace_id, type, title, dedupe_key) values ($1,'booking_created','dup',$2)`, [wsId, keyRow.dedupe_key])).rejects.toMatchObject({ code: "23505" });
-    // 3. cancel -> reopen -> cancel at the same time: the second cancel is the same key
+    // 3. 0027: cancel -> restore -> cancel are REAL repeated changes, so each cancel is its own event
+    //    (before 0027 the second one was silently swallowed by the time-based key).
     as(OWNER);
     await current.from("appointments").update({ status: "cancelled" }).eq("id", id);
     await current.from("appointments").update({ status: "pending" }).eq("id", id);
     await current.from("appointments").update({ status: "cancelled" }).eq("id", id);
-    expect((await inbox(["booking_cancelled"])).filter((e) => e.entity_id === id)).toHaveLength(1);
+    expect((await inbox(["booking_cancelled"])).filter((e) => e.entity_id === id)).toHaveLength(2);
     // 4. the service helper reports a duplicate as "not stored"
     const s = await session(OWNER);
     const input = { type: "work" as const, title: "Lead converted", dedupeKey: `work:test:${id}` };

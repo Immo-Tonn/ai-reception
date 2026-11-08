@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { en } from "@/lib/i18n/data/en";
 import { de } from "@/lib/i18n/data/de";
@@ -70,7 +70,9 @@ describe("client navigation", () => {
     expect(nav).toContain("/client/book");
     expect(nav).toContain("/client/bookings");
     expect(nav).toContain('aria-current');
-    expect(nav).not.toMatch(/\/client\/(profile|account)/);
+    // The Profile page exists since the client profile was added; the nav links to it.
+    expect(nav).toContain("/client/profile");
+    expect(existsSync("src/app/client/profile/page.tsx")).toBe(true);
     expect(read("src/app/client/bookings/BookingsView.tsx")).toContain("<ClientNav");
     expect(read("src/app/client/book/page.tsx")).toContain("<ClientNav");
     expect(read("src/app/client/bookings/BookingsView.tsx")).toContain("/client/book");

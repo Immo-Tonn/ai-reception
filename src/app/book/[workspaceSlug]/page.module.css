@@ -549,8 +549,12 @@
   color: var(--color-ink);
 }
 
-/* German compounds: hyphenate instead of overflowing the screen. */
-:global(html[lang="de"]) .stepTitle {
-  hyphens: auto;
-  overflow-wrap: anywhere;
+
+.calendarAutoNote {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 var(--space-4);
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
 }

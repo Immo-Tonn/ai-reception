@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Icon, type IconName } from "../Icon/Icon";
 import { THEME_COOKIE, type Theme } from "@/lib/theme/theme";
 import styles from "./ThemeSwitcher.module.css";
+import { writePreferenceCookie } from "@/lib/browser";
 
 const options: { value: Theme; icon: IconName }[] = [
   { value: "light", icon: "sun" },
@@ -17,14 +18,14 @@ export function ThemeSwitcher({
   labels,
 }: {
   initialTheme: Theme;
-  labels: { light: string; dark: string; system: string };
+  labels: { label: string; light: string; dark: string; system: string };
 }) {
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const router = useRouter();
 
   function selectTheme(value: Theme) {
     setTheme(value);
-    document.cookie = `${THEME_COOKIE}=${value}; path=/; max-age=31536000; SameSite=Lax`;
+    writePreferenceCookie(THEME_COOKIE, value);
     const root = document.documentElement;
     if (value === "system") {
       root.removeAttribute("data-theme");
@@ -35,7 +36,7 @@ export function ThemeSwitcher({
   }
 
   return (
-    <div className={styles.group} role="radiogroup" aria-label="Theme">
+    <div className={styles.group} role="radiogroup" aria-label={labels.label}>
       {options.map((option) => (
         <button
           key={option.value}

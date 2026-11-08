@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, Icon, Input } from "@/components/ui";
 import { uniqueSlotTimes, type AvailableSlot } from "@/features/appointments/availability";
 import {
@@ -29,10 +29,12 @@ import { resolveToday } from "@/lib/time/zonedTime";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency, formatDate } from "@/lib/i18n/format";
 import styles from "./page.module.css";
+import { useClientValue } from "@/lib/hooks/useClientValue";
+import { AddToCalendar } from "@/components/calendar/AddToCalendar";
+import { wallToInstant } from "@/lib/time/zonedTime";
 
 const DATE_STRIP_DAYS = 28;
 
-const subscribeNever = () => () => {};
 
 type Step = "service" | "staff" | "date" | "time" | "details" | "confirmation";
 const steps: Step[] = ["service", "staff", "date", "time", "details", "confirmation"];
@@ -45,6 +47,8 @@ export function BookingWizard({
   branding,
   profile,
   timezone = null,
+  backToBusinessesHref = null,
+  calendarConnected = false,
   services,
   staffList,
   chromeless = false,
@@ -58,6 +62,10 @@ export function BookingWizard({
   profile?: PublicProfile;
   /** Business IANA zone; null (demo presets) keeps browser-local "today". */
   timezone?: string | null;
+  /** Set when the visitor came from the ServiceOS business list (never for a business's own shared link). */
+  backToBusinessesHref?: string | null;
+  /** Signed-in client whose own calendar already subscribes to their bookings. */
+  calendarConnected?: boolean;
   /** Catalog of THIS workspace, loaded by the server page (demo preset or the database). */
   services: ServiceDefinition[];
   staffList: StaffMember[];
@@ -66,10 +74,12 @@ export function BookingWizard({
 }) {
   const { identity } = useClientAuth();
   const [step, setStep] = useState<Step>("service");
+  // Bumped on every step change: entering the date / time step always asks the server again
+  // (free times change), exactly like before.
+  const [stepVisit, setStepVisit] = useState(0);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null | "any">("any");
   const [selectedDate, setSelectedDate] = useState(() => resolveToday(new Date(), timezone));
-  const [slotsResult, setSlotsResult] = useState<{ key: string; slots: AvailableSlot[] } | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
   const [result, setResult] = useState<PublicBookingResult | null>(null);
   // null = untouched: the field shows the signed-in client's details (if any),
@@ -107,13 +117,18 @@ export function BookingWizard({
   const dateStrip = useMemo(() => buildDateStrip(new Date(), timezone, { maxDaysAhead: DATE_STRIP_DAYS - 1 }), [timezone]);
   // Days that really have slots (server-computed with the same engine as the time step).
   // null = not known yet / could not be determined: every day stays selectable then.
-  const [datesResult, setDatesResult] = useState<{ key: string; dates: Set<string> | null } | null>(null);
-  const datesKey = `${workspaceSlug}|${selectedServiceId}|${selectedStaffId}|${dateStrip[0]}|${dateStrip.length}`;
-  const datesLoading = step === "date" && !!selectedServiceId && datesResult?.key !== datesKey;
-  const availableDates = datesResult?.key === datesKey ? datesResult.dates : null;
+  // Each answer is stored WITH the request it belongs to, so "loading" is derived (no setState
+  // in an effect) and a late answer for an older request can never overwrite a newer one.
+  const datesRequest =
+    step === "date" && selectedServiceId
+      ? `${stepVisit}|${selectedServiceId}|${selectedStaffId}|${dateStrip[0]}|${dateStrip.length}`
+      : null;
+  const [datesAnswer, setDatesAnswer] = useState<{ request: string; dates: Set<string> | null } | null>(null);
+  const datesLoading = datesRequest !== null && datesAnswer?.request !== datesRequest;
+  const availableDates = datesAnswer && datesAnswer.request === datesRequest ? datesAnswer.dates : null;
   // Slots and booked times are the business's wall clock. Say so when the
   // visitor's own zone differs (detected after mount to keep SSR stable).
-  const visitorZone = useSyncExternalStore(subscribeNever, browserTimeZone, () => null);
+  const visitorZone = useClientValue(browserTimeZone, null);
   const zoneNote =
     timezone && visitorZone && visitorZone !== timezone
       ? booking.timesInBusinessZone.replace("{city}", zoneCityLabel(timezone)).replace("{zone}", timezone)
@@ -137,30 +152,32 @@ export function BookingWizard({
   const showPhoneError = Boolean(fieldErrors.phone) && (touched.phone || submitAttempted);
 
   useEffect(() => {
-    if (step !== "date" || !selectedServiceId) return;
+    if (!datesRequest || !selectedServiceId) return;
     let cancelled = false;
     const staffId = selectedStaffId === "any" ? null : selectedStaffId;
     getPublicBookingService(workspaceSlug)
       .getAvailableDates(workspaceSlug, selectedServiceId, staffId, dateStrip[0], dateStrip.length)
       .then((dates) => {
-        if (!cancelled) setDatesResult({ key: datesKey, dates: dates ? new Set(dates) : null });
+        if (!cancelled) setDatesAnswer({ request: datesRequest, dates: dates ? new Set(dates) : null });
       })
       .catch((err) => {
         if (cancelled) return;
-        setDatesResult({ key: datesKey, dates: null });
+        // Unknown = every day stays selectable.
+        setDatesAnswer({ request: datesRequest, dates: null });
         if (err instanceof BookingRateLimitedError) setError(booking.rateLimitedError);
       });
     return () => {
       cancelled = true;
     };
-  }, [step, workspaceSlug, selectedServiceId, selectedStaffId, dateStrip, datesKey, booking.rateLimitedError]);
+  }, [datesRequest, workspaceSlug, selectedServiceId, selectedStaffId, dateStrip, booking.rateLimitedError]);
 
-  const slotsKey = `${workspaceSlug}|${selectedServiceId}|${selectedStaffId}|${selectedDate}`;
-  const slotsLoading = step === "time" && !!selectedServiceId && slotsResult?.key !== slotsKey;
-  const slots = slotsResult?.key === slotsKey ? slotsResult.slots : [];
+  const slotsRequest = step === "time" && selectedServiceId ? `${stepVisit}|${selectedServiceId}|${selectedStaffId}|${selectedDate}` : null;
+  const [slotsAnswer, setSlotsAnswer] = useState<{ request: string; slots: AvailableSlot[] } | null>(null);
+  const slotsLoading = slotsRequest !== null && slotsAnswer?.request !== slotsRequest;
+  const slots = slotsAnswer && slotsAnswer.request === slotsRequest ? slotsAnswer.slots : [];
 
   useEffect(() => {
-    if (step !== "time" || !selectedServiceId) return;
+    if (!slotsRequest || !selectedServiceId) return;
     let cancelled = false;
     const staffId = selectedStaffId === "any" ? null : selectedStaffId;
     getPublicBookingService(workspaceSlug)
@@ -168,17 +185,17 @@ export function BookingWizard({
       // "Any specialist" yields one slot per free specialist per time — the
       // visitor sees each time once; the assignee is resolved at booking.
       .then((all) => {
-        if (!cancelled) setSlotsResult({ key: slotsKey, slots: uniqueSlotTimes(all) });
+        if (!cancelled) setSlotsAnswer({ request: slotsRequest, slots: uniqueSlotTimes(all) });
       })
       .catch((err) => {
         if (cancelled) return;
-        setSlotsResult({ key: slotsKey, slots: [] });
+        setSlotsAnswer({ request: slotsRequest, slots: [] });
         if (err instanceof BookingRateLimitedError) setError(booking.rateLimitedError);
       });
     return () => {
       cancelled = true;
     };
-  }, [step, workspaceSlug, selectedServiceId, selectedStaffId, selectedDate, slotsKey, booking.rateLimitedError]);
+  }, [slotsRequest, workspaceSlug, selectedServiceId, selectedStaffId, selectedDate, booking.rateLimitedError]);
 
   // Embed resizing (§3): tell the embedding page how tall we are so an
   // iframe embed can size itself instead of showing a scrollbar. Messages
@@ -219,6 +236,7 @@ export function BookingWizard({
   function goTo(next: Step) {
     setError(null);
     setStep(next);
+    setStepVisit((n) => n + 1);
   }
 
   function stepIndex(s: Step) {
@@ -258,6 +276,7 @@ export function BookingWizard({
       }
       setError(err instanceof BookingRateLimitedError ? booking.rateLimitedError : booking.slotTakenError);
       setStep("time");
+      setStepVisit((n) => n + 1); // reload the times: the chosen one was just taken
     } finally {
       setSubmitting(false);
     }
@@ -289,6 +308,12 @@ export function BookingWizard({
       <div className={`${styles.content} ${step === "details" ? styles.contentDetails : ""}`}>
         {step === "service" && (
           <>
+            {backToBusinessesHref ? (
+              <Link href={backToBusinessesHref} className={styles.stepBack}>
+                <Icon name="arrowLeft" size={16} strokeWidth={1.8} />
+                {client.allBusinesses}
+              </Link>
+            ) : null}
             {profile ? <BusinessAbout profile={profile} /> : null}
             <h1 className={styles.stepTitle}>{booking.stepService}</h1>
             <div className={styles.optionList}>
@@ -322,7 +347,7 @@ export function BookingWizard({
           <>
             <button type="button" className={styles.stepBack} onClick={() => goTo("service")}>
               <Icon name="arrowLeft" size={16} strokeWidth={1.8} />
-              {booking.stepService}
+              {booking.back}
             </button>
             <h1 className={styles.stepTitle}>{booking.stepStaff}</h1>
             <div className={styles.optionList}>
@@ -369,7 +394,7 @@ export function BookingWizard({
           <>
             <button type="button" className={styles.stepBack} onClick={() => goTo("staff")}>
               <Icon name="arrowLeft" size={16} strokeWidth={1.8} />
-              {booking.stepStaff}
+              {booking.back}
             </button>
             <h1 className={styles.stepTitle}>{booking.stepDate}</h1>
             {error && <p className={styles.errorText}>{error}</p>}
@@ -411,7 +436,7 @@ export function BookingWizard({
           <>
             <button type="button" className={styles.stepBack} onClick={() => goTo("date")}>
               <Icon name="arrowLeft" size={16} strokeWidth={1.8} />
-              {booking.stepDate}
+              {booking.back}
             </button>
             <h1 className={styles.stepTitle}>{booking.stepTime}</h1>
             {zoneNote && <p className={styles.fieldHint}>{zoneNote}</p>}
@@ -445,7 +470,7 @@ export function BookingWizard({
           <>
             <button type="button" className={styles.stepBack} onClick={() => goTo("time")}>
               <Icon name="arrowLeft" size={16} strokeWidth={1.8} />
-              {booking.stepTime}
+              {booking.back}
             </button>
             <h1 className={styles.stepTitle}>{booking.stepDetails}</h1>
             <p className={styles.detailsHelper}>{booking.detailsHelper}</p>
@@ -558,10 +583,33 @@ export function BookingWizard({
                 </dd>
               </div>
             </dl>
+            {calendarConnected && result.claim === "linked" ? (
+              // Linked to the account the client's calendar subscribes to: it appears there by itself.
+              <p className={styles.calendarAutoNote} role="status">
+                <Icon name="check" size={16} /> {booking.calendarAutoNote}
+              </p>
+            ) : (
+              <AddToCalendar
+                labels={{ title: booking.addToCalendarTitle, google: booking.addToCalendarGoogle, appleOutlook: booking.addToCalendarFile }}
+                event={(() => {
+                  // The booked time is the BUSINESS wall clock; demo workspaces have no zone (browser-local).
+                  const start = timezone ? wallToInstant(result.date, result.time, timezone) : new Date(`${result.date}T${result.time}:00`);
+                  return {
+                    uid: `appointment-${result.appointmentId}@serviceos`,
+                    start,
+                    end: new Date(start.getTime() + selectedService.durationMinutes * 60_000),
+                    summary: `${getServiceLabel(selectedService, locale)} · ${branding.businessName}`,
+                    description: staffLabel(result.staffName),
+                    status: result.status === "confirmed" ? "CONFIRMED" : "TENTATIVE",
+                  };
+                })()}
+              />
+            )}
             <Button
               fullWidth
               onClick={() => {
                 setStep("service");
+                setStepVisit((n) => n + 1);
                 setSelectedServiceId(null);
                 setSelectedStaffId("any");
                 setSelectedSlot(null);

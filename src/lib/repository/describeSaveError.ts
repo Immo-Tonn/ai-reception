@@ -19,6 +19,10 @@ export function describeSaveError(
       return options.duplicateClient ? messages.clientExists : messages.conflict;
     case "invalid_input":
       return messages.invalidInput;
+    case "invalid_status":
+      return messages.invalidStatus;
+    case "delete_blocked":
+      return messages.deleteBlocked;
     case "forbidden":
       return messages.forbidden;
     case "unauthenticated":

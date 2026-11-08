@@ -17,6 +17,8 @@ export type Permission =
   | "appointments.create"
   | "appointments.edit"
   | "appointments.cancel"
+  /** Change a recorded outcome (completed / no-show / cancelled). Always audited. */
+  | "appointments.correct"
   | "private_records.view"
   | "owner_records.view"
   | "finance.view"
@@ -40,6 +42,7 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "appointments.create",
     "appointments.edit",
     "appointments.cancel",
+    "appointments.correct",
     "private_records.view",
     "owner_records.view",
     "finance.view",
@@ -58,6 +61,7 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "appointments.create",
     "appointments.edit",
     "appointments.cancel",
+    "appointments.correct",
     "finance.view",
     "finance.edit",
     "financial_bucket.main.view",
@@ -72,6 +76,7 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "appointments.create",
     "appointments.edit",
     "appointments.cancel",
+    "appointments.correct",
     "financial_bucket.main.view",
     "clients.view",
     "clients.edit",

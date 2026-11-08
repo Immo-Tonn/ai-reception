@@ -13,7 +13,7 @@ import type { ExpoConfig, ConfigContext } from "expo/config";
 const PROVISIONAL_IOS_BUNDLE_ID = "com.serviceos.app"; // PROVISIONAL
 const PROVISIONAL_ANDROID_PACKAGE = "com.serviceos.app"; // PROVISIONAL
 
-export default ({ config }: ConfigContext): ExpoConfig => ({
+const appConfig = ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: "ServiceOS",
   slug: "serviceos",
@@ -47,3 +47,5 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
   },
 });
+
+export default appConfig;

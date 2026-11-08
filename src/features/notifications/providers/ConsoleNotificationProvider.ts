@@ -24,6 +24,5 @@ export function createConsoleNotificationProvider(
 }
 
 function defaultLog(message: string, detail: unknown) {
-  
   console.info(message, detail);
 }

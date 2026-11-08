@@ -12,7 +12,6 @@ let db: PGlite;
 let wsA: string;
 let slugA: string;
 let wsB: string;
-let slugB: string;
 let svcA: string;
 let staffA: string;
 
@@ -28,7 +27,7 @@ beforeAll(async () => {
       (await db.query<{ out_workspace_id: string; out_slug: string }>("select * from public.provision_workspace($1,$2,'',$3,$4,'en')", [u, e, n, b])).rows))[0];
   const a = await prov(OWNER, "o@t.invalid", "Biz A", "biz-a");
   const b = await prov(OTHER, "x@t.invalid", "Biz B", "biz-b");
-  wsA = a.out_workspace_id; slugA = a.out_slug; wsB = b.out_workspace_id; slugB = b.out_slug;
+  wsA = a.out_workspace_id; slugA = a.out_slug; wsB = b.out_workspace_id;
   await db.exec(`insert into profiles (id,email) values ('${STAFF}','s@t.invalid') on conflict do nothing;
     insert into workspace_members (workspace_id,profile_id,role) values ('${wsA}','${STAFF}','staff')`);
   svcA = (await q<{ id: string }>("insert into services (workspace_id,name,duration_minutes,price,description) values ($1,'Cut',30,40,'Nice cut') returning id", [wsA]))[0].id;

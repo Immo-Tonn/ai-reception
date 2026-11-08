@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button, Icon, Input, Sheet } from "@/components/ui";
 import { ClientPicker } from "./ClientPicker";
 import type { ClientRecord } from "@/features/clients/types";
@@ -12,7 +12,7 @@ import type {
   RecurrenceFrequency,
   Visibility,
 } from "@/features/appointments/types";
-import { statusOrder } from "@/features/appointments/statusMeta";
+import { SELECTABLE_STATUSES, canTransition, checkInitialStatus, isHistoryCorrection, wallNow, type DeleteBlocker } from "@/features/appointments/statusRules";
 import { financialBucketChoices, visibilityChoices } from "@/features/appointments/simpleOptions";
 import { findConflicts, findNextAvailableSlot } from "@/features/appointments/conflicts";
 import { expandRecurrenceDates } from "@/features/appointments/recurrence";
@@ -26,8 +26,10 @@ import { getResourceLabel } from "@/features/resources/label";
 import type { WorkingHoursProfile } from "@/features/workingHours/types";
 import type { Locale, Messages } from "@/lib/i18n";
 import { useI18n } from "@/lib/i18n/I18nProvider";
+import { HealthDataHint } from "@/components/privacy/HealthDataHint";
 import { describeSaveError } from "@/lib/repository/describeSaveError";
 import styles from "./AppointmentSheet.module.css";
+import { newLocalId } from "@/lib/browser";
 
 export type AppointmentSaveResult =
   | { mode: "create"; appointments: Appointment[] }
@@ -42,6 +44,12 @@ interface AppointmentSheetProps {
    * on a save that never actually persisted. */
   onSave: (result: AppointmentSaveResult) => void | Promise<void>;
   onDelete?: () => void;
+  /** Why this appointment may not be physically deleted; `[]` = may be deleted, `null` = still checking. */
+  deleteBlockers?: DeleteBlocker[] | null;
+  /** Workspace time zone (null: demo / this machine) — decides which statuses are possible yet. */
+  timeZone?: string | null;
+  /** May this person correct a recorded outcome (owner / admin / manager)? The server checks it too. */
+  canCorrect?: boolean;
   locale: Locale;
   messages: Messages["appointment"];
   statusMessages: Messages["appointmentStatus"];
@@ -70,11 +78,22 @@ function todayIso() {
   return localIsoDate(new Date());
 }
 
+const DELETE_BLOCKER_TEXT = {
+  has_history: "deleteBlockedHasHistory",
+  online_booking: "deleteBlockedOnline",
+  invoice: "deleteBlockedInvoice",
+  waiting_list: "deleteBlockedWaitingList",
+  not_permitted: "deleteBlockedNotPermitted",
+} as const;
+
 export function AppointmentSheet({
   open,
   onClose,
   onSave,
   onDelete,
+  deleteBlockers = null,
+  timeZone = null,
+  canCorrect = false,
   locale,
   messages,
   statusMessages,
@@ -98,6 +117,7 @@ export function AppointmentSheet({
   today,
 }: AppointmentSheetProps) {
   const isEditing = Boolean(initialValue);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const isSeries = Boolean(initialValue?.seriesId);
 
   const [client, setClient] = useState(initialValue?.client ?? prefillClient ?? "");
@@ -133,15 +153,17 @@ export function AppointmentSheet({
   const selectedService = services.find((s) => s.name === serviceName);
   const selectedStaffId = staffList.find((s) => s.name === staff)?.id;
 
-  // Keep duration/price in sync with the chosen service, but only when
-  // creating — editing shouldn't silently overwrite a custom price.
-  useEffect(() => {
-    if (isEditing || !selectedService) return;
-    setDuration(selectedService.durationMinutes);
-    setPrice(selectedService.price);
-    if (!selectedService.requiredResourceType) setResourceId(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serviceName]);
+  // Picking a service fills in its duration/price, but only when creating —
+  // editing shouldn't silently overwrite a custom price. (The initial values
+  // already come from the first service, so nothing is needed on open.)
+  function selectService(name: string) {
+    setServiceName(name);
+    const next = services.find((s) => s.name === name);
+    if (isEditing || !next) return;
+    setDuration(next.durationMinutes);
+    setPrice(next.price);
+    if (!next.requiredResourceType) setResourceId(null);
+  }
 
   const eligibleStaff = useMemo(() => {
     if (!selectedService || selectedService.allowedStaffIds.length === 0) return staffList;
@@ -235,7 +257,7 @@ export function AppointmentSheet({
     let result: AppointmentSaveResult;
 
     if (!isEditing && recurrenceFreq !== "none") {
-      const seriesId = `series-${Date.now()}`;
+      const seriesId = `series-${newLocalId()}`;
       const dates = recurrencePreviewDates;
       const created: Appointment[] = [];
       for (const occurrenceDate of dates) {
@@ -256,7 +278,7 @@ export function AppointmentSheet({
         );
         if (occurrenceConflict.hasConflict) continue;
         created.push({
-          id: `${Date.now()}-${occurrenceDate}`,
+          id: newLocalId(occurrenceDate),
           date: occurrenceDate,
           time,
           durationMinutes: duration,
@@ -292,7 +314,7 @@ export function AppointmentSheet({
         mode: "create",
         appointments: [
           {
-            id: `${Date.now()}`,
+            id: newLocalId(),
             date,
             time,
             durationMinutes: duration,
@@ -309,7 +331,7 @@ export function AppointmentSheet({
       await onSave(result);
       onClose();
     } catch (error) {
-      // eslint-disable-next-line no-console
+       
       console.error("Failed to save appointment", error);
       setSaveError(describeSaveError(error, allMessages.repositoryErrors));
     } finally {
@@ -403,7 +425,7 @@ export function AppointmentSheet({
           <select suppressHydrationWarning
             className={styles.select}
             value={serviceName}
-            onChange={(event) => setServiceName(event.target.value)}
+            onChange={(event) => selectService(event.target.value)}
           >
             {services.map((item) => (
               <option key={item.id} value={item.name}>
@@ -589,23 +611,38 @@ export function AppointmentSheet({
             placeholder={messages.notesPlaceholder}
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
+            aria-describedby="appointment-notes-health-hint"
           />
+          <HealthDataHint id="appointment-notes-health-hint" />
         </div>
 
         <div className={styles.section}>
           <span className={styles.sectionLabel}>{messages.statusLabel}</span>
           <div className={styles.statusRow}>
-            {statusOrder.map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={`${styles.statusChip} ${status === value ? styles.statusChipActive : ""}`}
-                onClick={() => setStatus(value)}
-              >
-                {statusMessages[value]}
-              </button>
-            ))}
+            {[...SELECTABLE_STATUSES, ...(SELECTABLE_STATUSES.includes(status) ? [] : [status])].map((value) => {
+              // Same rules as the server: completed / no-show only once the appointment has started, etc.
+              const now = wallNow(timeZone);
+              const allowed =
+                value === status ||
+                (isEditing && initialValue
+                  ? canTransition(initialValue, value, now) && (canCorrect || !isHistoryCorrection(initialValue.status, value))
+                  : checkInitialStatus({ date, time }, value, now));
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={!allowed}
+                  aria-disabled={!allowed}
+                  title={allowed ? undefined : messages.statusNotPossibleHint}
+                  className={`${styles.statusChip} ${status === value ? styles.statusChipActive : ""} ${allowed ? "" : styles.statusChipDisabled}`}
+                  onClick={() => setStatus(value)}
+                >
+                  {statusMessages[value]}
+                </button>
+              );
+            })}
           </div>
+          <span className={styles.sectionHint}>{messages.statusRulesHint}</span>
         </div>
 
         <div className={styles.section}>
@@ -663,10 +700,38 @@ export function AppointmentSheet({
           </div>
         )}
 
+        {isEditing && onDelete && deleteBlockers && deleteBlockers.length > 0 ? (
+          <div className={styles.deleteInfo} role="note">
+            <span className={styles.deleteInfoTitle}>{messages.deleteBlockedTitle}</span>
+            <ul className={styles.deleteInfoList}>
+              {deleteBlockers.map((b) => (
+                <li key={b}>{messages[DELETE_BLOCKER_TEXT[b]]}</li>
+              ))}
+            </ul>
+            {/* Only when cancelling is actually possible (a past outcome stays as it is). */}
+            {initialValue && canTransition(initialValue, "cancelled", wallNow(timeZone)) && (canCorrect || !isHistoryCorrection(initialValue.status, "cancelled")) ? <span>{messages.deleteCancelInstead}</span> : null}
+          </div>
+        ) : null}
+
+        {confirmingDelete && onDelete ? (
+          <div className={styles.warningCard} role="alertdialog" aria-label={messages.deleteConfirmTitle}>
+            <span className={styles.warningTitle}>{messages.deleteConfirmTitle}</span>
+            <span>{messages.deleteConfirmText}</span>
+            <div className={styles.actions}>
+              <Button variant="destructive" onClick={() => { setConfirmingDelete(false); onDelete(); }}>
+                {messages.deleteConfirm}
+              </Button>
+              <Button variant="secondary" onClick={() => setConfirmingDelete(false)}>
+                {messages.deleteKeep}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         <div className={styles.actions}>
-          {isEditing && onDelete ? (
-            <Button variant="secondary" className={styles.deleteButton} onClick={onDelete}>
-              {messages.delete}
+          {isEditing && onDelete && deleteBlockers && deleteBlockers.length === 0 && !confirmingDelete ? (
+            <Button variant="secondary" className={styles.deleteButton} onClick={() => setConfirmingDelete(true)}>
+              {messages.deleteMistake}
             </Button>
           ) : null}
           <Button fullWidth onClick={handleSave} disabled={saving}>

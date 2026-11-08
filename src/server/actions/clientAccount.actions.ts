@@ -21,6 +21,11 @@ import {
 import { loadMyBookingsForPage as loadPageData, type MyBookingsPageData } from "@/server/clientAccount/pageData";
 import { readPendingClaims, writePendingClaims } from "@/server/clientAccount/pendingClaims";
 import { safeClientRedirect } from "@/server/clientAccount/safeRedirect";
+import { authAttemptAllowed } from "@/server/auth/authRateLimit";
+import { headers } from "next/headers";
+import { deriveServerSecret } from "@/lib/supabase/admin";
+import { getPublicBaseUrl } from "@/lib/config/publicBaseUrl";
+import { bumpFeedVersion, createFeedToken, getFeedState } from "@/server/clientAccount/calendarFeed";
 
 export interface ClientAuthState {
   error?: AuthErrorCode;
@@ -67,6 +72,7 @@ export async function signUpClientAction(_prev: ClientAuthState, formData: FormD
     return { error: weak ? "weak_password" : "invalid_input" };
   }
   const { email, password, fullName, phone, locale } = parsed.data;
+  if (!(await authAttemptAllowed({ kind: "sign_up" }))) return { error: "rate_limited" };
   const result = await getBusinessAuth().signUpWithPassword(email, password);
   if (!result.ok) {
     // Neutral for an already-registered address (no account enumeration).
@@ -81,6 +87,7 @@ export async function signUpClientAction(_prev: ClientAuthState, formData: FormD
 export async function signInClientAction(_prev: ClientAuthState, formData: FormData): Promise<ClientAuthState> {
   const parsed = credentials.safeParse({ email: field(formData, "email"), password: field(formData, "password") });
   if (!parsed.success) return { error: "invalid_input" };
+  if (!(await authAttemptAllowed({ kind: "sign_in", email: parsed.data.email }))) return { error: "rate_limited" };
   const result = await getBusinessAuth().signInWithPassword(parsed.data.email, parsed.data.password);
   if (!result.ok) return { error: result.code };
   await afterSignIn(result.userId);
@@ -171,4 +178,86 @@ export async function rescheduleMyBookingAction(
  */
 export async function loadMyBookingsForPage(): Promise<MyBookingsPageData> {
   return loadPageData();
+}
+
+// ---------------------------------------------------------------------------
+// Calendar subscription (all my bookings in Google / Apple / Outlook)
+// ---------------------------------------------------------------------------
+
+export interface MyCalendarFeed {
+  /** https URL of the iCalendar feed (copy / Outlook). */
+  url: string;
+  /** Same feed for Apple Calendar / iPhone ("webcal://"). */
+  webcalUrl: string;
+  /** Opens Google Calendar's "add calendar from URL" with this feed. */
+  googleUrl: string;
+  /** A calendar app already fetches this link (see markFeedConnected). */
+  connected: boolean;
+}
+
+async function feedFor(userId: string, version: number, connected: boolean): Promise<MyCalendarFeed> {
+  const { baseUrl } = getPublicBaseUrl((await headers()).get("host"));
+  if (!baseUrl) throw new Error("public_base_url_missing"); // NEXT_PUBLIC_APP_URL not set
+  const url = `${baseUrl}/api/calendar/client/${createFeedToken(deriveServerSecret("client-calendar-feed"), userId, version)}.ics`;
+  const webcalUrl = url.replace(/^https?:\/\//, "webcal://");
+  return { url, webcalUrl, googleUrl: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl)}`, connected };
+}
+
+/** The signed-in client's personal subscription link. */
+export async function getMyCalendarFeedAction(): Promise<ClientActionResult<MyCalendarFeed>> {
+  return withUser(async (userId) => {
+    const state = await getFeedState(getPublicBookingDeps().admin, userId);
+    return feedFor(userId, state.version, state.connected);
+  });
+}
+
+/** New link; every previously shared one stops working immediately. */
+export async function resetMyCalendarFeedAction(): Promise<ClientActionResult<MyCalendarFeed>> {
+  return withUser(async (userId) => feedFor(userId, await bumpFeedVersion(getPublicBookingDeps().admin, userId), false));
+}
+
+
+// ---------------------------------------------------------------------------
+// Profile (name, phone) — only the signed-in client's own row
+// ---------------------------------------------------------------------------
+
+export interface MyProfile {
+  email: string | null;
+  fullName: string;
+  phone: string;
+}
+
+const profileSchema = z.object({
+  fullName: z.string().trim().max(120),
+  phone: z.string().trim().max(40).regex(/^[0-9+()\-\s/.]*$/),
+});
+
+export async function getMyProfileAction(): Promise<ClientActionResult<MyProfile>> {
+  return withUser(async (userId) => {
+    const { admin } = getPublicBookingDeps();
+    const [row, user] = await Promise.all([
+      admin.from("client_accounts").select("full_name, phone").eq("user_id", userId).maybeSingle(),
+      admin.auth.admin.getUserById(userId),
+    ]);
+    if (row.error) throw new Error("profile_read_failed");
+    const data = (row.data ?? {}) as { full_name?: string | null; phone?: string | null };
+    return { email: user.data.user?.email ?? null, fullName: data.full_name ?? "", phone: data.phone ?? "" };
+  });
+}
+
+/** Saves exactly what was entered (an emptied field is cleared on purpose). */
+export async function updateMyProfileAction(input: { fullName: string; phone: string }): Promise<ClientActionResult<MyProfile>> {
+  const parsed = profileSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, code: "invalid_input" };
+  return withUser(async (userId) => {
+    const deps = getPublicBookingDeps();
+    await ensureClientAccount(deps, userId); // the row exists for every signed-in client
+    const update = await deps.admin
+      .from("client_accounts")
+      .update({ full_name: parsed.data.fullName, phone: parsed.data.phone, updated_at: new Date().toISOString() }) // columns are NOT NULL, empty = ""
+      .eq("user_id", userId);
+    if (update.error) throw new Error("profile_update_failed");
+    const user = await deps.admin.auth.admin.getUserById(userId);
+    return { email: user.data.user?.email ?? null, fullName: parsed.data.fullName, phone: parsed.data.phone };
+  });
 }

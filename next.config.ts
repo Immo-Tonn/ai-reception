@@ -40,8 +40,21 @@ const nextConfig: NextConfig = {
   // dev server by LAN address. Set ALLOWED_DEV_ORIGINS="192.168.x.y,other-host" in .env.local
   // (comma list, empty by default). Never hard-code a LAN IP here.
   allowedDevOrigins: parseAllowedDevOrigins(process.env.ALLOWED_DEV_ORIGINS),
+  // Do not advertise the framework/version in every response.
+  poweredByHeader: false,
   async headers() {
     return [
+      // Baseline for every response. Listed FIRST: a later rule for the same key
+      // (e.g. Referrer-Policy: no-referrer on /connect-calendar) overrides it.
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // ServiceOS uses none of these browser features.
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
+        ],
+      },
       // STAGING only (NEXT_PUBLIC_APP_ENV=staging): never index the test site.
       ...(isStagingEnv()
         ? [{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }]
@@ -51,6 +64,24 @@ const nextConfig: NextConfig = {
         headers: [
           { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
+        ],
+      },
+      // Google Calendar connect pages: the URL carries a single-use secret (never leak it via Referer),
+      // nothing is indexed or cached.
+      {
+        source: "/connect-calendar/:path*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          { key: "Cache-Control", value: "no-store" },
+        ],
+      },
+      // Client calendar feed: the URL itself is the secret, never leak it via Referer.
+      {
+        source: "/api/calendar/:path*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
         ],
       },
       {

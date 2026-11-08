@@ -26,7 +26,6 @@ let wsId: string;
 
 const as = (id: string) => (current = createPgliteSupabaseClient(db, { kind: "user", id }));
 const service = () => createPgliteSupabaseClient(db, { kind: "service" });
-const q = async <T = Record<string, unknown>>(sql: string, p: unknown[] = []) => (await db.query<T>(sql, p)).rows;
 
 
 const OTHER = "eeeeeeee-0000-4000-8000-0000000000e5";

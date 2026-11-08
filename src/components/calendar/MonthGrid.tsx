@@ -1,9 +1,12 @@
 "use client";
 
 import { localIsoDate } from "@/lib/date/localIsoDate";
-import type { Appointment } from "@/features/appointments/types";
+import type { Appointment, AppointmentStatus } from "@/features/appointments/types";
 import type { Messages } from "@/lib/i18n";
 import styles from "./MonthGrid.module.css";
+
+/** Not taking place — a day with only these gets a muted count. */
+const INACTIVE = new Set<AppointmentStatus>(["cancelled", "rescheduled", "noShow"]);
 
 function isoDate(d: Date) {
   return localIsoDate(d);
@@ -16,6 +19,9 @@ export function MonthGrid({
   dashboardMessages,
   today: todayProp,
   onSelectDay,
+  compact = false,
+  selectedDate,
+  countLabel,
 }: {
   monthAnchor: string; // any ISO date within the month to display
   appointments: Appointment[];
@@ -28,6 +34,12 @@ export function MonthGrid({
   /** Workspace-local today (YYYY-MM-DD); falls back to the browser date. */
   today?: string;
   onSelectDay: (date: string) => void;
+  /** Phones: square cells with the number of appointments instead of text chips; the day's list is shown by the caller. */
+  compact?: boolean;
+  /** Highlighted day (compact mode). */
+  selectedDate?: string;
+  /** Screen-reader text per day, e.g. "{n} appointments". */
+  countLabel?: string;
 }) {
   const anchor = new Date(monthAnchor + "T00:00:00");
   const year = anchor.getFullYear();
@@ -46,7 +58,7 @@ export function MonthGrid({
   });
 
   return (
-    <div className={styles.grid}>
+    <div className={`${styles.grid} ${compact ? styles.gridCompact : ""}`}>
       {days.slice(0, 7).map((d) => (
         <div key={d.toISOString()} className={styles.weekdayHeader}>
           {weekdaysShort[d.getDay()]}
@@ -60,19 +72,29 @@ export function MonthGrid({
           <button
             key={iso}
             type="button"
-            className={`${styles.cell} ${outside ? styles.cellOutside : ""} ${iso === today ? styles.cellToday : ""}`}
+            className={`${styles.cell} ${outside ? styles.cellOutside : ""} ${iso === today ? styles.cellToday : ""} ${compact && iso === selectedDate ? styles.cellSelected : ""}`}
             onClick={() => onSelectDay(iso)}
+            aria-pressed={compact ? iso === selectedDate : undefined}
+            aria-label={compact && countLabel ? `${iso}: ${countLabel.replace("{n}", String(dayAppointments.length))}` : undefined}
           >
             <span className={styles.cellDate}>{d.getDate()}</span>
-            {dayAppointments.slice(0, 3).map((a) => (
+            {compact && dayAppointments.length > 0 ? (
+              <span
+                className={`${styles.count} ${dayAppointments.every((a) => INACTIVE.has(a.status)) ? styles.countMuted : ""}`}
+                aria-hidden="true"
+              >
+                {dayAppointments.length > 99 ? "99+" : dayAppointments.length}
+              </span>
+            ) : null}
+            {!compact && dayAppointments.slice(0, 3).map((a) => (
               <span
                 key={a.id}
-                className={`${styles.chip} ${a.visibility === "private" ? styles.chipMasked : ""}`}
+                className={`${styles.chip} ${a.visibility === "private" ? styles.chipMasked : ""} ${a.status === "cancelled" || a.status === "rescheduled" ? styles.chipCancelled : a.status === "noShow" ? styles.chipNoShow : ""}`}
               >
                 {a.time} {a.visibility === "private" ? dashboardMessages.statusBusy : a.client}
               </span>
             ))}
-            {dayAppointments.length > 3 && (
+            {!compact && dayAppointments.length > 3 && (
               <span className={styles.more}>+{dayAppointments.length - 3}</span>
             )}
           </button>

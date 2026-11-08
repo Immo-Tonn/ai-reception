@@ -80,7 +80,6 @@ export function SignupForm({
           showLabel={passwordLabels.show}
           hideLabel={passwordLabels.hide}
           name="password"
-          placeholder="••••••••"
           autoComplete="new-password"
           minLength={8}
           maxLength={72}

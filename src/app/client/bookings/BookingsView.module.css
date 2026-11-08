@@ -23,7 +23,7 @@
 }
 
 .body {
-  padding: 0 var(--space-5) calc(var(--space-8) + env(safe-area-inset-bottom));
+  padding: var(--space-6) var(--space-5) calc(var(--space-8) + env(safe-area-inset-bottom));
   max-width: 640px;
   margin: 0 auto;
 }
@@ -342,4 +342,15 @@
 .bookCta:focus-visible {
   outline: 2px solid var(--color-accent-blue);
   outline-offset: 2px;
+}
+
+.calendarHint {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: var(--font-size-small);
+  color: var(--color-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }

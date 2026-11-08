@@ -331,9 +331,3 @@
   font-size: var(--font-size-small);
 }
 
-/* German compounds: hyphenate instead of overflowing the screen. */
-:global(html[lang="de"]) .stepTitle,
-:global(html[lang="de"]) .stepSubtitle {
-  hyphens: auto;
-  overflow-wrap: anywhere;
-}

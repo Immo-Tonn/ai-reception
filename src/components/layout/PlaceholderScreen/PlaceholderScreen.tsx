@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Icon, type IconName } from "@/components/ui";
 import styles from "./PlaceholderScreen.module.css";
 
@@ -32,10 +33,10 @@ export function PlaceholderScreen({
         </span>
         <span className={styles.emptyTitle}>{emptyTitle}</span>
         <span className={styles.emptyDescription}>{emptyDescription}</span>
-        <a className={styles.backLink} href={backHref}>
+        <Link className={styles.backLink} href={backHref}>
           <Icon name="chevronRight" size={16} style={{ transform: "rotate(180deg)" }} />
           {backLabel}
-        </a>
+        </Link>
       </div>
     </main>
   );

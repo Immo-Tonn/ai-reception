@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useState } from "react";
 import { Button, Icon, SaveStatus, type SaveState } from "@/components/ui";
 import { useWaitingList } from "@/features/waitingList/useWaitingList";
@@ -142,9 +143,9 @@ export function WaitingListView({
                     {entry.notes ? <span className={styles.rowNotes}>{entry.notes}</span> : null}
                     <div className={styles.actions}>
                       {active ? (
-                        <a className={`${styles.actionButton} ${styles.actionPrimary}`} href={bookingLinkForEntry(workspaceSlug, entry, today)}>
+                        <Link className={`${styles.actionButton} ${styles.actionPrimary}`} href={bookingLinkForEntry(workspaceSlug, entry, today)}>
                           {messages.bookNow}
-                        </a>
+                        </Link>
                       ) : null}
                       {status === "waiting" ? (
                         <button type="button" className={styles.actionButton} disabled={busy} onClick={() => void setStatus(entry, "contacted")}>

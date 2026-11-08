@@ -1,4 +1,5 @@
 import { getMessages } from "@/lib/i18n";
+import { MobileBackToToday } from "@/components/layout/MobileBackToToday/MobileBackToToday";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { AssistantView } from "./AssistantView";
 
@@ -9,7 +10,12 @@ export default async function AssistantPage({
 }) {
   const { workspaceSlug } = await params;
   const locale = await getRequestLocale();
-  const { assistant } = getMessages(locale);
+  const { assistant, nav } = getMessages(locale);
 
-  return <AssistantView workspaceSlug={workspaceSlug} messages={assistant} />;
+  return (
+    <>
+      <MobileBackToToday workspaceSlug={workspaceSlug} label={nav.today} />
+      <AssistantView workspaceSlug={workspaceSlug} messages={assistant} />
+    </>
+  );
 }

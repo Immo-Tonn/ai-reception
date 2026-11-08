@@ -6,7 +6,7 @@
  */
 export function reportError(context: string, error: unknown): void {
   try {
-    // eslint-disable-next-line no-console
+     
     console.error(`[error] ${context}`, error);
   } catch {
     // reporting must never break the caller

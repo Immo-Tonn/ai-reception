@@ -44,7 +44,8 @@ export function WorkspaceSwitcher({ currentSlug, workspaces = [] }: { currentSlu
   const others = isDemo ? [] : workspaces.filter((workspace) => workspace.slug !== currentSlug && !isDemoWorkspaceSlug(workspace.slug));
   const current = demoWorkspaces.find((w) => w.slug === currentSlug);
   const displayName = isDemo ? (current?.name ?? currentSlug) : config.name || currentSlug;
-  const avatar = isDemo ? (current?.emoji ?? "🏢") : displayName.trim().charAt(0).toUpperCase() || "🏢";
+  // A letter, not an emoji: consistent with the rest of the icon language.
+  const avatar = displayName.trim().charAt(0).toUpperCase() || "S";
 
   function selectWorkspace(slug: string) {
     setOpen(false);
@@ -65,7 +66,7 @@ export function WorkspaceSwitcher({ currentSlug, workspaces = [] }: { currentSlu
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className={isDemo ? styles.triggerEmoji : styles.triggerInitial} aria-hidden="true">
+        <span className={styles.triggerInitial} aria-hidden="true">
           {avatar}
         </span>
         <span className={styles.triggerLabel}>{displayName}</span>
@@ -112,7 +113,9 @@ export function WorkspaceSwitcher({ currentSlug, workspaces = [] }: { currentSlu
               className={styles.option}
               onClick={() => selectWorkspace(workspace.slug)}
             >
-              <span className={styles.optionEmoji}>{workspace.emoji}</span>
+              <span className={styles.optionInitial} aria-hidden="true">
+                {workspace.name.trim().charAt(0).toUpperCase()}
+              </span>
               <span className={styles.optionBody}>
                 <span className={styles.optionName}>{workspace.name}</span>
                 <span className={styles.optionTagline}>{workspace.tagline}</span>

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Icon } from "@/components/ui";
@@ -72,7 +73,7 @@ export function ClientsView({
       ) : (
         <div className={styles.list}>
           {filtered.map((client) => (
-            <a
+            <Link
               key={client.id}
               href={`/${workspaceSlug}/clients/${client.id}`}
               className={styles.row}
@@ -100,7 +101,7 @@ export function ClientsView({
               <span className={styles.chevron}>
                 <Icon name="chevronRight" size={18} />
               </span>
-            </a>
+            </Link>
           ))}
         </div>
       )}

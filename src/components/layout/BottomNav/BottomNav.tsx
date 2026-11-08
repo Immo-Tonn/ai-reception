@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "@/components/ui";
@@ -105,13 +106,13 @@ function NavLink({
   label: string;
 }) {
   return (
-    <a
+    <Link
       href={`${base}/${item.segment}`}
       className={`${styles.item} ${active ? styles.itemActive : ""}`}
       aria-current={active ? "page" : undefined}
     >
       <Icon name={item.icon} size={22} />
       <span className={styles.itemLabel}>{label}</span>
-    </a>
+    </Link>
   );
 }

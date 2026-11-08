@@ -144,6 +144,7 @@ class Query implements PromiseLike<{ data: unknown; error: PgError | null }> {
       if (this.returning || this.mode !== "many") sql += ` returning ${cols}`;
     } else {
       sql = `delete from ${t}${this.where(params)}`;
+      if (this.returning) sql += ` returning ${cols}`;
     }
 
     try {

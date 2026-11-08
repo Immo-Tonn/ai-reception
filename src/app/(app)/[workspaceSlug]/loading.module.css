@@ -1,0 +1,59 @@
+.page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+@media (min-width: 768px) {
+  .page {
+    padding: var(--space-6) var(--space-8);
+  }
+}
+
+/* Thin indeterminate bar at the very top: the tap was registered. */
+.progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: var(--z-overlay);
+  overflow: hidden;
+}
+
+.progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: var(--color-accent-blue);
+  animation: slide 900ms var(--motion-ease) infinite;
+}
+
+@keyframes slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+.block {
+  height: 64px;
+  border-radius: var(--radius-sm);
+  background: var(--color-border);
+  opacity: 0.45;
+}
+
+.title {
+  height: 32px;
+  width: 45%;
+  margin-bottom: var(--space-3);
+}
+
+.short {
+  width: 60%;
+}

@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { Button, Icon } from "@/components/ui";
 import type { Messages } from "@/lib/i18n";
 import styles from "./page.module.css";
+import { newLocalId } from "@/lib/browser";
 
 interface TextMessage {
   kind: "text";
@@ -48,7 +49,7 @@ export function AssistantView({
     if (!text.trim()) return;
     const userMessage: TextMessage = {
       kind: "text",
-      id: `${Date.now()}-user`,
+      id: newLocalId("user"),
       role: "user",
       text,
     };
@@ -56,10 +57,10 @@ export function AssistantView({
     const isMoveRequest = /move|перенес|перенос|verschieb/i.test(text);
 
     const replyMessage: ThreadMessage = isMoveRequest
-      ? { kind: "action", id: `${Date.now()}-action`, role: "assistant" }
+      ? { kind: "action", id: newLocalId("action"), role: "assistant" }
       : {
           kind: "text",
-          id: `${Date.now()}-assistant`,
+          id: newLocalId("assistant"),
           role: "assistant",
           text: messages.demoReplyIntro,
         };

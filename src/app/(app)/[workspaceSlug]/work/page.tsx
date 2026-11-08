@@ -1,4 +1,5 @@
 import { getMessages } from "@/lib/i18n";
+import { MobileBackToToday } from "@/components/layout/MobileBackToToday/MobileBackToToday";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { WorkView } from "./WorkView";
 
@@ -9,16 +10,19 @@ export default async function WorkPage({
 }) {
   const { workspaceSlug } = await params;
   const locale = await getRequestLocale();
-  const { work, workOps, appointment, repositoryErrors } = getMessages(locale);
+  const { work, workOps, appointment, repositoryErrors, nav } = getMessages(locale);
 
   return (
-    <WorkView
-      workspaceSlug={workspaceSlug}
-      locale={locale}
-      messages={work}
-      opsMessages={workOps}
-      errorMessages={repositoryErrors}
-      appointmentMessages={appointment}
-    />
+    <>
+      <MobileBackToToday workspaceSlug={workspaceSlug} label={nav.today} />
+      <WorkView
+        workspaceSlug={workspaceSlug}
+        locale={locale}
+        messages={work}
+        opsMessages={workOps}
+        errorMessages={repositoryErrors}
+        appointmentMessages={appointment}
+      />
+    </>
   );
 }

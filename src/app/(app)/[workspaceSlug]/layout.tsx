@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar/Sidebar";
 import { BottomNav } from "@/components/layout/BottomNav/BottomNav";
+import { BusyBar } from "@/components/layout/BusyBar/BusyBar";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher/WorkspaceSwitcher";
 import { getMessages } from "@/lib/i18n";
@@ -11,6 +12,8 @@ import { getSession, UnauthenticatedError, WorkspaceAccessError } from "@/server
 import { loadWorkspaceCatalog } from "@/server/services/workspaceCatalog.service";
 import { listMyWorkspaces, type MyWorkspace } from "@/server/services/myWorkspaces.service";
 import { WorkspaceCatalogProvider, type WorkspaceCatalogData } from "@/features/workspace/WorkspaceCatalog";
+import { getFeatureFlags } from "@/lib/config/features";
+import { FeatureFlagsProvider } from "@/features/workspace/FeatureFlags";
 import styles from "./layout.module.css";
 
 export default async function WorkspaceLayout({
@@ -48,17 +51,23 @@ export default async function WorkspaceLayout({
   const { nav, common, quickCreate } = getMessages(locale);
 
   const shell = (
+    <FeatureFlagsProvider value={getFeatureFlags()}>
     <div className={styles.shell}>
+      <BusyBar />
       <Sidebar workspaceSlug={workspaceSlug} locale={locale} messages={nav} appName={common.appName} />
       <div className={styles.content}>
         <div className={styles.topBar}>
           <WorkspaceSwitcher currentSlug={workspaceSlug} workspaces={myWorkspaces} />
-          <Preferences />
+          {/* Phones: language and theme live in Settings (one compact header row). */}
+          <div className={styles.topBarPreferences}>
+            <Preferences />
+          </div>
         </div>
         {children}
       </div>
       <BottomNav workspaceSlug={workspaceSlug} nav={nav} quickCreate={quickCreate} />
     </div>
+    </FeatureFlagsProvider>
   );
 
   return catalog ? <WorkspaceCatalogProvider value={catalog}>{shell}</WorkspaceCatalogProvider> : shell;

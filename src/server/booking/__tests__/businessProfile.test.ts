@@ -30,7 +30,6 @@ const q = async <T = Record<string, unknown>>(sql: string, p: unknown[] = []) =>
 
 
 const OTHER = "eeeeeeee-0000-4000-8000-0000000000e5";
-let otherSlug: string;
 
 beforeAll(async () => {
   db = await createMigratedDb();
@@ -40,7 +39,7 @@ beforeAll(async () => {
   const a = await prov(OWNER, "o@test.invalid", "Biz", "biz-salon");
   wsId = a.out_workspace_id;
   slug = a.out_slug;
-  otherSlug = (await prov(OTHER, "x@test.invalid", "Other", "other-salon")).out_slug;
+  await prov(OTHER, "x@test.invalid", "Other", "other-salon"); // a second business must exist
   await db.exec(`insert into profiles (id,email) values ('${MANAGER}','m@test.invalid'),('${STAFF}','s@test.invalid');
     insert into workspace_members (workspace_id,profile_id,role) values ('${wsId}','${MANAGER}','manager'),('${wsId}','${STAFF}','staff')`);
 }, 90_000);

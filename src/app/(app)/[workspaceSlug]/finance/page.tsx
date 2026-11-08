@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
 import { getMessages } from "@/lib/i18n";
+import { MobileBackToToday } from "@/components/layout/MobileBackToToday/MobileBackToToday";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { getSession } from "@/server/auth/session";
+import { isFeatureEnabled } from "@/lib/config/features";
 import { getWorkspaceCurrency } from "@/server/services/finance.service";
 import { FinanceView } from "./FinanceView";
 
@@ -12,8 +14,9 @@ export default async function FinancePage({
   params: Promise<{ workspaceSlug: string }>;
 }) {
   const { workspaceSlug } = await params;
+  if (!isFeatureEnabled("finance")) notFound();
   const locale = await getRequestLocale();
-  const { finance, appointment, repositoryErrors, common } = getMessages(locale);
+  const { finance, appointment, repositoryErrors, common, nav } = getMessages(locale);
 
   let defaultCurrency = "EUR";
   if (!isDemoWorkspaceSlug(workspaceSlug)) {
@@ -25,14 +28,17 @@ export default async function FinancePage({
   }
 
   return (
-    <FinanceView
-      workspaceSlug={workspaceSlug}
-      locale={locale}
-      messages={finance}
-      appointmentMessages={appointment}
-      errorMessages={repositoryErrors}
-      statusLabels={common.saveStatus}
-      defaultCurrency={defaultCurrency}
-    />
+    <>
+      <MobileBackToToday workspaceSlug={workspaceSlug} label={nav.today} />
+      <FinanceView
+        workspaceSlug={workspaceSlug}
+        locale={locale}
+        messages={finance}
+        appointmentMessages={appointment}
+        errorMessages={repositoryErrors}
+        statusLabels={common.saveStatus}
+        defaultCurrency={defaultCurrency}
+      />
+    </>
   );
 }

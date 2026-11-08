@@ -1,4 +1,5 @@
 import { getMessages } from "@/lib/i18n";
+import { MobileBackToToday } from "@/components/layout/MobileBackToToday/MobileBackToToday";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { ClientsView } from "./ClientsView";
 
@@ -9,7 +10,12 @@ export default async function ClientsPage({
 }) {
   const { workspaceSlug } = await params;
   const locale = await getRequestLocale();
-  const { clients } = getMessages(locale);
+  const { clients, nav } = getMessages(locale);
 
-  return <ClientsView workspaceSlug={workspaceSlug} locale={locale} messages={clients} />;
+  return (
+    <>
+      <MobileBackToToday workspaceSlug={workspaceSlug} label={nav.today} />
+      <ClientsView workspaceSlug={workspaceSlug} locale={locale} messages={clients} />
+    </>
+  );
 }

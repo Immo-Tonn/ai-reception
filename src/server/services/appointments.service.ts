@@ -1,6 +1,6 @@
 import "server-only";
 import type { Session } from "@/server/auth/session";
-import { assertCan } from "@/server/permissions/roles";
+import { assertCan, can, PermissionDeniedError } from "@/server/permissions/roles";
 import {
   getServerAppointmentsRepository,
   getServerAuditLogRepository,
@@ -17,7 +17,16 @@ import {
   type UpdateAppointmentInput,
   type MoveAppointmentInput,
 } from "@/server/validation/appointment.schema";
-import { checkSlotAvailable } from "@/features/appointments/availability";
+import { checkSlotAvailable, type ExternalBusyInput } from "@/features/appointments/availability";
+import type { StaffMember } from "@/features/staff/types";
+import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
+import { addDays, wallToInstant } from "@/lib/time/zonedTime";
+import { getExternalBusyLoader } from "@/server/externalCalendar/deps";
+import { externalBusyForEngine } from "@/server/externalCalendar/engineInput";
+import { activeStatuses } from "@/features/appointments/statusMeta";
+import { checkInitialStatus, checkStatusTransition, HISTORY_STATUSES, wallNow, type DeleteBlocker, type WallNow, isHistoryCorrection } from "@/features/appointments/statusRules";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getWorkspaceTimeZone } from "./finance.service";
 import { BusinessRuleError } from "./businessRuleError";
 import { applyVisibility, applyVisibilityToList, type VisibleAppointment } from "./masking";
 import type { Appointment } from "@/features/appointments/types";
@@ -54,6 +63,28 @@ export async function getAppointment(
   return appt ? applyVisibility(appt, session) : undefined;
 }
 
+/**
+ * The staff member's external calendar busy time around `date` (freshly
+ * confirmed: `commit`). Demo workspaces and deployments without Supabase have
+ * none. A real workspace whose time zone cannot be read is treated as
+ * unconfirmed for that person rather than guessed.
+ */
+async function externalBusyFor(session: Session, staff: Pick<StaffMember, "id">, date: string, staffList: StaffMember[]): Promise<ExternalBusyInput> {
+  if (isDemoWorkspaceSlug(session.workspaceId)) return {};
+  const loader = getExternalBusyLoader();
+  if (!loader) return {};
+  const tz = await getWorkspaceTimeZone(session);
+  if (!tz) return { externalUnavailableStaffIds: [staff.id] };
+  const result = await loader({
+    workspaceId: session.workspaceId,
+    staffIds: [staff.id],
+    from: wallToInstant(addDays(date, -1), "00:00", tz),
+    until: wallToInstant(addDays(date, 2), "00:00", tz),
+    mode: "commit",
+  });
+  return externalBusyForEngine(result, tz, staffList);
+}
+
 async function checkBusinessRules(
   session: Session,
   candidate: Pick<
@@ -61,7 +92,7 @@ async function checkBusinessRules(
     "id" | "staff" | "resourceId" | "date" | "time" | "durationMinutes" | "service"
   > &
     Partial<Pick<Appointment, "staffId" | "serviceId">>,
-  options: { rejectInactiveService?: boolean } = {},
+  options: { rejectInactiveService?: boolean; checkExternalCalendar?: boolean } = {},
 ) {
   const [existing, services, staffList, workingHours] = await Promise.all([
     getServerAppointmentsRepository(session.workspaceId).list(),
@@ -81,10 +112,17 @@ async function checkBusinessRules(
     staffList.find((s) => (candidate.staffId ? s.id === candidate.staffId : s.name === candidate.staff)) ??
     ({ id: candidate.staffId ?? candidate.staff, name: candidate.staff } as const);
 
+  // External calendar busy time counts only when the slot itself changes (a
+  // new appointment, another time/person/duration): editing notes or status of
+  // an appointment that now overlaps a Google event must stay possible — the
+  // owner decides about such conflicts, ServiceOS never acts on them.
+  const external = options.checkExternalCalendar ? await externalBusyFor(session, staff, candidate.date, staffList) : {};
+
   // The SAME rule Public Booking uses (`checkSlotAvailable`): working hours,
-  // staff and resource collisions with buffers. The database's exclusion
-  // constraints back it up if two requests race.
+  // staff and resource collisions with buffers, external busy time. The
+  // database's exclusion constraints back it up if two requests race.
   const result = checkSlotAvailable({
+    ...external,
     service: { ...service, durationMinutes: candidate.durationMinutes },
     staff,
     resourceId: candidate.resourceId,
@@ -103,10 +141,66 @@ async function checkBusinessRules(
   if (result.reason === "resourceConflict") {
     throw new BusinessRuleError("The selected resource is already booked at this time.", "resource_conflict");
   }
+  if (result.reason === "externalBusy") {
+    throw new BusinessRuleError(`${candidate.staff} is busy in their connected calendar at this time.`, "external_calendar_busy");
+  }
+  if (result.reason === "externalUnconfirmed") {
+    throw new BusinessRuleError(
+      `The connected calendar of ${candidate.staff} could not be checked right now. Try again, or disconnect it in Settings.`,
+      "external_calendar_unconfirmed",
+    );
+  }
   throw new BusinessRuleError(
     `${candidate.staff} is not available at ${candidate.date} ${candidate.time} (${result.reason}).`,
     "outside_working_hours",
   );
+}
+
+/** Did the occupied slot change (time, person, length, service — anything that moves the busy window)? */
+function slotChanged(before: Appointment, after: Appointment): boolean {
+  return (
+    before.date !== after.date ||
+    before.time !== after.time ||
+    before.durationMinutes !== after.durationMinutes ||
+    (before.staffId ?? before.staff) !== (after.staffId ?? after.staff) ||
+    (before.serviceId ?? before.service) !== (after.serviceId ?? after.service) ||
+    // Re-activating a cancelled appointment books the slot again.
+    (before.status === "cancelled" || before.status === "noShow") !== (after.status === "cancelled" || after.status === "noShow")
+  );
+}
+
+/**
+ * "Now" on the workspace wall clock. Demo workspaces: this machine's clock.
+ * A REAL workspace whose time zone could not be read gets `null` (unknown) —
+ * never the server clock (UTC on Vercel), which would shift "has it started?".
+ */
+async function workspaceNow(session: Session): Promise<WallNow | null> {
+  if (isDemoWorkspaceSlug(session.workspaceId)) return wallNow(null);
+  const tz = await getWorkspaceTimeZone(session);
+  return tz ? wallNow(tz) : null;
+}
+
+/** Long before / after any appointment: a rule that holds for BOTH does not depend on the time. */
+const NOTHING_STARTED: WallNow = { date: "0000-01-01", time: "00:00" };
+const EVERYTHING_STARTED: WallNow = { date: "9999-12-31", time: "23:59" };
+
+/** With an unknown "now", allow only what is allowed at any time (fail closed, never guess). */
+function allowedWhateverTheTime(check: (now: WallNow) => boolean): boolean {
+  return check(NOTHING_STARTED) && check(EVERYTHING_STARTED);
+}
+
+/** Server-side status rules (the UI shows only allowed actions, this is the authority). */
+async function assertStatusChange(session: Session, before: Appointment, to: Appointment["status"]) {
+  // Correcting a recorded outcome is not for every role (staff could otherwise rewrite history).
+  if (isHistoryCorrection(before.status, to)) assertCan(session.role, "appointments.correct");
+  const now = await workspaceNow(session);
+  if (!now) {
+    if (allowedWhateverTheTime((t) => checkStatusTransition(before, to, t).ok)) return;
+    throw new BusinessRuleError("The workspace time zone could not be read; this status change depends on the time.", "invalid_status_transition");
+  }
+  const verdict = checkStatusTransition(before, to, now);
+  if (verdict.ok) return;
+  throw new BusinessRuleError(`Status change ${before.status} -> ${to} is not allowed (${verdict.reason}).`, "invalid_status_transition");
 }
 
 /** A database-level collision (two requests raced past the check above) is the same business rule. */
@@ -127,6 +221,10 @@ export async function createAppointment(
 ): Promise<Appointment> {
   assertCan(session.role, "appointments.create");
   const data = createAppointmentSchema.parse(input);
+  const now = await workspaceNow(session);
+  if (now ? !checkInitialStatus(data, data.status, now) : !allowedWhateverTheTime((t) => checkInitialStatus(data, data.status, t))) {
+    throw new BusinessRuleError(`Status ${data.status} is not allowed for this appointment time.`, "invalid_status_transition");
+  }
 
   await checkBusinessRules(session, {
     id: "new",
@@ -138,7 +236,7 @@ export async function createAppointment(
     time: data.time,
     durationMinutes: data.durationMinutes,
     service: data.service,
-  }, { rejectInactiveService: true });
+  }, { rejectInactiveService: true, checkExternalCalendar: true });
 
   const draft: Appointment = {
     ...data,
@@ -175,7 +273,20 @@ export async function updateAppointment(
   if (!before) return undefined;
 
   const merged = { ...before, ...patch };
-  await checkBusinessRules(session, {
+  const statusChanged = patch.status !== undefined && patch.status !== before.status;
+  if (statusChanged) await assertStatusChange(session, before, patch.status!);
+  // The occupied slot changes when the time / person / length / service changes, or a
+  // non-active appointment becomes active again. A pure outcome change (completed,
+  // no-show, cancelled) or a notes/paid edit frees or keeps the slot and needs no check.
+  const occupiesNewSlot =
+    merged.date !== before.date ||
+    merged.time !== before.time ||
+    merged.durationMinutes !== before.durationMinutes ||
+    (merged.staffId ?? merged.staff) !== (before.staffId ?? before.staff) ||
+    (merged.serviceId ?? merged.service) !== (before.serviceId ?? before.service) ||
+    merged.resourceId !== before.resourceId ||
+    (activeStatuses.has(merged.status) && !activeStatuses.has(before.status));
+  if (occupiesNewSlot && activeStatuses.has(merged.status)) await checkBusinessRules(session, {
     id,
     staff: merged.staff,
     staffId: merged.staffId,
@@ -188,18 +299,19 @@ export async function updateAppointment(
   }, {
     // Editing an old appointment keeps its (possibly archived) service; only picking another one is checked.
     rejectInactiveService: merged.serviceId !== before.serviceId || merged.service !== before.service,
+    checkExternalCalendar: slotChanged(before, merged),
   });
 
   const updated = await writeOrConflict(() => repo.update(id, patch));
 
   await auditLog(session, {
-    action: patch.status && patch.status !== before.status ? "statusChanged" : "updated",
+    action: statusChanged ? "statusChanged" : "updated",
     entityType: "appointment",
     entityId: id,
-    summary:
-      patch.status && patch.status !== before.status
-        ? `Status: ${before.status} → ${patch.status}`
-        : "Appointment updated",
+    summary: statusChanged
+      ? // A change away from an outcome (completed / no-show / cancelled) is a correction of a wrong mark.
+        `Status: ${before.status} → ${patch.status}${HISTORY_STATUSES.has(before.status) || before.status === "cancelled" ? " (correction)" : ""}`
+      : "Appointment updated",
     source: "user",
   });
 
@@ -216,8 +328,12 @@ export async function moveAppointment(
   const repo = getServerAppointmentsRepository(session.workspaceId);
   const before = await repo.get(id);
   if (!before) return undefined;
+  // Only an upcoming active appointment can be moved; a past outcome stays where it happened.
+  if (!activeStatuses.has(before.status) || HISTORY_STATUSES.has(before.status)) {
+    throw new BusinessRuleError("Only upcoming active appointments can be moved.", "invalid_status_transition");
+  }
 
-  await checkBusinessRules(session, { ...before, id, date, time });
+  await checkBusinessRules(session, { ...before, id, date, time }, { checkExternalCalendar: slotChanged(before, { ...before, date, time }) });
 
   const updated = await writeOrConflict(() => repo.update(id, { date, time }));
 
@@ -240,6 +356,8 @@ export async function cancelAppointment(
   const repo = getServerAppointmentsRepository(session.workspaceId);
   const before = await repo.get(id);
   if (!before) return undefined;
+  if (before.status === "cancelled") return before;
+  await assertStatusChange(session, before, "cancelled");
 
   const updated = await repo.update(id, { status: "cancelled" });
 
@@ -254,11 +372,51 @@ export async function cancelAppointment(
   return updated;
 }
 
+export type { DeleteBlocker };
+
+/**
+ * Why an appointment must NOT be physically deleted (empty = it may be deleted).
+ * Physical deletion is only for appointments created by mistake inside the
+ * business app; everything that happened or that a client knows about stays as
+ * a record with its status (cancel / no-show instead). Migration 0027 adds the
+ * same guard in the database (`guard_appointment_delete`), which also sees
+ * private invoices and client-account links that RLS hides from this check.
+ */
+export async function getDeleteBlockers(session: Session, appt: Appointment): Promise<DeleteBlocker[]> {
+  const blockers: DeleteBlocker[] = [];
+  if (!can(session.role, "settings.manage")) blockers.push("not_permitted"); // owner / admin only
+  if (HISTORY_STATUSES.has(appt.status)) blockers.push("has_history");
+  if (isDemoWorkspaceSlug(session.workspaceId)) return blockers;
+  const client = await createSupabaseServerClient();
+  const [row, invoice, waiting] = await Promise.all([
+    client.from("appointments").select("source").eq("id", appt.id).eq("workspace_id", session.workspaceId).maybeSingle(),
+    client.from("invoices").select("id").eq("workspace_id", session.workspaceId).eq("appointment_id", appt.id).limit(1),
+    client.from("waiting_list").select("id").eq("workspace_id", session.workspaceId).eq("booked_appointment_id", appt.id).limit(1),
+  ]);
+  if (row.error || invoice.error || waiting.error) throw new BusinessRuleError("Could not check what depends on this appointment.", "delete_not_allowed");
+  if ((row.data as { source?: string } | null)?.source !== "user") blockers.push("online_booking");
+  if ((invoice.data as unknown[] | null)?.length) blockers.push("invoice");
+  if ((waiting.data as unknown[] | null)?.length) blockers.push("waiting_list");
+  return blockers;
+}
+
+export async function getAppointmentDeleteBlockers(session: Session, id: string): Promise<DeleteBlocker[]> {
+  assertCan(session.role, "appointments.view");
+  const appt = await getServerAppointmentsRepository(session.workspaceId).get(id);
+  if (!appt) return ["not_permitted"];
+  return getDeleteBlockers(session, appt);
+}
+
 export async function removeAppointment(session: Session, id: string): Promise<void> {
   assertCan(session.role, "appointments.cancel");
   const repo = getServerAppointmentsRepository(session.workspaceId);
   const before = await repo.get(id);
   if (!before) return;
+  const blockers = await getDeleteBlockers(session, before);
+  if (blockers.includes("not_permitted")) throw new PermissionDeniedError(session.role, "settings.manage");
+  if (blockers.length > 0) {
+    throw new BusinessRuleError(`This appointment cannot be deleted (${blockers.join(", ")}); cancel it instead.`, "delete_not_allowed");
+  }
   await repo.remove(id);
   await auditLog(session, {
     action: "deleted",

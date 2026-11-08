@@ -118,6 +118,14 @@
   max-width: 34ch;
 }
 
+/* Desktop title is ~42px: 34ch (of the 16px body font) is narrower than one long
+   RU/UK/DE word at that size ("Организованный"), which then broke mid-word. */
+@media (min-width: 900px) {
+  .brandContent {
+    max-width: 28rem;
+  }
+}
+
 .brandTitle {
   overflow-wrap: break-word;
   font-size: 1.5rem;
@@ -284,10 +292,3 @@
   }
 }
 
-/* German compounds: hyphenate instead of overflowing the screen. */
-:global(html[lang="de"]) .brandTitle,
-:global(html[lang="de"]) .brandSubtitle,
-:global(html[lang="de"]) .formTitle {
-  hyphens: auto;
-  overflow-wrap: anywhere;
-}

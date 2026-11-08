@@ -16,11 +16,6 @@
   font-weight: var(--font-weight-medium);
 }
 
-.triggerEmoji {
-  font-size: 16px;
-  line-height: 1;
-}
-
 .triggerInitial {
   display: inline-flex;
   align-items: center;
@@ -88,10 +83,18 @@
   background: var(--color-paper);
 }
 
-.optionEmoji {
-  font-size: 20px;
-  line-height: 1;
+.optionInitial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--color-border);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .optionBody {

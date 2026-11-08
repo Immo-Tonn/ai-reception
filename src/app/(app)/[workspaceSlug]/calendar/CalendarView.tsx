@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { localIsoDate } from "@/lib/date/localIsoDate";
+import { describeSaveError } from "@/lib/repository/describeSaveError";
+import { CANCELLED_LIKE, HISTORY_STATUSES, type DeleteBlocker } from "@/features/appointments/statusRules";
+import { getAppointmentDeleteBlockersAction } from "@/server/actions/appointments.actions";
 import { Button, Icon } from "@/components/ui";
 import { AppointmentSheet, type AppointmentSaveResult } from "@/components/calendar/AppointmentSheet";
 import { QuickActionsSheet } from "@/components/calendar/QuickActionsSheet";
@@ -22,6 +25,25 @@ import { resolveServiceLabel } from "@/features/services/label";
 import { getStaffLabel } from "@/features/staff/label";
 import type { Locale, Messages } from "@/lib/i18n";
 import styles from "./page.module.css";
+
+// "Show cancelled" is remembered per browser; read through useSyncExternalStore (server render = hidden).
+const SHOW_CANCELLED_KEY = "serviceos:calendar:showCancelled";
+const SHOW_CANCELLED_EVENT = "serviceos:showCancelled";
+function readShowCancelled(): boolean {
+  try {
+    return window.localStorage.getItem(SHOW_CANCELLED_KEY) === "1";
+  } catch {
+    return false; // storage unavailable: default stays "hidden"
+  }
+}
+function subscribeShowCancelled(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(SHOW_CANCELLED_EVENT, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(SHOW_CANCELLED_EVENT, onChange);
+  };
+}
 
 type DesktopView = "day" | "week" | "month" | "staff" | "list";
 
@@ -67,6 +89,8 @@ export function CalendarView({
   recurrence,
   conflict,
   auditLog,
+  repositoryErrors,
+  canCorrect,
 }: {
   workspaceSlug: string;
   locale: Locale;
@@ -80,6 +104,9 @@ export function CalendarView({
   recurrence: Messages["recurrence"];
   auditLog: Messages["auditLog"];
   conflict: Messages["conflict"];
+  repositoryErrors: Messages["repositoryErrors"];
+  /** owner / admin / manager: may correct a recorded outcome (server-checked as well). */
+  canCorrect: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -105,17 +132,80 @@ export function CalendarView({
   // Real workspace: opens on the workspace-local today (same as Today).
   // Demo workspaces keep their seeded demo day.
   const workspaceToday = useWorkspaceToday(workspaceSlug);
-  const isRealWorkspace = useWorkspaceTimeZone(workspaceSlug) !== null;
+  const workspaceTimeZone = useWorkspaceTimeZone(workspaceSlug);
+  const isRealWorkspace = workspaceTimeZone !== null;
   const [selectedDate, setSelectedDate] = useState(
     searchParams.get("date") ?? (isRealWorkspace ? workspaceToday : "2026-09-22"),
   );
   const [staffFilter, setStaffFilter] = useState<string>("all");
+  // Cancelled appointments no longer occupy time: hidden unless asked for (remembered per browser).
+  const storedShowCancelled = useSyncExternalStore(subscribeShowCancelled, readShowCancelled, () => false);
+  // Session fallback when storage is unavailable (private mode): the toggle still works on this page.
+  const [showCancelledOverride, setShowCancelledOverride] = useState<boolean | null>(null);
+  const showCancelled = showCancelledOverride ?? storedShowCancelled;
+  function toggleShowCancelled() {
+    const next = !showCancelled;
+    setShowCancelledOverride(next);
+    try {
+      window.localStorage.setItem(SHOW_CANCELLED_KEY, next ? "1" : "0");
+      window.dispatchEvent(new Event(SHOW_CANCELLED_EVENT));
+    } catch {
+      // ignore: the override above keeps the choice for this visit
+    }
+  }
+  // What the calendar SHOWS (the full list still drives conflict checks and deep links).
+  const shownAppointments = useMemo(
+    () => (showCancelled ? appointments : appointments.filter((a) => !CANCELLED_LIKE.has(a.status))),
+    [appointments, showCancelled],
+  );
+  const [actionError, setActionError] = useState<string | null>(null);
+  // Server answer for ONE appointment id (a stale answer for another id is never shown).
+  const [fetchedBlockers, setFetchedBlockers] = useState<{ id: string; list: DeleteBlocker[] } | null>(null);
   const [desktopView, setDesktopView] = useState<DesktopView>("day");
   const [listScope, setListScope] = useState<"upcoming" | "past">("upcoming");
+  // Week on phones: bring the selected day into view (Monday-first columns, 56px time axis).
+  const mobileWeekScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (desktopView !== "week") return;
+    const box = mobileWeekScrollRef.current;
+    if (!box || box.scrollWidth <= box.clientWidth) return;
+    const index = (new Date(selectedDate + "T00:00:00").getDay() + 6) % 7;
+    const columnWidth = (box.scrollWidth - 56) / 7;
+    box.scrollLeft = Math.max(0, index * columnWidth - columnWidth / 2);
+  }, [desktopView, selectedDate]);
 
   const [editing, setEditing] = useState<Appointment | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(searchParams.get("create") === "appointment");
+  // Can the appointment being edited be physically deleted? Real workspaces ask the server
+  // (role, history, online booking, invoice, waiting list); demo workspaces apply the status rule.
+  const editingId = editing?.id ?? null;
+  useEffect(() => {
+    if (!editingId || !isRealWorkspace) return;
+    let alive = true;
+    getAppointmentDeleteBlockersAction(workspaceSlug, editingId).then((r) => {
+      if (alive) setFetchedBlockers({ id: editingId, list: r.ok ? r.data : ["not_permitted"] });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [editingId, isRealWorkspace, workspaceSlug]);
+  const deleteBlockers: DeleteBlocker[] | null = !editing
+    ? null
+    : !isRealWorkspace
+      ? HISTORY_STATUSES.has(editing.status) ? ["has_history"] : []
+      : fetchedBlockers?.id === editing.id ? fetchedBlockers.list : null;
+  const createParam = searchParams.get("create");
+  const [sheetOpen, setSheetOpen] = useState(createParam === "appointment");
   const prefillClient = searchParams.get("client") ?? "";
+  // "Create → Appointment" while already on Calendar only changes the query
+  // string (no remount), so open the sheet when `?create=` appears.
+  const [seenCreateParam, setSeenCreateParam] = useState(createParam);
+  if (createParam !== seenCreateParam) {
+    setSeenCreateParam(createParam);
+    if (createParam === "appointment") {
+      setEditing(null);
+      setSheetOpen(true);
+    }
+  }
 
   // Store only the id and derive the live object from `appointments` on
   // every render — holding the Appointment object itself would freeze a
@@ -145,7 +235,11 @@ export function CalendarView({
     [appointments],
   );
 
-  const dayAppointments = appointments
+  const hiddenCancelledToday = showCancelled
+    ? 0
+    : appointments.filter((a) => a.date === selectedDate && CANCELLED_LIKE.has(a.status) && (staffFilter === "all" || a.staff === staffFilter)).length;
+
+  const dayAppointments = shownAppointments
     .filter((item) => item.date === selectedDate)
     .filter((item) => staffFilter === "all" || item.staff === staffFilter)
     .sort((a, b) => a.time.localeCompare(b.time));
@@ -260,7 +354,14 @@ export function CalendarView({
 
   async function handleDelete() {
     if (!editing) return;
-    await remove(editing.id);
+    setActionError(null);
+    try {
+      await remove(editing.id);
+    } catch (error) {
+      setActionError(describeSaveError(error, repositoryErrors));
+      setSheetOpen(false);
+      return;
+    }
     log({
       action: "deleted",
       entityType: "appointment",
@@ -272,7 +373,14 @@ export function CalendarView({
   }
 
   async function handleSetStatus(appt: Appointment, status: AppointmentStatus) {
-    await update(appt.id, { status });
+    setActionError(null);
+    try {
+      await update(appt.id, { status });
+    } catch (error) {
+      // The server applies the same status rules; show its reason instead of an unhandled error.
+      setActionError(describeSaveError(error, repositoryErrors));
+      return;
+    }
     log({
       action: status === "cancelled" ? "cancelled" : "statusChanged",
       entityType: "appointment",
@@ -325,7 +433,7 @@ export function CalendarView({
       <button
         key={item.id}
         type="button"
-        className={`${styles.row} ${item.id === justSavedId ? styles.rowJustSaved : ""}`}
+        className={`${styles.row} ${item.id === justSavedId ? styles.rowJustSaved : ""} ${CANCELLED_LIKE.has(item.status) ? styles.rowCancelled : item.status === "noShow" ? styles.rowNoShow : ""}`}
         onClick={() => setQuickActionsTargetId(item.id)}
       >
         <span className={styles.rowTime}>{item.time}</span>
@@ -371,7 +479,7 @@ export function CalendarView({
       // Weekday via the static lookup, not Intl — see the note by
       // `weekdaysShort` in the i18n data files for why.
       label: `${calendar.weekdaysShort[d.getDay()]} ${d.getDate()}`,
-      appointments: appointments
+      appointments: shownAppointments
         .filter((a) => a.date === iso)
         .filter((a) => staffFilter === "all" || a.staff === staffFilter),
     };
@@ -381,14 +489,55 @@ export function CalendarView({
   const staffColumns: TimeGridColumn[] = demoStaff.map((s) => ({
     key: s.id,
     label: getStaffLabel(s.name, youLabel),
-    appointments: appointments.filter((a) => a.date === selectedDate && a.staff === s.name),
+    appointments: shownAppointments.filter((a) => a.date === selectedDate && a.staff === s.name),
   }));
 
-  function shiftDesktopDate(days: number) {
+  /** Prev/next by the period of the current view: day (day/staff), week, or a whole MONTH. */
+  function shiftPeriod(direction: 1 | -1) {
     const d = new Date(selectedDate + "T00:00:00");
-    d.setDate(d.getDate() + days);
+    if (desktopView === "month") d.setMonth(d.getMonth() + direction, 1);
+    else d.setDate(d.getDate() + (desktopView === "week" ? 7 : 1) * direction);
     setSelectedDate(localIsoDate(d));
   }
+
+  function periodLabel() {
+    const d = new Date(selectedDate + "T00:00:00");
+    const thisYear = selectedDate.slice(0, 4) === workspaceToday.slice(0, 4);
+    // Year only when it isn't the current one, so the label fits a 320px phone.
+    if (desktopView === "month") {
+      return thisYear
+        ? d.toLocaleDateString(locale, { month: "long" })
+        : d.toLocaleDateString(locale, { month: "long", year: "numeric" });
+    }
+    if (desktopView === "week") {
+      const start = new Date(weekDays[0] + "T00:00:00");
+      const end = new Date(weekDays[weekDays.length - 1] + "T00:00:00");
+      // Short enough for a phone: "21–27 Sep" (same month) or "28 Sep – 4 Oct"; the year is in Month view.
+      return start.getMonth() === end.getMonth()
+        ? `${start.getDate()}–${end.toLocaleDateString(locale, { day: "numeric", month: "short" })}`
+        : `${start.toLocaleDateString(locale, { day: "numeric", month: "short" })} – ${end.toLocaleDateString(locale, { day: "numeric", month: "short" })}`;
+    }
+    return thisYear
+      ? d.toLocaleDateString(locale, { day: "numeric", month: "long" })
+      : d.toLocaleDateString(locale, { dateStyle: "long" });
+  }
+
+  const periodNav = (
+    <div className={styles.dateNav}>
+      <button type="button" className={styles.dateNavButton} onClick={() => shiftPeriod(-1)} aria-label={calendar.previousPeriod}>
+        <Icon name="chevronRight" size={16} style={{ transform: "rotate(180deg)" }} />
+      </button>
+      <span className={styles.dateNavLabel}>{periodLabel()}</span>
+      <button type="button" className={styles.dateNavButton} onClick={() => shiftPeriod(1)} aria-label={calendar.nextPeriod}>
+        <Icon name="chevronRight" size={16} />
+      </button>
+      {selectedDate !== workspaceToday ? (
+        <button type="button" className={styles.todayButton} onClick={() => setSelectedDate(workspaceToday)}>
+          {calendar.today}
+        </button>
+      ) : null}
+    </div>
+  );
 
   const desktopViewTabs: { key: DesktopView; label: string }[] = [
     { key: "day", label: calendar.dayView },
@@ -465,6 +614,8 @@ export function CalendarView({
           ))}
         </div>
 
+        <div className={styles.mobilePeriod}>{periodNav}</div>
+
         {desktopView === "day" && (
           <div className={styles.dateStrip}>
             {weekStrip.map((iso) => {
@@ -507,7 +658,23 @@ export function CalendarView({
               {getStaffLabel(name, youLabel)}
             </button>
           ))}
+          <button
+            type="button"
+            aria-pressed={showCancelled}
+            className={`${styles.staffChip} ${showCancelled ? styles.staffChipActive : ""}`}
+            onClick={toggleShowCancelled}
+          >
+            {calendar.showCancelled}
+          </button>
         </div>
+        {hiddenCancelledToday > 0 && (
+          <p className={styles.hiddenNote}>{calendar.cancelledHidden.replace("{n}", String(hiddenCancelledToday))}</p>
+        )}
+        {actionError && (
+          <p className={styles.actionError} role="alert">
+            {actionError}
+          </p>
+        )}
 
         {desktopView === "day" &&
           (dayAppointments.length === 0 ? (
@@ -520,31 +687,54 @@ export function CalendarView({
           ))}
 
         {desktopView === "week" && (
-          <div className={styles.gridScroll}>
+          <>
+          <p className={styles.scrollHint}>
+            {calendar.scrollHint} <Icon name="arrowRight" size={14} />
+          </p>
+          <div className={styles.weekScroller}>
+          <div className={styles.gridScroll} ref={mobileWeekScrollRef}>
             <TimeGrid
               columns={weekColumns}
               services={demoServices}
               locale={locale}
               dashboardMessages={dashboard}
+              statusMessages={appointmentStatus}
               onSelect={(a) => setQuickActionsTargetId(a.id)}
             />
           </div>
+          </div>
+          </>
         )}
 
         {desktopView === "month" && (
-          <MonthGrid
-            monthAnchor={selectedDate}
-            appointments={appointments.filter(
-              (a) => staffFilter === "all" || a.staff === staffFilter,
-            )}
-            weekdaysShort={calendar.weekdaysShort}
-            dashboardMessages={dashboard}
-            today={workspaceToday}
-            onSelectDay={(date) => {
-              setSelectedDate(date);
-              setDesktopView("day");
-            }}
-          />
+          <>
+            <MonthGrid
+              compact
+              monthAnchor={selectedDate}
+              selectedDate={selectedDate}
+              countLabel={calendar.dayCount}
+              appointments={shownAppointments.filter(
+                (a) => staffFilter === "all" || a.staff === staffFilter,
+              )}
+              weekdaysShort={calendar.weekdaysShort}
+              dashboardMessages={dashboard}
+              today={workspaceToday}
+              // Phones: pick a day and see its appointments right below (no jump to Day view).
+              onSelectDay={(date) => setSelectedDate(date)}
+            />
+            <section className={styles.dayAgenda} aria-live="polite">
+              <h2 className={styles.dayAgendaTitle}>
+                {new Date(selectedDate + "T00:00:00").toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })}
+              </h2>
+              {dayAppointments.length === 0 ? (
+                <div className={styles.empty}>
+                  <span className={styles.emptyTitle}>{calendar.noAppointments}</span>
+                </div>
+              ) : (
+                <div className={styles.list}>{dayAppointments.map(renderRow)}</div>
+              )}
+            </section>
+          </>
         )}
 
         {desktopView === "list" && listSection}
@@ -556,6 +746,7 @@ export function CalendarView({
               services={demoServices}
               locale={locale}
               dashboardMessages={dashboard}
+              statusMessages={appointmentStatus}
               onSelect={(a) => setQuickActionsTargetId(a.id)}
             />
           </div>
@@ -578,29 +769,7 @@ export function CalendarView({
             ))}
           </div>
 
-          <div className={styles.dateNav}>
-            <button
-              type="button"
-              className={styles.dateNavButton}
-              onClick={() => shiftDesktopDate(desktopView === "week" ? -7 : -1)}
-              aria-label="Previous"
-            >
-              <Icon name="chevronRight" size={16} style={{ transform: "rotate(180deg)" }} />
-            </button>
-            <span className={styles.dateNavLabel}>
-              {new Date(selectedDate + "T00:00:00").toLocaleDateString(locale, {
-                dateStyle: "long",
-              })}
-            </span>
-            <button
-              type="button"
-              className={styles.dateNavButton}
-              onClick={() => shiftDesktopDate(desktopView === "week" ? 7 : 1)}
-              aria-label="Next"
-            >
-              <Icon name="chevronRight" size={16} />
-            </button>
-          </div>
+          {periodNav}
 
           <div className={styles.staffRow} style={{ marginBottom: 0 }}>
             <button
@@ -634,19 +803,22 @@ export function CalendarView({
           ))}
 
         {desktopView === "week" && (
+          <div className={styles.gridScroll}>
           <TimeGrid
             columns={weekColumns}
             services={demoServices}
             locale={locale}
             dashboardMessages={dashboard}
+            statusMessages={appointmentStatus}
             onSelect={(a) => setQuickActionsTargetId(a.id)}
           />
+          </div>
         )}
 
         {desktopView === "month" && (
           <MonthGrid
             monthAnchor={selectedDate}
-            appointments={appointments.filter(
+            appointments={shownAppointments.filter(
               (a) => staffFilter === "all" || a.staff === staffFilter,
             )}
             weekdaysShort={calendar.weekdaysShort}
@@ -662,13 +834,16 @@ export function CalendarView({
         {desktopView === "list" && listSection}
 
         {desktopView === "staff" && (
+          <div className={styles.gridScroll}>
           <TimeGrid
             columns={staffColumns}
             services={demoServices}
             locale={locale}
             dashboardMessages={dashboard}
+            statusMessages={appointmentStatus}
             onSelect={(a) => setQuickActionsTargetId(a.id)}
           />
+          </div>
         )}
       </div>
 
@@ -681,6 +856,9 @@ export function CalendarView({
         onClose={closeSheet}
         onSave={handleSave}
         onDelete={editing ? handleDelete : undefined}
+        deleteBlockers={editing ? deleteBlockers : null}
+        timeZone={workspaceTimeZone}
+        canCorrect={canCorrect}
         locale={locale}
         messages={appointment}
         statusMessages={appointmentStatus}
@@ -724,6 +902,8 @@ export function CalendarView({
         onOpenClient={() => quickActionsTarget && handleOpenClient(quickActionsTarget)}
         onConfirmCancel={() => quickActionsTarget && handleConfirmCancel(quickActionsTarget)}
         onViewWaitingList={() => router.push(`/${workspaceSlug}/waiting-list`)}
+        timeZone={workspaceTimeZone}
+        canCorrect={canCorrect}
       />
 
       <MoveAppointmentSheet

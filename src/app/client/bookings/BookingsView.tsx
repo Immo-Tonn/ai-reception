@@ -28,6 +28,8 @@ import { browserTimeZone, buildDateStrip, zoneCityLabel } from "@/lib/time/dateS
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency, formatDate } from "@/lib/i18n/format";
 import styles from "./BookingsView.module.css";
+import { useClientValue } from "@/lib/hooks/useClientValue";
+import { AddToCalendar } from "@/components/calendar/AddToCalendar";
 
 export type BookingsViewState = "signed_out" | "ready";
 
@@ -45,6 +47,7 @@ export function BookingsView({
   bookings,
   hasPendingClaims,
   email,
+  calendarConnected = false,
 }: {
   locale: Locale;
   client: Messages["client"];
@@ -53,6 +56,8 @@ export function BookingsView({
   bookings: MyBooking[];
   hasPendingClaims: boolean;
   email: string | null;
+  /** The client's calendar already subscribes: no per-booking "add" buttons (no duplicates). */
+  calendarConnected?: boolean;
 }) {
   const [expired, setExpired] = useState(false);
   const handleExpired = useCallback(() => setExpired(true), []);
@@ -68,6 +73,7 @@ export function BookingsView({
       bookings={bookings}
       hasPendingClaims={hasPendingClaims}
       email={email}
+      calendarConnected={calendarConnected}
       onExpired={handleExpired}
     />
   );
@@ -76,6 +82,7 @@ export function BookingsView({
 function SignedOutPrompt({ client, expired }: { client: Messages["client"]; expired: boolean }) {
   return (
     <main className={styles.screen}>
+      <ClientNav client={client} active="bookings" showSignOut={false} />
       <div className={styles.body}>
         <h1 className={styles.title}>{client.signedOutTitle}</h1>
         {expired ? (
@@ -110,6 +117,7 @@ function ReadyView({
   bookings,
   hasPendingClaims,
   email,
+  calendarConnected,
   onExpired,
 }: {
   locale: Locale;
@@ -118,6 +126,7 @@ function ReadyView({
   bookings: MyBooking[];
   hasPendingClaims: boolean;
   email: string | null;
+  calendarConnected: boolean;
   onExpired: () => void;
 }) {
   const router = useRouter();
@@ -127,11 +136,10 @@ function ReadyView({
   const [feedback, setFeedback] = useState<Feedback>(IDLE);
   const [busy, setBusy] = useState(false);
   const [claiming, setClaiming] = useState(false);
-  const [browserZone, setBrowserZone] = useState<string | null>(null);
   const claimStarted = useRef(false);
 
-  // Browser zone is only known on the client; reading it after mount keeps SSR and hydration identical.
-  useEffect(() => setBrowserZone(browserTimeZone()), []);
+  // Browser zone is only known on the client; the server render and hydration use null.
+  const browserZone = useClientValue(browserTimeZone, null);
 
   // Bookings made as a guest in this browser are linked once, right after sign-in.
   useEffect(() => {
@@ -224,6 +232,10 @@ function ReadyView({
             {client.bookAppointmentCta}
           </Link>
         ) : null}
+        <Link href="/client/profile" className={styles.calendarHint}>
+          {calendarConnected ? client.calendarSyncConnectedShort : client.calendarSyncInProfile}
+        </Link>
+
 
         <div className={styles.tabs} role="tablist">
           <button
@@ -265,6 +277,7 @@ function ReadyView({
                 client={client}
                 appointmentStatus={appointmentStatus}
                 browserZone={browserZone}
+                calendarConnected={calendarConnected}
                 busy={busy}
                 cancelling={cancelTargetId === booking.id}
                 rescheduling={rescheduleTargetId === booking.id}
@@ -298,6 +311,7 @@ function BookingCard({
   client,
   appointmentStatus,
   browserZone,
+  calendarConnected,
   busy,
   cancelling,
   rescheduling,
@@ -314,6 +328,7 @@ function BookingCard({
   client: Messages["client"];
   appointmentStatus: Messages["appointmentStatus"];
   browserZone: string | null;
+  calendarConnected: boolean;
   busy: boolean;
   cancelling: boolean;
   rescheduling: boolean;
@@ -351,6 +366,18 @@ function BookingCard({
         </span>
         {booking.price > 0 ? (
           <span className={styles.metaLine}>{formatCurrency(booking.price, booking.currency, locale)}</span>
+        ) : null}
+        {booking.isUpcoming && booking.status !== "cancelled" && !calendarConnected ? (
+          <AddToCalendar
+            labels={{ title: client.addToCalendarTitle, google: client.addToCalendarGoogle, appleOutlook: client.addToCalendarFile }}
+            event={{
+              uid: `appointment-${booking.id}@serviceos`,
+              start: new Date(booking.startsAt),
+              end: new Date(booking.endsAt),
+              summary: [booking.serviceName, booking.businessName].filter(Boolean).join(" · "),
+              status: booking.status === "pending" ? "TENTATIVE" : "CONFIRMED",
+            }}
+          />
         ) : null}
       </div>
 
@@ -432,36 +459,29 @@ function ReschedulePanel({
   // Days are counted from the BUSINESS "today", never the browser's.
   const dateStrip = useMemo(() => buildDateStrip(new Date(), booking.timezone), [booking.timezone]);
   const [selectedDate, setSelectedDate] = useState(dateStrip[0]);
-  const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // The answer is stored WITH the day it belongs to: "loading" is derived, and a late answer
+  // for a previously tapped day can never replace the current one.
+  const [answer, setAnswer] = useState<{ date: string; slots: AvailableSlot[]; error: string | null } | null>(null);
+  const loading = answer?.date !== selectedDate;
+  const slots = !loading && answer ? answer.slots : [];
+  const error = !loading && answer ? answer.error : null;
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setSelectedTime(null);
-    setError(null);
     getMyRescheduleSlotsAction(booking.id, selectedDate)
       .then((result) => {
         if (cancelled) return;
         if (result.ok) {
-          setSlots(uniqueSlotTimes(result.data));
+          setAnswer({ date: selectedDate, slots: uniqueSlotTimes(result.data), error: null });
         } else if (result.code === "unauthenticated") {
           onExpired();
         } else {
-          setSlots([]);
-          setError(client[clientErrorKey(result.code)]);
+          setAnswer({ date: selectedDate, slots: [], error: client[clientErrorKey(result.code)] });
         }
       })
       .catch(() => {
-        if (!cancelled) {
-          setSlots([]);
-          setError(client.errUnknown);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setAnswer({ date: selectedDate, slots: [], error: client.errUnknown });
       });
     return () => {
       cancelled = true;
@@ -482,7 +502,11 @@ function ReschedulePanel({
               type="button"
               aria-pressed={selectedDate === iso}
               className={`${styles.dateChip} ${selectedDate === iso ? styles.dateChipActive : ""}`}
-              onClick={() => setSelectedDate(iso)}
+              onClick={() => {
+                if (iso === selectedDate) return;
+                setSelectedDate(iso);
+                setSelectedTime(null);
+              }}
             >
               <span>{date.toLocaleDateString(locale, { weekday: "short" })}</span>
               <strong>{date.getDate()}</strong>

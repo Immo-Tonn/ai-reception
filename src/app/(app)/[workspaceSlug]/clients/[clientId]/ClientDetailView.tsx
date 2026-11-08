@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { belongsToClient } from "@/features/appointments/identity";
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/ui";
@@ -9,6 +10,8 @@ import type { Locale, Messages } from "@/lib/i18n";
 import { formatCurrency, formatDate } from "@/lib/i18n/format";
 import { useWorkspaceToday } from "@/features/workspace/WorkspaceCatalog";
 import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
+import { StatusBadge } from "@/components/calendar/StatusBadge";
+import { activeStatuses } from "@/features/appointments/statusMeta";
 import { EditClientSheet } from "./EditClientSheet";
 import { RelatedPanel } from "./RelatedPanel";
 import styles from "./page.module.css";
@@ -30,12 +33,14 @@ export function ClientDetailView({
   locale,
   messages,
   crossModule,
+  statusMessages,
 }: {
   workspaceSlug: string;
   clientId: string;
   locale: Locale;
   messages: Messages["clients"];
   crossModule: Messages["crossModule"];
+  statusMessages: Messages["appointmentStatus"];
 }) {
   const [tab, setTab] = useState<Tab>("upcoming");
   const [editing, setEditing] = useState(false);
@@ -58,17 +63,31 @@ export function ClientDetailView({
   const upcoming = useMemo(
     () =>
       clientAppointments
-        .filter((a) => a.date >= today && a.status !== "cancelled")
+        // Upcoming = still going to happen (active and today or later). Everything else is history,
+        // so an appointment never disappears from the client: cancelled, no-show, completed all stay.
+        .filter((a) => a.date >= today && activeStatuses.has(a.status))
         .sort((a, b) => (a.date === b.date ? a.time.localeCompare(b.time) : a.date.localeCompare(b.date))),
     [clientAppointments, today],
   );
   const history = useMemo(
     () =>
       clientAppointments
-        .filter((a) => a.date < today || a.status === "completed" || a.status === "cancelled")
+        .filter((a) => !(a.date >= today && activeStatuses.has(a.status)))
         .sort((a, b) => (a.date === b.date ? b.time.localeCompare(a.time) : b.date.localeCompare(a.date))),
     [clientAppointments, today],
   );
+
+  const counts = useMemo(
+    () => ({
+      completed: clientAppointments.filter((a) => a.status === "completed").length,
+      noShow: clientAppointments.filter((a) => a.status === "noShow").length,
+      cancelled: clientAppointments.filter((a) => a.status === "cancelled").length,
+    }),
+    [clientAppointments],
+  );
+  /** Opens the appointment's quick actions in the calendar (status changes / corrections live there). */
+  const appointmentHref = (a: { id: string; date: string }) =>
+    `/${workspaceSlug}/calendar?date=${encodeURIComponent(a.date)}&appointment=${encodeURIComponent(a.id)}`;
 
   const loaded = clientsLoaded && appointmentsLoaded;
 
@@ -84,10 +103,10 @@ export function ClientDetailView({
   if (!client) {
     return (
       <main className={styles.page}>
-        <a className={styles.backLink} href={`/${workspaceSlug}/clients`}>
+        <Link className={styles.backLink} href={`/${workspaceSlug}/clients`}>
           <Icon name="chevronRight" size={14} style={{ transform: "rotate(180deg)" }} />
           {messages.back}
-        </a>
+        </Link>
         <div className={styles.empty}>
           <div>{messages.notFoundTitle}</div>
           <div>{messages.notFoundDescription}</div>
@@ -98,10 +117,10 @@ export function ClientDetailView({
 
   return (
     <main className={styles.page}>
-      <a className={styles.backLink} href={`/${workspaceSlug}/clients`}>
+      <Link className={styles.backLink} href={`/${workspaceSlug}/clients`}>
         <Icon name="chevronRight" size={14} style={{ transform: "rotate(180deg)" }} />
         {messages.back}
-      </a>
+      </Link>
 
       <div className={styles.header}>
         <span className={styles.avatar}>{initials(client.name)}</span>
@@ -119,6 +138,12 @@ export function ClientDetailView({
         <button type="button" className={styles.editButton} onClick={() => setEditing(true)}>
           {messages.edit}
         </button>
+      </div>
+
+      <div className={styles.statusCounts} aria-label={messages.statusSummaryLabel}>
+        <span>{messages.countCompleted.replace("{n}", String(counts.completed))}</span>
+        <span className={counts.noShow > 0 ? styles.countWarning : undefined}>{messages.countNoShow.replace("{n}", String(counts.noShow))}</span>
+        <span>{messages.countCancelled.replace("{n}", String(counts.cancelled))}</span>
       </div>
 
       <EditClientSheet
@@ -149,14 +174,15 @@ export function ClientDetailView({
         ) : (
           <div className={styles.list}>
             {upcoming.map((item) => (
-              <div key={item.id} className={styles.row}>
+              <Link key={item.id} className={styles.row} href={appointmentHref(item)}>
                 <div>
                   <div className={styles.rowTitle}>{item.service}</div>
                   <div className={styles.rowSubtitle}>
                     {formatDate(new Date(item.date), locale, { dateStyle: "medium" })} · {item.time}
                   </div>
                 </div>
-              </div>
+                <StatusBadge status={item.status} labels={statusMessages} />
+              </Link>
             ))}
           </div>
         ))}
@@ -167,17 +193,25 @@ export function ClientDetailView({
         ) : (
           <div className={styles.list}>
             {history.map((item) => (
-              <div key={item.id} className={styles.row}>
+              <Link
+                key={item.id}
+                className={`${styles.row} ${item.status === "cancelled" || item.status === "noShow" ? styles.rowMuted : ""}`}
+                href={appointmentHref(item)}
+                title={messages.historyOpenHint}
+              >
                 <div>
                   <div className={styles.rowTitle}>{item.service}</div>
                   <div className={styles.rowSubtitle}>
-                    {formatDate(new Date(item.date), locale, { dateStyle: "medium" })}
+                    {formatDate(new Date(item.date), locale, { dateStyle: "medium" })} · {item.time}
                   </div>
                 </div>
-                <span className={styles.rowValue}>
-                  {formatCurrency(item.price, item.currency, locale)}
+                <span className={styles.rowEnd}>
+                  <StatusBadge status={item.status} labels={statusMessages} />
+                  {item.status === "completed" ? (
+                    <span className={styles.rowValue}>{formatCurrency(item.price, item.currency, locale)}</span>
+                  ) : null}
                 </span>
-              </div>
+              </Link>
             ))}
           </div>
         ))}

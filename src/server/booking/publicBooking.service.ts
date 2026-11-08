@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { computeSlotsFor, pickSlot, type AvailableSlot } from "@/features/appointments/availability";
+import { computeSlotsFor, pickSlot, type AvailableSlot, type ExternalBusyInput } from "@/features/appointments/availability";
 import type { ServiceDefinition } from "@/features/services/types";
 import type { StaffMember } from "@/features/staff/types";
 import type { ResourceDefinition, ResourceType } from "@/features/resources/types";
@@ -13,6 +13,8 @@ import { computeAvailableDates } from "@/features/scheduling/availableDates";
 import type { RateLimiter } from "@/server/ratelimit/rateLimiter";
 import { busyRangesToAppointments, type BusyRange } from "./busyMapper";
 import { workingHoursFromRows, type TimeOffRow, type WorkingHoursRow } from "./workingHoursMapper";
+import { externalBusyForEngine, type ExternalBusyLoader } from "@/server/externalCalendar/engineInput";
+import type { ExternalBusyMode } from "@/features/externalCalendar/policy";
 
 /**
  * The real (shared-backend) Public Booking application service. A guest has
@@ -45,6 +47,11 @@ export interface PublicBookingDeps {
   admin: SupabaseClient;
   rateLimiter: RateLimiter;
   now?: () => Date;
+  /**
+   * Busy time from connected external calendars (Google FreeBusy). Optional:
+   * without it nothing external is considered (tests, no integration).
+   */
+  externalBusy?: ExternalBusyLoader;
 }
 
 /** The customer-facing business profile: exactly what the owner entered for customers, nothing internal. */
@@ -247,6 +254,29 @@ async function loadBusyAppointments(
   return busyRangesToAppointments(busy, tz, catalog.staff);
 }
 
+/**
+ * External calendar busy time for the same window as `loadBusyAppointments`.
+ * `commit` (right before writing) demands a fresher answer than browsing.
+ * People whose busy time cannot be confirmed come back as unavailable.
+ */
+async function loadExternalInput(
+  deps: Pick<PublicBookingDeps, "externalBusy">,
+  catalog: PublicCatalog,
+  fromDate: string,
+  toDate: string,
+  mode: ExternalBusyMode,
+): Promise<ExternalBusyInput> {
+  if (!deps.externalBusy) return {};
+  const tz = catalog.workspace.timezone;
+  const result = await deps.externalBusy({
+    workspaceId: catalog.workspace.id,
+    from: wallToInstant(addDays(fromDate, -1), "00:00", tz),
+    until: wallToInstant(addDays(toDate, 2), "00:00", tz),
+    mode,
+  });
+  return externalBusyForEngine(result, tz, catalog.staff);
+}
+
 /** The engine inputs shared by slots and dates: the catalog's rules, in the workspace time zone. */
 function engineContext(catalog: PublicCatalog, now: Date) {
   const tz = catalog.workspace.timezone;
@@ -267,29 +297,35 @@ function assertServiceAndStaff(catalog: PublicCatalog, serviceId: string, staffI
 }
 
 export async function computeSlots(
-  deps: Pick<PublicBookingDeps, "admin" | "now">,
+  deps: Pick<PublicBookingDeps, "admin" | "now" | "externalBusy">,
   catalog: PublicCatalog,
   serviceId: string,
   staffId: string | null,
   date: string,
   ignore?: IgnoredBusyWindow,
+  mode: ExternalBusyMode = "browse",
 ): Promise<AvailableSlot[]> {
   const now = (deps.now ?? (() => new Date()))();
   const ctx = engineContext(catalog, now);
   if (!isWithinHorizon(date, ctx.today, ctx.maxHorizonDays)) return [];
   assertServiceAndStaff(catalog, serviceId, staffId);
 
+  const [existingAppointments, external] = await Promise.all([
+    loadBusyAppointments(deps, catalog, date, date, ignore),
+    loadExternalInput(deps, catalog, date, date, mode),
+  ]);
   return computeSlotsFor({
     serviceId,
     staffId,
     services: catalog.services,
     staff: catalog.staff,
     resources: catalog.resources,
-    existingAppointments: await loadBusyAppointments(deps, catalog, date, date, ignore),
+    existingAppointments,
     workingHours: ctx.workingHours,
     date,
     notBefore: ctx.notBefore,
     slotIntervalMinutes: ctx.slotIntervalMinutes,
+    ...external,
   });
 }
 
@@ -298,7 +334,7 @@ export async function computeSlots(
  * fetch, then the same engine per day (pure), horizon and min notice applied.
  */
 export async function computeAvailableDatesForCatalog(
-  deps: Pick<PublicBookingDeps, "admin" | "now">,
+  deps: Pick<PublicBookingDeps, "admin" | "now" | "externalBusy">,
   catalog: PublicCatalog,
   serviceId: string,
   staffId: string | null,
@@ -309,13 +345,19 @@ export async function computeAvailableDatesForCatalog(
   const ctx = engineContext(catalog, now);
   assertServiceAndStaff(catalog, serviceId, staffId);
   const window = Math.min(Math.max(1, days), MAX_DATES_WINDOW);
+  const toDate = addDays(fromDate, window - 1);
+  const [existingAppointments, external] = await Promise.all([
+    loadBusyAppointments(deps, catalog, fromDate, toDate),
+    loadExternalInput(deps, catalog, fromDate, toDate, "browse"),
+  ]);
   return computeAvailableDates({
+    ...external,
     serviceId,
     staffId,
     services: catalog.services,
     staff: catalog.staff,
     resources: catalog.resources,
-    existingAppointments: await loadBusyAppointments(deps, catalog, fromDate, addDays(fromDate, window - 1)),
+    existingAppointments,
     workingHours: ctx.workingHours,
     fromDate,
     days: window,
@@ -373,8 +415,8 @@ export async function createPublicBooking(deps: PublicBookingDeps, ctx: { ip: st
   const catalog = await loadPublicCatalog(deps, slug);
   if (!catalog) throw new PublicBookingError("not_found");
 
-  // Re-validate against the live schedule, then let the database be the final judge.
-  const slots = await computeSlots(deps, catalog, serviceId, staffId, date);
+  // Re-validate against the live schedule (external calendars freshly confirmed), then let the database be the final judge.
+  const slots = await computeSlots(deps, catalog, serviceId, staffId, date, undefined, "commit");
   const slot = pickSlot(slots, time, staffId);
   if (!slot) throw new PublicBookingError("slot_unavailable");
 
