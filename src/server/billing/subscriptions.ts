@@ -13,7 +13,7 @@ import {
 } from "./stripe";
 
 /**
- * Stored subscriptions (migration 0033), written only by the Stripe webhook.
+ * Stored subscriptions (migration 0034), written only by the Stripe webhook.
  * Service-role client because the table has no RLS policies; every reader
  * authorizes with `billing.manage` first.
  */
@@ -40,7 +40,7 @@ async function readStoredSubscription(client: SupabaseClient, workspaceId: strin
 /**
  * The workspace's current subscription: the stored row first, then Stripe. The
  * fallback keeps double charging impossible while the webhook is late, or when
- * the code is deployed before migration 0033 / the webhook is set up.
+ * the code is deployed before migration 0034 / the webhook is set up.
  */
 export async function getCurrentSubscription(
   config: StripeConfig,

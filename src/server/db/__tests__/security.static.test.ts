@@ -176,7 +176,7 @@ describe("service-role and secret hygiene", () => {
     expect(importers).toEqual([
       "src/lib/supabase/admin.ts",
       "src/server/auth/supabaseBusinessAuth.ts", // roll back a half-made sign-up
-      "src/server/billing/subscriptions.ts", // workspace_subscriptions (0033: no RLS policies, service role only; callers authorize first)
+      "src/server/billing/subscriptions.ts", // workspace_subscriptions (0034: no RLS policies, service role only; callers authorize first)
       "src/server/booking/deps.ts", // guest booking (3 whitelisted DB functions) + client directory listing (0017)
       "src/server/booking/pageData.ts", // public catalog for the booking page (same function)
       "src/server/externalCalendar/deps.ts", // external calendar tables (0025: no RLS policies, service role only; callers authorize first)

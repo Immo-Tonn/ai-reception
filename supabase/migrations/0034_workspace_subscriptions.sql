@@ -1,4 +1,4 @@
--- ServiceOS — 0033: the business's own ServiceOS subscription (Stripe), kept in
+-- ServiceOS — 0034: the business's own ServiceOS subscription (Stripe), kept in
 -- sync by the Stripe webhook (src/app/api/stripe/webhook). Setup: docs/STRIPE_SETUP_RU.md.
 --
 --   workspace_subscriptions : at most one per workspace. Stripe ids, plan and
@@ -8,8 +8,8 @@
 -- revoked from anon / authenticated / PUBLIC. The server reads the row after
 -- its own `billing.manage` check (same model as 0025).
 --
--- Numbered 0033 because 0028-0032 are reserved by the GDPR branches. Depends
--- only on `workspaces`, so it may be applied before or after them.
+-- Follows the GDPR chain (0028-0033) in numbering. Depends only on
+-- `workspaces`, not on any GDPR migration.
 -- Idempotent; no existing table or row is changed.
 
 create table if not exists public.workspace_subscriptions (

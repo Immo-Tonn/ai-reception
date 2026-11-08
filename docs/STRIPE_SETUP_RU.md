@@ -67,8 +67,8 @@ STRIPE_PRICE_PRO=price_...
 
 Порядок важен:
 
-1. **Миграция.** Применить `supabase/migrations/0033_workspace_subscriptions.sql`. Production — только по отдельному согласованию.
-   Номера `0028`–`0032` заняты GDPR-ветками, поэтому лучше применять по порядку, после них. Миграция зависит только от `workspaces`, и через SQL Editor её можно применить раньше. Но если применить `0033` через `supabase db push` раньше них, потом для `0028`–`0032` понадобится флаг `--include-all`.
+1. **Миграция.** Применить `supabase/migrations/0034_workspace_subscriptions.sql` после GDPR-миграций `0028`–`0033`, по порядку: бэкап → миграция → слияние PR → проверка. Production — только по отдельному согласованию.
+   От GDPR-миграций она не зависит, нужна только таблица `workspaces`.
 2. **Вебхук в Stripe.** Developers → Webhooks → **Add destination** (или Add endpoint). Адрес: `https://ваш-домен/api/stripe/webhook`. События:
    - `checkout.session.completed`
    - `customer.subscription.updated`

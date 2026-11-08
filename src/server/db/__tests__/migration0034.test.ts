@@ -43,10 +43,10 @@ beforeEach(async () => {
   await db.query("delete from workspace_subscriptions");
 });
 
-describe("0033 workspace subscriptions", () => {
+describe("0034 workspace subscriptions", () => {
   it("is idempotent (re-running the file is harmless)", async () => {
     await save("sub_1", "active");
-    await db.exec(readFileSync(path.join(migrationsDir, "0033_workspace_subscriptions.sql"), "utf8"));
+    await db.exec(readFileSync(path.join(migrationsDir, "0034_workspace_subscriptions.sql"), "utf8"));
     expect((await stored()).stripe_subscription_id).toBe("sub_1");
   });
 
