@@ -46,7 +46,7 @@ describe("typography: no mid-word breaks", () => {
   });
 
   it("overflow-wrap: anywhere only on user-data fields (one long token)", () => {
-    const used = css.flatMap((f) => anywhereSelectors(f).map((sel) => `${path.relative(root, f)} ${sel}`));
+    const used = css.flatMap((f) => anywhereSelectors(f).map((sel) => `${path.relative(root, f).split(path.sep).join("/")} ${sel}`));
     expect(used.sort()).toEqual([...ALLOWED_ANYWHERE].sort());
   });
 
