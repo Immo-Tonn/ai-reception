@@ -175,6 +175,7 @@ describe("service-role and secret hygiene", () => {
     const importers = sources.filter((f) => /createSupabaseAdminClient/.test(read(f))).map(rel).sort();
     expect(importers).toEqual([
       "src/lib/supabase/admin.ts",
+      "src/server/audit/deps.ts", // the ONLY insert into audit_logs (0033): after the server checked user + membership
       "src/server/auth/supabaseBusinessAuth.ts", // roll back a half-made sign-up
       "src/server/booking/deps.ts", // guest booking (3 whitelisted DB functions) + client directory listing (0017)
       "src/server/booking/pageData.ts", // public catalog for the booking page (same function)
@@ -183,6 +184,14 @@ describe("service-role and secret hygiene", () => {
       "src/server/retention/deps.ts", // daily retention cron (CRON_SECRET): expired unclaimed booking_claims + retention_dry_run (0030, service_role only)
       "src/server/services/provisioning.service.ts", // provision_workspace
     ]);
+  });
+
+  it("audit_logs is written from exactly one place in the application code", () => {
+    const inserts = sources
+      .filter((f) => !rel(f).startsWith("src/test/")) // test wiring (src/test/setup.ts) is not application code
+      .filter((f) => /from\(["']audit_logs["']\)\s*\.insert\(/.test(read(f).replace(/\s+/g, " ")))
+      .map(rel);
+    expect(inserts).toEqual(["src/server/audit/deps.ts"]);
   });
 
   it("the service-role key is read in exactly one file and never behind NEXT_PUBLIC_", () => {
