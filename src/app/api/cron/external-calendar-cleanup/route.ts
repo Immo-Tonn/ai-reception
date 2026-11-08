@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 /**
  * Daily retention cleanup for the Google Calendar integration (vercel.json
  * crons, docs/DATA_RETENTION.md). Protected by CRON_SECRET. Idempotent: a
- * repeated or late run (Hobby plan: once a day, ±59 min) deletes nothing twice.
+(the hosting plan limits cron to about once a day, +-59 min)
  * Logs and returns COUNTS only — never ids, names, e-mail addresses or tokens.
  */
 export async function GET(request: NextRequest) {

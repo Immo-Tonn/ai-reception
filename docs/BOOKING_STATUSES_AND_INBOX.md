@@ -135,10 +135,10 @@ Re-enable: set the variable in Vercel and redeploy.
 |---|---|---|---|
 | Local (`next dev`) with the LOCAL Supabase (`supabase start`) or demo workspaces | test data | unset (= on) | the developer |
 | Staging with its OWN test Supabase project (does not exist yet) | test data | `finance,analytics` | the team |
-| Vercel Preview | **production data** (shares the production keys) | **unset (= off)** | nobody |
-| Production (`livetermin.de`) | production data | **unset (= off)** | nobody |
+| Vercel Preview | must NOT use production credentials (details: private repository) | **unset (= off)** | nobody |
+| Production | production data | **unset (= off)** | nobody |
 
-⚠️ "ServiceOS Dev" is the Supabase project that serves PRODUCTION (real
+⚠️ Treat the team's main Supabase project as holding real data (real
 businesses). It is not a test database. Until a separate test project
 exists, Finance / Analytics are tested only locally.
 
@@ -147,7 +147,7 @@ Rules:
   not decide which data is visible — the Supabase project of the environment
   does. RLS still applies everywhere (a business only sees itself; finance
   only for roles with `finance.view`).
-- Never point staging / previews at the production database to "test finance".
+- Never point staging / previews at a database holding real data to "test finance".
 - Later, to launch: set `SERVICEOS_FEATURES=finance,analytics` (or only one)
   in the production environment and redeploy. Removing it hides them again.
 

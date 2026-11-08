@@ -1,6 +1,6 @@
 # Bootstrap ServiceOS on a fresh Supabase project
 
-Цель: поднять рабочий ServiceOS на **совершенно новом** Supabase project, не переписывая код. Источник истины для структуры backend — **репозиторий + `supabase/migrations/`**. Текущий проект `ai-reception` — временное/reference-окружение, не единственный источник истины. В коде нет ни одного идентификатора конкретного проекта: переезд = новые ENV + redeploy.
+Предыдущий тестовый проект — временное/reference-окружение (подробности в закрытом репозитории), не единственный источник истины. В коде нет ни одного идентификатора конкретного проекта: переезд = новые ENV + redeploy.
 
 Что живёт ТОЛЬКО вне репозитория (и поэтому описано здесь): ключи проекта и настройки Auth в панели Supabase.
 
@@ -41,7 +41,7 @@ supabase db push
 Замечания:
 - `0001`–`0006` создают типы (`create type`) без `if not exists` → их запускают **один раз** на чистой базе.
 - `0007`–`0010` идемпотентны и безопасны при повторном запуске (это проверяется тестами).
-- Проект, где `0001`–`0006` уже применены (как `ai-reception`), получает только `0007`+.
+- Проект, где `0001`–`0006` уже применены (например, ранний тестовый проект), получает только `0007`+.
 - `0008` добавляет ограничения как `NOT VALID`: существующие строки не отвергаются, новые — проверяются.
 - `0011` требует расширение `btree_gist` (входит в Supabase и в любой PostgreSQL; `create extension if not exists` в самой миграции). Она добавляет защиту от double booking. На базе, где уже есть **пересекающиеся активные записи** одного сотрудника/ресурса, миграция намеренно упадёт — сначала разрешите пересечения (на тестовом проекте записей нет).
 - `0013`/`0014` — функции для гостевой брони и rate limiting; доступны **только** `service_role`.
@@ -112,19 +112,19 @@ Vercel: Project → Settings → Environment Variables — те же 4 пере�
 
 ## 8. Окружения и известные ограничения
 
-- **`ai-reception` — только reference/временное окружение**, не незаменимая инфраструктура. По последнему аудиту на нём применены `0001`–`0007` (+ grants и FK, сделанные вручную). **Миграции `0008`–`0016` на него НЕ применять.**
-- Основной E2E планируется на отдельном контролируемом проекте **ServiceOS Dev Supabase**: чистый проект → `0001 → 0016` → новый signup/provisioning (старые workspace `ai-reception` не используются, backfill для них не делается).
+- **Ранний тестовый проект — только reference/временное окружение**, не незаменимая инфраструктура. Какие миграции применены на нём и что на него не применять — в закрытом репозитории.
+- Основной E2E планируется на отдельном контролируемом проекте Supabase: чистый проект → `0001 → 0016` → новый signup/provisioning.
 
 **Roadmap / known limitations (не реализовано намеренно):**
 N2 `/auth/callback` и «забыл пароль» (нужны при включённом Confirm email); N3 пагинация/окно дат для списков (лимит PostgREST 1000 строк); N4 авто-обновление Calendar (сейчас — после reload); N5 уведомления о новой брони (гостю и владельцу, после merge Notifications); N6 UI для staff, ресурсов, рабочих часов и `auto_confirm_bookings`; N7 GDPR: экспорт/удаление клиента; N8 browser-E2E (Playwright). Finance, Waiting List, Work, Inbox для реального workspace пока пустые (shared backend — Phase 3–4); demo-данные показываются только demo-workspaces.
 
 ## 9. Security hardening (`0016`)
 
-`0016_security_hardening.sql` закрывает замечания Supabase Advisor (отзыв EXECUTE у trigger-функций, перенос `btree_gist` из `public` в `extensions`, разделение `FOR ALL` write-политик; последнее также закрывает чтение PRIVATE financial bucket ролью `admin`). **Применять к ServiceOS Dev после первого E2E и до production** (`supabase db push`), затем повторить `supabase db advisors --linked`. Оставшиеся WARN по SECURITY DEFINER-хелперам для `authenticated` сознательные (их вызывают RLS-политики и приложение); возможное будущее улучшение — вынести хелперы в неэкспонируемую схему.
+`0016_security_hardening.sql` закрывает замечания Supabase Advisor (отзыв EXECUTE у trigger-функций, перенос `btree_gist` из `public` в `extensions`, разделение `FOR ALL` write-политик; последнее также закрывает чтение PRIVATE financial bucket ролью `admin`). **Применять к Supabase (основной) после первого E2E и до production** (`supabase db push`), затем повторить `supabase db advisors --linked`. Оставшиеся WARN по SECURITY DEFINER-хелперам для `authenticated` сознательные (их вызывают RLS-политики и приложение); возможное будущее улучшение — вынести хелперы в неэкспонируемую схему.
 
 ## 10. ⛔ Production blocker: Confirm email
 
-Состояние ServiceOS Dev: **Confirm email = OFF** (временно, только на время первого ручного E2E). **До production обязательно включить обратно (ON).** Перед включением должны быть готовы и проверены: `/auth/callback`, Site URL и Redirect URLs, flow подтверждения email, Forgot/Reset Password, production SMTP (встроенная отправка Supabase годится только для тестов), E2E регистрации с подтверждением. **Условие релиза: Confirm email = ON и E2E подтверждения email = PASS.**
+**Confirm email должен быть ON до production.** Перед включением должны быть готовы и проверены: `/auth/callback`, Site URL и Redirect URLs, flow подтверждения email, Forgot/Reset Password, production SMTP (встроенная отправка Supabase годится только для тестов), E2E регистрации с подтверждением. **Условие релиза: Confirm email = ON и E2E подтверждения email = PASS.**
 
 ## 11. Если что-то пошло не так
 
