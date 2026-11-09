@@ -129,7 +129,7 @@
 ## Этап 6 — безопасность и документация ✅
 - Итоговая проверка security definer, search_path, прав EXECUTE, RLS и изоляции организаций.
 - Под полями заметок: «Не вносите сведения о здоровье».
-- Обновить только `docs/DATA_RETENTION.md`, `docs/LEGAL_TODO.md`, `docs/BACKUP_RECOVERY.md`: категории A/B/C, сроки, анонимизация, экспорт, восстановление после бэкапа и erasure ledger, вопросы юристу, AVV/DPA, регионы Supabase (eu-central-1) и Vercel (iad1 → fra1?), международная передача, сведения о здоровье.
+- Обновить только `docs/DATA_RETENTION.md`, `docs/LEGAL_TODO.md`, `docs/BACKUP_RECOVERY.md`: категории A/B/C, сроки, анонимизация, экспорт, восстановление после бэкапа и erasure ledger, вопросы юристу, договоры обработки данных, регионы сервисов, международная передача, сведения о здоровье.
 - Datenschutz и Impressum не изменять.
 
 Реализация (ветка `feature/gdpr-security-docs`, без новых миграций):

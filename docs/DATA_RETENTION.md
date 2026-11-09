@@ -43,7 +43,7 @@ After an explicit disconnect the normal working schedule applies.
 | Item | Value |
 |---|---|
 | Route | `GET /api/cron/external-calendar-cleanup` |
-| Schedule | `vercel.json`: `17 3 * * *` (daily, 03:17 UTC). Hobby plan: once per day max, run time ±59 min |
+| Schedule | `vercel.json`: `17 3 * * *` (daily, 03:17 UTC). The hosting plan limits cron frequency and precision (see the Vercel documentation) |
 | Auth | `Authorization: Bearer <CRON_SECRET>` (Vercel sends it when `CRON_SECRET` is set); timing-safe compare; **closed** (401) when no secret or a secret shorter than 16 chars is configured |
 | Steps | 1. clear busy caches not refreshed for 24 h · 2. delete used links older than 30 days · 3. delete unused links expired > 30 days · 4. remove connections of inactive staff |
 | Idempotent | yes — a repeated or late run deletes nothing twice |
@@ -54,15 +54,14 @@ After an explicit disconnect the normal working schedule applies.
 Clearing a cache never opens busy time: the next booking request asks Google again; if Google fails, the person is
 blocked (fail-closed). Tested in `externalCalendarIntegration.test.ts` ("retention cleanup").
 
-Vercel limits (docs, checked 2026-10-13): 100 cron jobs per project on every plan; Hobby: minimum interval once per
-day, scheduling precision per hour; cron invocations count as normal function usage.
+Vercel cron limits depend on the hosting plan (see the Vercel documentation); cron invocations count as normal function usage.
 
 ## 5. Open DSGVO questions (Needs legal review)
 - Final periods: 24 h cache, 30 days for link records, "revoked" status without automatic deletion.
 - Legal basis and roles (employer business vs ServiceOS operator), information of staff (Art. 13), record of
   processing, DPIA.
 - Backup retention and handling of deletion requests for data in backups.
-- Vercel function region (`iad1`, USA, per `x-vercel-id`) and log retention; Supabase/Vercel DPAs.
+- Hosting function region and log retention; processor agreements with Supabase/Vercel (details: private repository).
 Full list: [LEGAL_TODO.md](LEGAL_TODO.md).
 
 ## 6. Client data (GDPR stages 1–5) — provisional
