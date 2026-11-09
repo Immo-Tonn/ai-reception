@@ -71,14 +71,14 @@ Open items: private time_off.reason is readable by any member through a direct q
 
 ### Client Account + real My bookings (uncommitted; migration 0018 APPLIED to Supabase (main))
 Architecture: docs/CLIENT_ACCOUNTS.md. ClientRecord (per business) and client account (Supabase Auth user + client_accounts) are separate. Access is PER APPOINTMENT via a secret claim token (hash in booking_claims), never by e-mail lookup and never per ClientRecord (typed-e-mail attack tested). Service-role-only RPCs (issue_booking_claim, claim_booking, list_my_bookings, cancel_my_booking, reschedule_my_booking) take the user id from the server-verified session; anon/authenticated cannot touch booking_claims; customers see only visibility=normal rows and customer-safe fields.
-- Applied to Dev: 0018 (dry-run first, target project verified). Verified: counts intact, RLS on both tables, anon 401 on tables and RPC, advisors unchanged (7 intentional SECURITY DEFINER helpers + leaked-password WARN).
+- Applied to Dev: 0018 (dry-run first, target project verified). Verified: counts intact, RLS on both tables, anon 401 on tables and RPC, advisors unchanged (7 intentional SECURITY DEFINER helpers).
 - Works now: guest booking unchanged; logged-in client booking is linked at once; guest booking stores a pending token in httpOnly cookie `serviceos_claims` and is claimed when the person signs up/in in the same browser; /client/login + /client/signup are real Supabase forms (PasswordInput, localized errors, safe ?redirect=); /client/bookings lists real upcoming/past/cancelled bookings (business timezone), cancel, reschedule via the same availability engine; moves return to pending unless auto-confirm; changes are audited (source public) and instantly visible to the business; demo bookings only at /client/bookings?demo=1; proxy now refreshes the session on /client/*.
-- NOT working / debt: bookings made BEFORE 0018 (e.g. the first E2E booking on 07.10.2026) have no claim token and will not appear in My bookings; make a new booking. /client intro still shows sign-in links to signed-in people; wizard prefill still uses the demo identity; ClientRecord-level link needs verified e-mail (Confirm email ON); cancellation policy/min notice; notifications/e-mail manage link; "manage this booking" without account.
-- AUTH BACKLOG (unchanged, production blockers): Confirm email ON + /auth/callback, expired/reused links, forgot/reset password, custom SMTP, auth E2E, leaked-password protection. Signup returns the neutral "check your e-mail" state when no session comes back; the pending claim cookie survives the confirmation round trip (same browser).
+- NOT working / debt: bookings made BEFORE 0018 (e.g. the first E2E booking on 07.10.2026) have no claim token and will not appear in My bookings; make a new booking. /client intro still shows sign-in links to signed-in people; wizard prefill still uses the demo identity; ClientRecord-level link needs verified e-mail; cancellation policy/min notice; notifications/e-mail manage link; "manage this booking" without account.
+- AUTH BACKLOG (unchanged): authentication settings before launch; /auth/callback, expired/reused links, forgot/reset password, custom SMTP, auth E2E. Signup returns the neutral "check your e-mail" state when no session comes back; the pending claim cookie survives the confirmation round trip (same browser).
 - Tests 488/488, tsc clean, build OK; migration0018.test.ts (18) is mutation-checked.
 
 ### Pre-E2E package (uncommitted, 2026-10-04)
-- Time model: business day/today/date defaults = workspace timezone (Labrity Europe/Berlin); UTC only for stored timestamps. Helpers: `todayInTimeZone`/`resolveToday` (zonedTime.ts), `useWorkspaceToday`, `buildDateStrip` (dateStrip.ts), `getWorkspaceTimeZone` (finance.service). Fixed: Today, Calendar (was hardcoded 2026-09-22), MonthGrid, ClientDetail, Analytics, Inbox, Finance invoice date, NewInvoiceSheet, Work, public booking date strip (+ "times are in business time" note), My Bookings upcoming/past split. Guard test `preE2eConsistency.test.ts` forbids UTC/browser day derivation in business app.
+- Time model: business day/today/date defaults = workspace timezone (test business, Europe/Berlin); UTC only for stored timestamps. Helpers: `todayInTimeZone`/`resolveToday` (zonedTime.ts), `useWorkspaceToday`, `buildDateStrip` (dateStrip.ts), `getWorkspaceTimeZone` (finance.service). Fixed: Today, Calendar (was hardcoded 2026-09-22), MonthGrid, ClientDetail, Analytics, Inbox, Finance invoice date, NewInvoiceSheet, Work, public booking date strip (+ "times are in business time" note), My Bookings upcoming/past split. Guard test `preE2eConsistency.test.ts` forbids UTC/browser day derivation in business app.
 - SaveStatus shared component (dirty/saving/saved/error), used by Business Profile + Services; bottom nav: More active for its children, aria-current, 44px back/tabs on client detail.
 - Checklist for the full iPhone(client) + MacBook(business) run: docs/E2E_CHECKLIST_CLIENT_BUSINESS.md.
 
@@ -87,8 +87,8 @@ Architecture: docs/CLIENT_ACCOUNTS.md. ClientRecord (per business) and client ac
 - Controls 32-40px in Inbox conversation page and parts of Calendar (touch-target pass); nav uses plain <a> (full reload per tap) and `<nav aria-label>` reuses nav.today (add nav.primary key).
 - AppointmentSheet `todayIso()` fallback is browser-local (only used when `today` prop is missing; CalendarView always passes it).
 - Booking page in other locale: first selectable day for visitors is now business-day based; embed widget uses same path (verify in an iframe).
-- Staff/Resources/Working hours edit, User Profile, password flows (forgot/reset/change, callback, SMTP, Confirm email ON), logo storage migration, Danger Zone design, notifications, Finance/Work/Waiting list/Inbox on the shared backend.
-- Production hardening: leaked-password protection, review suppressHydrationWarning scope, delete dev password script, audit-log coverage beyond appointments/clients/workspace.
+- Staff/Resources/Working hours edit, User Profile, password flows (forgot/reset/change, callback, SMTP, authentication settings before launch), logo storage migration, Danger Zone design, notifications, Finance/Work/Waiting list/Inbox on the shared backend.
+- Production hardening: review suppressHydrationWarning scope, delete dev password script, audit-log coverage beyond appointments/clients/workspace.
 
 ### App wiring after 0017 (uncommitted)
 - Business Profile `/[slug]/settings/business`: 5 sections (identity incl. logo placeholder, public contact with customer-visibility notice, location, regional, online booking/visibility). Two separate switches; turning booking off also clears discoverable (UI + server). Website normalised to https, country ISO-2, invalid input -> friendly error. Renames are audited (entity "workspace"). Slug never changes.
@@ -99,7 +99,7 @@ Architecture: docs/CLIENT_ACCOUNTS.md. ClientRecord (per business) and client ac
 - Tests 366/366, tsc clean, build OK; Graphify rebuilt (1237 nodes).
 - Still open: Staff/Resources/Working hours edit, User Profile, password flows, Danger Zone, logo storage migration, Calendar/other screens still not manually verified on iPhone.
 
-### Migration 0017 — APPLIED to Supabase (main) (user OK; verified: only 0017 pending in dry-run, project ref matched .env.local, Labrity + 1 client + 3 services + 4 appointments intact, /book/labrity 200, anon 401 on workspaces and the new RPC, advisors unchanged)
+### Migration 0017 — APPLIED to Supabase (main) (user OK; verified: only 0017 pending in dry-run, project ref matched .env.local, test business + 1 client + 3 services + 4 appointments intact, /book/test-business 200, anon 401 on workspaces and the new RPC, advisors unchanged)
 `supabase/migrations/0017_business_profile_and_discovery.sql`: additive only.
 - workspaces: description, phone, email, website, address_line1, postal_code, city, country, logo_path (reference only), public_booking_enabled (default true), discoverable (default false); CHECK discoverable => public_booking_enabled; partial index on discoverable.
 - services: description (was in docs/PROPOSED_MIGRATION_services.md; included, so that doc item 1 is superseded; items 2-3 stay optional).
@@ -123,11 +123,11 @@ Architecture: docs/CLIENT_ACCOUNTS.md. ClientRecord (per business) and client ac
 
 ## E2E fixes package (uncommitted)
 - Migration 0016 is now APPLIED to Supabase (main) (0001–0016 remote). Older text saying "pending" is outdated.
-- Advisor WARN `auth_leaked_password_protection`: enable in Auth settings before production (production hardening).
+- Auth settings: review before launch (production hardening).
 - Understandable save errors (`describeSaveError` + `repositoryErrors` i18n DE/EN/UK/RU): duplicate client e-mail, slot conflict, forbidden, session expired; no red overlay for client create (AddClientSheet, ClientPicker, AppointmentSheet).
 - WorkspaceSwitcher shows the real business name + initial avatar for real workspaces (no demo list); label visible on mobile with ellipsis.
 - `/signup` mobile: compact intro (`brandPanelCompact`); desktop unchanged.
-- Still open: manual onboarding of Labrity, second-owner isolation check, Confirm email ON for production.
+- Still open: manual onboarding of the test business, second-owner isolation check, authentication settings before launch.
 
 
 ---
@@ -141,17 +141,17 @@ Architecture: docs/CLIENT_ACCOUNTS.md. ClientRecord (per business) and client ac
 ## ЗАФИКСИРОВАННЫЙ РЕЗУЛЬТАТ ПЕРВОГО РУЧНОГО E2E (Supabase (основной), 2026-10-04)
 
 **Business-side: ПРОЙДЕН.** Public Booking → Supabase → ClientRecord → Business UI работает:
-- реальный workspace `labrity` (signup + provisioning: профиль, workspace, owner, MAIN+PRIVATE buckets, staff «You», рабочие часы);
-- вход владельца (`/login`) → `/labrity/today`;
-- гостевая бронь через `/book/labrity` сохранена в Supabase (`pending`, `source = public`, переживает reload), audit-запись без PII;
+- реальный workspace `test-business` (signup + provisioning: профиль, workspace, owner, MAIN+PRIVATE buckets, staff «You», рабочие часы);
+- вход владельца (`/login`) → `/test-business/today`;
+- гостевая бронь через `/book/test-business` сохранена в Supabase (`pending`, `source = public`, переживает reload), audit-запись без PII;
 - ClientRecord создан и **переиспользован** при повторной брони (дубля нет), appointments связаны с ним через `client_id`;
-- `/labrity/clients` показывает реального клиента с обеими записями: **5 октября 09:00 «Поддержка сайтов»** и **5 октября 11:00 «Разработка веб сайтов»** (Europe/Berlin, время корректно).
+- `/test-business/clients` показывает реального клиента с обеими записями: **5 октября 09:00 «Поддержка сайтов»** и **5 октября 11:00 «Разработка веб сайтов»** (Europe/Berlin, время корректно).
 
 **Client-side E2E: НЕ пройден.** «Мої записи» реального клиента не показывает Supabase-брони: это demo/localStorage-путь (см. «E2E GAP — Мої записи»).
 
-**Визуально подтверждено (уже в backlog):** WorkspaceSwitcher показывает `labrity` (slug, с маленькой буквы) вместо названия бизнеса `Labrity`.
+**Визуально подтверждено (уже в backlog):** WorkspaceSwitcher показывает `test-business` (slug, с маленькой буквы) вместо названия бизнеса `тестовый бизнес`.
 
-**Ещё выявлено в E2E (в backlog):** красный overlay при дубликате email клиента (`RemoteRepositoryError: conflict` не обрабатывается в UI — нужны понятные локализованные ошибки), Confirm email в Dev по факту ещё ON, hydration `__gcr*` (Chrome iOS).
+**Ещё выявлено в E2E (в backlog):** красный overlay при дубликате email клиента (`RemoteRepositoryError: conflict` не обрабатывается в UI — нужны понятные локализованные ошибки), hydration `__gcr*` (Chrome iOS).
 
 **Следующий отдельный шаг:** меры безопасности (подробности в закрытом репозитории), затем `0016`.
 
@@ -159,9 +159,9 @@ Architecture: docs/CLIENT_ACCOUNTS.md. ClientRecord (per business) and client ac
 
 ## ⛔ E2E FUNCTIONAL BLOCKER — Client Discovery показывает только demo businesses
 
-Найдено в mobile E2E: клиентская сторона (`/client/book`, discovery) показывает только hardcoded demo-бизнесы (Beauty Salon, Auto Service, Cleaning Service, Consulting/Web Studio, помечены Demo). Реальный workspace `labrity` (существует в Supabase (основной)) клиенту не виден. Это нарушает целевую архитектуру. Требования:
+Найдено в mobile E2E: клиентская сторона (`/client/book`, discovery) показывает только hardcoded demo-бизнесы (Beauty Salon, Auto Service, Cleaning Service, Consulting/Web Studio, помечены Demo). Реальный workspace `test-business` (существует в Supabase (основной)) клиенту не виден. Это нарушает целевую архитектуру. Требования:
 1. **Guest client не обязан регистрироваться** для брони: сохраняется.
-2. **Direct public booking** реального бизнеса `/book/labrity` получает реальный public catalog из Supabase (а не demo). *(Уже реализовано в Phase 2: `loadPublicPageData` → RPC `get_public_booking_catalog`; проверить в E2E.)*
+2. **Direct public booking** реального бизнеса `/book/test-business` получает реальный public catalog из Supabase (а не demo). *(Уже реализовано в Phase 2: `loadPublicPageData` → RPC `get_public_booking_catalog`; проверить в E2E.)*
 3. **Client discovery** (`/client/book`, `/client/discover`) в конечной архитектуре показывает реальные businesses, доступные для public booking, а не только hardcoded demos.
 4. Demo businesses остаются только demo-сценарием и визуально/логически не смешиваются с настоящими.
 5. **Не считать любой workspace автоматически discoverable.** Нужна явная настройка публикации/discoverability (например `public_booking_enabled` + `discoverable`), чтобы приватный/неготовый workspace не попал в общий каталог. Требует новой миграции (схема сейчас не меняется) и публичной функции каталога только для опубликованных бизнесов (service role, без PII), плюс rate limit.
@@ -170,7 +170,7 @@ Architecture: docs/CLIENT_ACCOUNTS.md. ClientRecord (per business) and client ac
 
 ## ⚠ E2E GAP — «Мої записи» (Client Account) не поддерживает реальные Supabase-брони
 
-Найдено в E2E (workspace `labrity`, бронь 2026-10-05 11:00 Europe/Berlin):
+Найдено в E2E (workspace `test-business`, бронь 2026-10-05 11:00 Europe/Berlin):
 - Public Booking реального workspace **успешно сохраняется** в Supabase (запись в `appointments`, audit-запись, переживает reload).
 - ClientRecord **создаётся/переиспользуется корректно** (повторная бронь нашла того же клиента, дубля нет).
 - Appointment **связан с ClientRecord** через `client_id`.
@@ -191,7 +191,7 @@ Architecture: docs/CLIENT_ACCOUNTS.md. ClientRecord (per business) and client ac
 Сейчас на Login нет «Forgot password?». Нужен production-ready flow:
 `Login → Forgot password → email → нейтральный ответ без user enumeration → reset email → recovery/callback → Set new password → success → Login.`
 Учесть: expired / invalid / reused ссылки; resend; безопасные redirect URLs (allow-list, без open redirect); DE/EN/UK/RU; mobile UX; production SMTP.
-**Связано с Confirm email blocker** (см. выше): Confirm email + `/auth/callback` + Site URL / Redirect URLs + SMTP + выделенный Auth E2E. **До выполнения всего этого Auth не считается production-ready.**
+**Связано с настройками авторизации перед запуском** (см. выше): `/auth/callback` + Site URL / Redirect URLs + SMTP + выделенный Auth E2E. **До выполнения всего этого Auth не считается production-ready.**
 
 ### C. Mobile navigation audit (после E2E, системно)
 Непоследовательно понятно: где пользователь, как вернуться, какой экран родительский. **Не добавлять механически breadcrumbs/Back на каждый экран.** Определить правила:
@@ -207,38 +207,36 @@ Architecture: docs/CLIENT_ACCOUNTS.md. ClientRecord (per business) and client ac
 Сейчас флаг добавлен очень широко: `<html>` + все `<form>`, `<input>`, `<textarea>`, `<select>` по приложению (~30 элементов + `Input`/`PasswordInput`), плюс тест-страж `src/__tests__/formControlsHydration.test.ts`. Перед коммитом **ещё раз проверить, что это минимально необходимое решение** и что мы не скрываем будущие реальные hydration bugs (флаг attribute-only и element-scoped, но широкий охват нужно оправдать): рассмотреть более узкий вариант (только общие примитивы + формы, где реально воспроизводится), проверить на реальном Chrome-for-iOS. Пока ничего не переделывается.
 
 ### E. Не потерять уже записанные
-- название реального workspace (Labrity) в Business UI (из БД, не slug);
+- название реального workspace (тестовый бизнес) в Business UI (из БД, не slug);
 - Business Profile отдельно от User Profile;
 - реальные businesses в Client Discovery вместо только demo;
 - publication/discoverability setting;
 - mobile-компактность `/signup`;
-- Confirm email = ON — production blocker;
+- настройки авторизации перед запуском;
 - `0016_security_hardening.sql` — применить после первого E2E и до production.
 
 ---
 
 ## POST-E2E UX / PRODUCT FIXES (зафиксировано, не реализовано)
 
-1. **Current workspace identity.** После входа в реальный workspace (`Labrity`) название бизнеса нигде не видно: в mobile-шапке только иконка и селектор (подпись скрыта на <640px, а для реального workspace берётся slug из demo-реестра). Требование: текущий реальный workspace явно показывает **название бизнеса из backend/БД** (не demo-конфиг, не slug); mobile-first; корректный `WorkspaceSwitcher` на будущее для нескольких businesses пользователя; demo-workspaces не смешиваются с реальными businesses пользователя.
+1. **Current workspace identity.** После входа в реальный workspace (`тестовый бизнес`) название бизнеса нигде не видно: в mobile-шапке только иконка и селектор (подпись скрыта на <640px, а для реального workspace берётся slug из demo-реестра). Требование: текущий реальный workspace явно показывает **название бизнеса из backend/БД** (не demo-конфиг, не slug); mobile-first; корректный `WorkspaceSwitcher` на будущее для нескольких businesses пользователя; demo-workspaces не смешиваются с реальными businesses пользователя.
 2. **Business Profile / Workspace Settings.** Сейчас нельзя открыть настройки бизнеса и изменить его данные. Нужен отдельный Business Profile, **не смешивать с User Profile** (User Profile = данные человека; Business Profile = данные workspace). Минимум: business name + возможность его изменить; identity/logo/avatar placeholder; locale/timezone где уместно; позже телефон/email/адрес и реквизиты. После изменения название должно последовательно обновляться во всех местах UI, где показывается текущий workspace (шапка, switcher, Today, публичная страница брони и т.д.).
 3. Mobile-компактность `/signup`; доработка mobile UX (формы выше экрана).
 4. Login UX: ошибка/сброс полей (сделано в рабочем дереве, см. ниже), аналогичное для `/signup`.
 
 ---
 
-## ⛔ PRODUCTION BLOCKER — CONFIRM EMAIL
+## Настройки авторизации перед запуском
 
-- **Confirm email должен быть ON до production** (Authentication → Sign In / Providers → Email). На время первого ручного E2E он мог быть выключен.
-- **До production обязательно вернуть ON.**
-- До повторного включения должны быть готовы и проверены:
+- Перед запуском проверить настройки подтверждения email в Supabase Auth (Authentication → Sign In / Providers → Email). Состояние окружений — в закрытом репозитории.
+- Должны быть готовы и проверены:
   - `/auth/callback` (обмен кода из письма на сессию);
   - Site URL и Redirect URLs в Supabase Auth;
   - сам flow подтверждения email;
   - Forgot / Reset Password;
   - production SMTP / доставка писем (встроенная почта Supabase имеет жёсткий лимит и не годится для production);
   - E2E регистрации с подтверждением email.
-- **Условие релиза в production:** Confirm email = **ON** и E2E подтверждения email = **PASS**.
-- Пока Confirm email выключен (только в тестовых окружениях), регистрация позволяет отличить новый email от уже существующего, см. `signUpOwner`; в production с ON ответ одинаков для обоих случаев.
+- **Условие релиза в production:** настройки авторизации проверены и E2E подтверждения email = **PASS**.
 - `0016_security_hardening.sql` остаётся **pending** до конца первого E2E (к Dev не применена).
 
 ---
@@ -276,7 +274,7 @@ Architecture: docs/CLIENT_ACCOUNTS.md. ClientRecord (per business) and client ac
 - Business Calendar/Clients реального workspace читают shared БД: Supabase-репозитории (appointments, clients, staff, resources, audit, services) за `Repository<T>`; клиентский `createRemoteRepository` вызывает Server Actions; каталог (услуги/staff/ресурсы/часы) приходит из layout через `WorkspaceCatalogProvider`.
 - Часовые пояса: `lib/time/zonedTime.ts` (только Intl; DST-случаи покрыты тестами). Слоты — wall-clock бизнеса; БД хранит `timestamptz`.
 - RateLimiter: интерфейс + PostgreSQL-реализация (production), memory-реализация только для тестов.
-- Auth: убран user enumeration при регистрации (одинаковый ответ «проверьте почту»); при выключенном Confirm email (dev) разница наблюдаема — в production Confirm email включить.
+- Auth: убран user enumeration при регистрации (одинаковый ответ «проверьте почту»).
 - Клиент-матчинг: e-mail побеждает (в БД уникален на workspace), телефон — запасной (SQL и TS синхронизированы тестом).
 
 **Осталось на localStorage:** Waiting list, Invoices/Finance, Work (Leads/Quotes/Jobs/Projects), Inbox, Audit (клиентский лог в UI Calendar), client-area «Мои записи» (demo). Real workspace: Finance/Waiting list/Work не имеют серверного пути (Phase 3–4).

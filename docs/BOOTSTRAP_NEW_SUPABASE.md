@@ -122,9 +122,9 @@ N2 `/auth/callback` и «забыл пароль» (нужны при включ
 
 `0016_security_hardening.sql` закрывает замечания Supabase Advisor (отзыв EXECUTE у trigger-функций, перенос `btree_gist` из `public` в `extensions`, разделение `FOR ALL` write-политик; последнее также закрывает чтение PRIVATE financial bucket ролью `admin`). **Применять к Supabase (основной) после первого E2E и до production** (`supabase db push`), затем повторить `supabase db advisors --linked`. Оставшиеся WARN по SECURITY DEFINER-хелперам для `authenticated` сознательные (их вызывают RLS-политики и приложение); возможное будущее улучшение — вынести хелперы в неэкспонируемую схему.
 
-## 10. ⛔ Production blocker: Confirm email
+## 10. Настройки авторизации перед запуском
 
-**Confirm email должен быть ON до production.** Перед включением должны быть готовы и проверены: `/auth/callback`, Site URL и Redirect URLs, flow подтверждения email, Forgot/Reset Password, production SMTP (встроенная отправка Supabase годится только для тестов), E2E регистрации с подтверждением. **Условие релиза: Confirm email = ON и E2E подтверждения email = PASS.**
+**Подтверждение email и связанные настройки Auth проверяются перед запуском.** Должны быть готовы и проверены: `/auth/callback`, Site URL и Redirect URLs, flow подтверждения email, Forgot/Reset Password, production SMTP (встроенная отправка Supabase годится только для тестов), E2E регистрации с подтверждением. **Условие релиза: настройки авторизации проверены и E2E подтверждения email = PASS.**
 
 ## 11. Если что-то пошло не так
 

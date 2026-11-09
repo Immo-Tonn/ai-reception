@@ -26,7 +26,7 @@ Last updated: 2026-10-05, after the Business Operations foundation (commit `ddaa
 - Public footer and legal-page FOUNDATION (/impressum with TODO markers, /datenschutz placeholder; NOT production-ready text)
 
 ## NEXT: recommended order
-1. **Production Auth + User Profile**: Confirm email, `/auth/callback`, expired/reused links, forgot / reset / change password, production SMTP, User Profile, audit of ALL password fields.
+1. **Production Auth + User Profile**: authentication settings, `/auth/callback`, expired/reused links, forgot / reset / change password, production SMTP, User Profile, audit of ALL password fields.
 2. **Roles & Permissions / Staff Accounts**: owner / admin / manager / staff / accountant matrix, invitations, authenticated Business User != Staff Profile (future link via `staff_profiles.profile_id`), OWNER_ONLY / CUSTOM visibility UX, PRIVATE financial permissions.
 3. **Notifications**: booking created / confirmed / cancelled / rescheduled, client and business e-mail, DE/EN/UK/RU templates, retry + idempotency, future push; Work/Finance Inbox events (`recordInboxEvent` exists).
 4. **Google Calendar integration**: connection/auth, busy-time sync, staff calendars where appropriate, double-booking protection, sync-failure handling.
@@ -34,7 +34,7 @@ Last updated: 2026-10-05, after the Business Operations foundation (commit `ddaa
 5. **Storage / Branding**: business logo (Supabase Storage + policies, proposal in docs/PROPOSED_MIGRATION_logo_storage.md), upload validation, later staff/service images.
 6. **Workspace Management / Danger Zone**: archive/deactivate, protected deletion, typed business-name confirmation, history/dependency handling.
 7. **Production Observability** (MUST NOT BE FORGOTTEN): Sentry/error monitoring, health endpoint, uptime monitoring, structured application/business failure events, critical alerts (Telegram or equivalent), no PII in alerts, server-side secrets only; monitor Public Booking, Supabase failures, appointment-creation failures, notification failures, external calendar sync failures.
-8. **Security / Recovery / Production Hardening**: final RLS audit, second real workspace/owner tenant-isolation E2E, leaked-password protection, rotate development/exposed secrets before production, backups, recovery procedure, rate limits, abuse/error cases, privacy audit, production environment review.
+8. **Security / Recovery / Production Hardening**: final RLS audit, second real workspace/owner tenant-isolation E2E, check secrets before launch, backups, recovery procedure, rate limits, abuse/error cases, privacy audit, production environment review.
 9. **Final QA / Release Candidate**: iPhone/mobile, desktop, browsers, DE/EN/UK/RU, Light/Dark/System, PWA, timezone/DST, poor network/error states, permissions, privacy, finance separation, concurrency, demo/real isolation, accessibility/touch targets, full critical-path E2E.
 10. **Production Release**: production domain, Vercel production configuration, production Supabase/Auth, SMTP, FINAL Impressum, FINAL approved Datenschutzerklaerung, monitoring enabled, backup/recovery verified, secrets rotated, final smoke tests.
 
@@ -44,15 +44,15 @@ After the completed Business Operations foundation and successful tsc, tests, bu
 ### STAGING / TEAM TESTING (prepared, NOT deployed)
 Full guide: [docs/STAGING.md](STAGING.md). Staging uses a TEMPORARY team test environment (test data only; production gets its OWN Supabase project; environment details: private repository).
 - Done in code: `NEXT_PUBLIC_APP_ENV=staging` shows a top "TEST ENVIRONMENT" badge (DE/EN/UK/RU) and sends noindex (meta + X-Robots-Tag); committed LAN IP removed (`ALLOWED_DEV_ORIGINS`, dev only); `metadataBase` derived from the public base URL; previews prefer `VERCEL_URL` over the production domain; `engines` (Node 20.x) + `.nvmrc`; clean-copy build without env values passes; client bundle scan clean; static test blocks server-only env reads in client components.
-- Owner manual: Vercel project + env vars + deployment protection + fixed domain; Supabase Auth Site URL / Redirect URLs / Confirm email / rate limits (see docs/STAGING.md).
+- Owner manual: Vercel project + env vars + deployment protection + fixed domain; Supabase Auth Site URL / Redirect URLs / rate limits (see docs/STAGING.md).
 - Native app readiness analysis: [docs/NATIVE_APP_READINESS.md](NATIVE_APP_READINESS.md).
 
 Real-device touch check is MANDATORY on the Vercel staging URL (never on a LAN dev server; see docs/STAGING.md). Status: not yet performed on a real staging deployment.
 
 ## PRODUCTION BLOCKERS (must be closed before production; none blocks staging)
-- Production Auth flows (stage 1) and leaked-password protection
+- Production Auth flows (stage 1)
 - Impressum operator data NOT confirmed; Datenschutzerklaerung NOT production ready; `npm run check:legal` must pass (docs/LEGAL_TODO.md)
-- Secrets: rotate development/exposed keys; service-role key server-side only
+- Secrets: check secrets before launch; service-role key server-side only
 - Observability and alerting (stage 7); backups and recovery (stage 8)
 - Second-owner tenant-isolation E2E, final RLS and privacy audit
 - Real-Postgres concurrency verification for invoice numbering / conversions / booking races (PGlite is single-connection)
@@ -81,7 +81,7 @@ Legal:
 - Impressum operator data not confirmed. Do NOT assume the "Andreas Tonn / Labrity" client-site Impressum is the ServiceOS operator; do not invent legal data
 - Datenschutz is NOT production ready
 Small decisions pending: German `common.you` is informal ("Du") and is shown to clients as the owner staff label; Node 20 -> 22 move (engines + .nvmrc together); `Secure` flag on Supabase cookies before production.
-Housekeeping: old ESLint errors in pre-existing files (react-hooks/*, next/no-html-link-for-pages); dev-only password helper script on the owner's Desktop (delete); `.env.local` still holds the old Supabase secret key (rotation postponed).
+Housekeeping: old ESLint errors in pre-existing files (react-hooks/*, next/no-html-link-for-pages); dev-only password helper script on the owner's Desktop (delete).
 
 ## POST-V1 (future, non-blocking unless architecture requires)
 AI Assistant; payments provider / online payments; WhatsApp / Telegram integrations; advanced automation; automatic Waiting List matching/notifications; advanced resource capacity; recurring time off; advanced Analytics; React Native / native app; additional integrations.
