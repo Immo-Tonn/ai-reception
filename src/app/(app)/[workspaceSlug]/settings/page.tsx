@@ -66,6 +66,7 @@ export default async function SettingsPage({
             ["hours", settings.hours],
             ["booking", settings.booking],
             ["integrations", settings.integrations],
+            ["billing", settings.billing],
           ] as const
         ).map(([path, entry]) => (
           <Link key={path} href={`/${workspaceSlug}/settings/${path}`} className={styles.row}>

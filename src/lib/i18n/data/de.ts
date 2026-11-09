@@ -477,6 +477,50 @@ export const de: Messages = {
     keepEditing: "Weiter bearbeiten",
     demoNote: "Demo-Workspace: Das sind Beispieldaten, nur lesbar. Öffne dein eigenes Unternehmen, um zu bearbeiten.",
   },
+  billing: {
+    title: "Tarif und Zahlung",
+    subtitle: "Wählen Sie einen Tarif. Die Zahlung wird sicher über Stripe abgewickelt.",
+    businessLabel: "Unternehmen",
+    perMonth: "/ Monat",
+    choose: "Tarif wählen",
+    redirecting: "Stripe wird geöffnet…",
+    currentBadge: "Ihr Tarif",
+    manage: "Abonnement verwalten",
+    cancel: "Abonnement kündigen",
+    cancelConfirmTitle: "Abonnement kündigen?",
+    cancelConfirmText: "Ihr Tarif bleibt bis zum Ende des bezahlten Zeitraums aktiv. Danach endet er, und es wird nichts mehr abgebucht.",
+    cancelConfirm: "Ja, zum Periodenende kündigen",
+    keep: "Abonnement behalten",
+    canceling: "Wird gekündigt…",
+    resume: "Abonnement fortsetzen",
+    resuming: "Wird fortgesetzt…",
+    cancelScheduledNotice: "Ihr Abonnement ist gekündigt und endet mit dem bezahlten Zeitraum. Es wird nichts mehr abgebucht.",
+    cancelScheduledOnNotice: "Ihr Abonnement ist gekündigt und endet am {date}. Es wird nichts mehr abgebucht.",
+    taxNote: "Den Endbetrag einschließlich etwaiger Steuern sehen Sie vor der Zahlung auf der Stripe-Zahlungsseite.",
+    successNotice: "Zahlung abgeschlossen, vielen Dank. Ihr Tarif erscheint hier in etwa einer Minute.",
+    canceledNotice: "Zahlung abgebrochen. Es wurde nichts berechnet.",
+    errorNotice: "Die Zahlung ist derzeit nicht verfügbar. Bitte versuchen Sie es später erneut.",
+    notConfiguredNotice: "Die Online-Zahlung ist noch nicht eingerichtet.",
+    forbiddenNotice: "Nur der Inhaber des Unternehmens kann den Tarif verwalten.",
+    demoNotice: "Dies ist ein Demo-Unternehmen, daher können hier keine Tarife gebucht werden.",
+    plans: {
+      start: {
+        name: "Start",
+        features: ["Kalender und Termine", "Kundenverwaltung", "Online-Buchung: Link, QR-Code und Website-Widget"],
+        support: "E-Mail-Support: Antwort innerhalb von 48 Stunden",
+      },
+      business: {
+        name: "Business",
+        features: ["Alles aus Start", "Aufträge und Warteliste", "Mitarbeitende, Ressourcen und Arbeitszeiten", "Belegte Zeiten aus Google Kalender"],
+        support: "E-Mail-Support: Antwort innerhalb von 24 Stunden",
+      },
+      pro: {
+        name: "Pro",
+        features: ["Alles aus Business", "Finanzen", "Analysen"],
+        support: "Priorisierter Support: Antwort innerhalb von 4 Geschäftsstunden",
+      },
+    },
+  },
   settings: {
     businessProfile: {
       label: "Betriebsprofil",
@@ -501,6 +545,10 @@ export const de: Messages = {
     booking: {
       label: "Buchungsregeln",
       description: "Auto-Bestätigung, Vorlauf, Buchungszeitraum, Startzeiten.",
+    },
+    billing: {
+      label: "Tarif und Zahlung",
+      description: "Ihr Tarif, Zahlung und Rechnungen.",
     },
     integrations: {
       label: "Google Kalender",
