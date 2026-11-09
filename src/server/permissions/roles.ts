@@ -27,6 +27,8 @@ export type Permission =
   | "financial_bucket.private.view"
   | "clients.view"
   | "clients.edit"
+  /** Irreversibly anonymise a client (GDPR erasure). Owner only; re-checked in the database. */
+  | "clients.erase"
   | "staff.manage"
   | "settings.manage"
   | "billing.manage"
@@ -51,6 +53,7 @@ export const rolePermissions: Record<Role, Permission[]> = {
     "financial_bucket.private.view",
     "clients.view",
     "clients.edit",
+    "clients.erase",
     "staff.manage",
     "settings.manage",
     "billing.manage",
