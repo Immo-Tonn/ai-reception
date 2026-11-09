@@ -1,6 +1,9 @@
 import "server-only";
 import type { Session } from "@/server/auth/session";
+import { z } from "zod";
 import { assertCan } from "@/server/permissions/roles";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { toRepositoryError } from "@/server/repository/errors";
 import { getServerClientsRepository, getServerAuditLogRepository } from "@/server/repository/registry";
 import {
   createClientSchema,
@@ -66,4 +69,24 @@ export async function updateClient(
     });
   }
   return updated;
+}
+
+export type AnonymizeClientResult = { status: "anonymized" | "already" };
+
+/**
+ * GDPR erasure inside this workspace (migration 0028): personal data of the client
+ * is removed or replaced by "Gelöschter Kunde" in one database transaction; invoices
+ * and appointment facts stay. Owner only — the database checks it again.
+ * Does NOT touch a client ACCOUNT (Supabase Auth), which is handled separately.
+ */
+export async function anonymizeClient(session: Session, id: string): Promise<AnonymizeClientResult> {
+  assertCan(session.role, "clients.erase");
+  const clientId = z.string().uuid().parse(id);
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("anonymize_client", {
+    p_workspace_id: session.workspaceId,
+    p_client_id: clientId,
+  });
+  if (error) throw toRepositoryError(error, "clients.anonymize");
+  return { status: (data as { status?: string } | null)?.status === "already" ? "already" : "anonymized" };
 }

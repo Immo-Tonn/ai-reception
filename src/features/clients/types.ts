@@ -21,4 +21,6 @@ export interface ClientRecord {
    * preset without a separate schema per industry. Optional so existing
    * records/tests are unaffected. */
   customFields?: ClientCustomField[];
+  /** Set when the client was anonymised (GDPR erasure, migration 0028): personal data is gone, the row is read-only. */
+  anonymizedAt?: string;
 }

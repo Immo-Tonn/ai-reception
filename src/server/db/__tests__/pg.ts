@@ -10,7 +10,7 @@ import { btree_gist } from "@electric-sql/pglite/contrib/btree_gist";
  * project would run. It stubs the three things Supabase provides itself:
  * the roles (anon / authenticated / service_role), `auth.users` and
  * `auth.uid()`. No network, no Supabase project, nothing persistent — safe by
- * construction (it never touches the live `ai-reception` database).
+ * construction (it never touches any real database).
  */
 export const migrationsDir = path.resolve(__dirname, "../../../../supabase/migrations");
 

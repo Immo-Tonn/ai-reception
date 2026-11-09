@@ -23,7 +23,8 @@ export interface AuditLogEntry {
     | "resource"
     | "workingHours"
     | "timeOff"
-    | "bookingRules";
+    | "bookingRules"
+    | "dataSubjectRequest";
   entityId: string;
   summary: string; // human-readable, already localized at write time
   source: "user" | "assistant" | "automation" | "public";

@@ -9,14 +9,14 @@ Status: PREPARED, NOT DEPLOYED. Deploying needs explicit owner permission. Stagi
 | Purpose | development | team testing | real customers (NOT launched) |
 | `NEXT_PUBLIC_APP_ENV` | unset / `local` | `staging` | `production` |
 | Host | localhost / LAN | one Vercel project/domain | own domain (later) |
-| Supabase | ServiceOS Dev | ServiceOS Dev (TEMPORARY team test environment) | its OWN new Supabase project (to be created later) |
+| Supabase | local | TEMPORARY team test environment (test data only) | its OWN new Supabase project (to be created later) |
 | Data | any test data | TEST DATA ONLY | real |
 | Badge + noindex | no | yes | no |
 
 Rules:
-- Staging temporarily reuses the existing **ServiceOS Dev** Supabase project. Only test data. No real customers, no real businesses.
+- Staging temporarily reuses an existing team Supabase project (details: private repository). Only test data. No real customers, no real businesses.
 - Do NOT create a new Supabase project for staging now. Production must later get its own project (`docs/BOOTSTRAP_NEW_SUPABASE.md`).
-- The old `ai-reception` project is forbidden: never point any env var at it.
+- The old test project is forbidden: never point any env var at it (details: private repository).
 - Production is not launched. Production blockers stay in `docs/ROADMAP.md`.
 
 What `NEXT_PUBLIC_APP_ENV=staging` does (and nothing else):
@@ -78,7 +78,7 @@ Consequence: per-deploy preview URLs change every push, so booking links/QRs cre
 Build facts verified: `npm run build` passes from a clean copy of the git-tracked files without any env vars (Supabase-less build is fine: pages are dynamic and read env at runtime). Nothing in the build depends on `.env*`, `.graphify` or `supabase/.temp`. Client chunks (`.next/static`) contain none of the server-only names, no `sb_secret_`, no `service_role`, no JWT-like strings.
 
 ## 4. Supabase dashboard items (OWNER, manual; none changed by engineering)
-ServiceOS Dev project, Authentication:
+The team Supabase project, Authentication:
 - [ ] URL Configuration: Site URL = staging domain; Redirect URLs include the staging domain (`https://<staging>/**`). Keep localhost entries for local work. Preview URLs need a wildcard entry if previews are used.
 - [ ] Confirm email: decide and note the state. If ON, sign-up shows the neutral "check your e-mail" state and the confirmation link uses Site URL; there is NO `/auth/callback` route yet (production blocker), so testers should rely on OFF for staging unless the callback is built.
 - [ ] Rate limits (auth emails/sign-ins): review defaults so a team of testers is not locked out; built-in e-mail sender is heavily limited (custom SMTP is a production blocker).
