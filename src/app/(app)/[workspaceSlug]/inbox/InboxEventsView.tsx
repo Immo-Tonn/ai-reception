@@ -7,6 +7,7 @@ import { Icon, type IconName } from "@/components/ui";
 import type { InboxEvent, InboxEventType } from "@/features/inbox/events";
 import { useWorkspaceTimeZone } from "@/features/workspace/WorkspaceCatalog";
 import { listInboxEventsAction, markAllInboxEventsReadAction, setInboxEventReadAction } from "@/server/actions/inbox.actions";
+import { restoreClientAction } from "@/server/actions/clientArchive.actions";
 import type { Locale, Messages } from "@/lib/i18n";
 import { formatDate, formatTime } from "@/lib/i18n/format";
 import { addDays } from "@/lib/time/zonedTime";
@@ -101,6 +102,8 @@ export function InboxEventsView({
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState<string | null>(null);
   const [actionFailed, setActionFailed] = useState(false);
+  const [restoreFailed, setRestoreFailed] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
@@ -126,6 +129,16 @@ export function InboxEventsView({
       cancelled = true;
     };
   }, [workspaceSlug, tick]);
+
+  /** Explicit restore (owner / admin). The list reloads, so the mark shows the real state. */
+  async function restoreClient(clientId: string) {
+    setRestoringId(clientId);
+    setRestoreFailed(false);
+    const result = await restoreClientAction(workspaceSlug, clientId);
+    if (result.ok) await load();
+    else setRestoreFailed(true);
+    setRestoringId(null);
+  }
 
   async function setRead(event: InboxEvent, isRead: boolean): Promise<boolean> {
     setActionFailed(false);
@@ -228,6 +241,7 @@ export function InboxEventsView({
       </header>
 
       {actionFailed ? <p role="alert" className={styles.inlineError}>{messages.actionError}</p> : null}
+      {restoreFailed ? <p role="alert" className={styles.inlineError}>{messages.restoreClientFailed}</p> : null}
 
       {!loaded ? (
         <p role="status" className={styles.emptyDescription}>…</p>
@@ -330,7 +344,10 @@ export function InboxEventsView({
                                 {d.isPrivate ? (
                                   <div><dt>{messages.fieldClient}</dt><dd>{messages.privateAppointment}</dd></div>
                                 ) : d.clientName ? (
-                                  <div><dt>{messages.fieldClient}</dt><dd>{d.clientName}</dd></div>
+                                  <div>
+                                    <dt>{messages.fieldClient}</dt>
+                                    <dd>{d.clientName}{event.clientArchived ? ` · ${messages.clientArchivedBadge}` : ""}</dd>
+                                  </div>
                                 ) : null}
                                 {d.service ? <div><dt>{messages.fieldService}</dt><dd>{d.service}</dd></div> : null}
                                 {d.staffName ? <div><dt>{messages.fieldStaff}</dt><dd>{d.staffName}</dd></div> : null}
@@ -365,6 +382,11 @@ export function InboxEventsView({
                           ) : null}
                           {clientId ? (
                             <Link className={styles.eventLink} href={`/${workspaceSlug}/clients/${clientId}`}>{messages.openClient}</Link>
+                          ) : null}
+                          {event.clientRestorable && clientId ? (
+                            <button type="button" className={styles.eventRestore} disabled={restoringId === clientId} onClick={() => void restoreClient(clientId)}>
+                              {messages.restoreClient}
+                            </button>
                           ) : null}
                           <button type="button" className={styles.eventToggle} onClick={() => void setRead(event, !event.isRead)}>
                             {event.isRead ? messages.markUnread : messages.markRead}

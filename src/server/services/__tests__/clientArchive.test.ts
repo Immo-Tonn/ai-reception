@@ -142,7 +142,9 @@ describe("client archive service", () => {
     const invoicesBefore = (await finance.listInvoices(owner)).filter((i) => i.clientId === c);
     await archive.archiveClient(owner, c);
     const apptsAfter = (await getServerAppointmentsRepository(wsId).list()).filter((a) => a.clientId === c);
-    expect(apptsAfter).toEqual(apptsBefore);
+    // Only the read-time archive mark is new; the appointments themselves did not change.
+    expect(apptsAfter.every((a) => a.clientArchived)).toBe(true);
+    expect(apptsAfter.map((a) => { const copy = { ...a }; delete copy.clientArchived; return copy; })).toEqual(apptsBefore);
     expect(apptsAfter.map((a) => a.client)).toEqual(["Hist", "Hist"]); // the name stays visible in history
     expect(apptsAfter.some((a) => a.status === "confirmed")).toBe(true); // the future appointment is not cancelled
     expect((await finance.listInvoices(owner)).filter((i) => i.clientId === c)).toEqual(invoicesBefore);

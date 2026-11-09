@@ -23,3 +23,11 @@ export async function listArchivedClientsAction(workspaceSlug: string): Promise<
 export async function canArchiveClientsAction(workspaceSlug: string): Promise<ActionResult<boolean>> {
   return runAction(async () => can((await getSession(workspaceSlug)).role, "clients.archive"));
 }
+
+/** May this viewer restore this archived client? false also when the client is not archived or not readable. */
+export async function canRestoreClientAction(workspaceSlug: string, clientId: string): Promise<ActionResult<boolean>> {
+  return runAction(async () => {
+    const access = await archiveService.archivedClientAccess(await getSession(workspaceSlug), [clientId]);
+    return access.get(clientId)?.canRestore ?? false;
+  });
+}
