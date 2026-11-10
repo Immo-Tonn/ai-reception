@@ -9,11 +9,15 @@ import { RepositoryError, toRepositoryError } from "./errors";
 
 interface ClientRow {
   id: string;
+  /** 0032; absent before that migration is applied. */
+  archived_at?: string | null;
   name: string;
   email: string;
   phone: string;
   tags: string[] | null;
   notes: string;
+  /** 0028; absent before that migration is applied. */
+  anonymized_at?: string | null;
 }
 interface VisitRow {
   client_id: string | null;
@@ -34,6 +38,7 @@ export function clientFromRow(row: ClientRow, visits: VisitRow[], serviceNames: 
   const upcoming = withWall.filter((x) => x.at > now.getTime() && ACTIVE.has(x.v.status)).sort((a, b) => a.at - b.at);
   return {
     id: row.id,
+    ...(row.archived_at ? { archivedAt: row.archived_at } : {}),
     name: row.name,
     email: row.email,
     phone: row.phone,
@@ -42,6 +47,7 @@ export function clientFromRow(row: ClientRow, visits: VisitRow[], serviceNames: 
     upcoming: upcoming.map((x) => ({ date: x.wall.date, time: x.wall.time, service: service(x.v) })),
     history: past.map((x) => ({ date: x.wall.date, service: service(x.v), price: Number(x.v.price) })),
     notes: row.notes,
+    ...(row.anonymized_at ? { anonymizedAt: row.anonymized_at } : {}),
   };
 }
 
@@ -74,7 +80,8 @@ export function createSupabaseClientsRepository(
     async list() {
       const client = await getClient();
       const [rows, v] = await Promise.all([
-        client.from("clients").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: true }),
+        // Active clients only (0032): archived ones never reach lists, search or pickers for new bookings.
+        client.from("clients").select("*").eq("workspace_id", workspaceId).is("archived_at", null).order("created_at", { ascending: true }),
         visits(client),
       ]);
       if (rows.error) throw toRepositoryError(rows.error, "clients.list");

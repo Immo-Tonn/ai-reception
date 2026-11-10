@@ -2,7 +2,7 @@
 
 **Status (2026-10-13):** implemented on branch `feature/google-calendar-freebusy`, tested with a mock provider,
 fake HTTP responses and signed test ID tokens. **Not yet verified against a real Google account and not deployed.**
-Migrations `0025` and `0026` are applied to the production database (ServiceOS Dev = production), 2026-10-13. Datenschutz text: Needs legal review.
+Migrations `0025` and `0026` are part of the schema. Datenschutz text: Needs legal review.
 
 Related: [Data retention](DATA_RETENTION.md) · [Backups & recovery](BACKUP_RECOVERY.md) ·
 [Production checklist](PRODUCTION_DEPLOYMENT_CHECKLIST.md) · owner setup guide (RU) [GOOGLE_CALENDAR_SETUP_RU.md](GOOGLE_CALENDAR_SETUP_RU.md).
@@ -137,7 +137,7 @@ static test; `src/server/db/__tests__/migration0025.test.ts`, `migration0026.tes
 - Calendar UI suggestions (browser-side) do not know Google busy time; the server refuses with a generic conflict.
 - No Google push notifications (webhooks); freshness from the 5 min / 60 s policy.
 - `openid`-only manage sign-in to be confirmed with real Google (see §4).
-- Vercel functions currently appear to run in `iad1` (USA): DSGVO question (docs/LEGAL_TODO.md).
+- Hosting function region: to be confirmed (DSGVO question, docs/LEGAL_TODO.md; details: private repository).
 
 ## 13. Future: two-way sync (plan only, NOT implemented)
 Writing ServiceOS appointments into Google (Direction 2 of PRODUCT_ARCHITECTURE.md §4.3) would need: a write scope

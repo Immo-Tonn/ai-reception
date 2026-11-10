@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { useRouter, useSearchParams } from "next/navigation";
 import { localIsoDate } from "@/lib/date/localIsoDate";
 import { describeSaveError } from "@/lib/repository/describeSaveError";
+import { restoreClientAction } from "@/server/actions/clientArchive.actions";
 import { CANCELLED_LIKE, HISTORY_STATUSES, type DeleteBlocker } from "@/features/appointments/statusRules";
 import { getAppointmentDeleteBlockersAction } from "@/server/actions/appointments.actions";
 import { Button, Icon } from "@/components/ui";
@@ -124,10 +125,10 @@ export function CalendarView({
   const resourceLabelOverride = workspace.resourceLabel?.[locale];
   const noResourceLabelOverride = workspace.noResourceLabel?.[locale];
 
-  const { items: appointments, create, update, remove } = useAppointments(workspaceSlug);
+  const { items: appointments, create, update, remove, refresh: refreshAppointments } = useAppointments(workspaceSlug);
   const { log, entries: auditEntries } = useAuditLog(workspaceSlug);
   const { items: waitingListEntries } = useWaitingList(workspaceSlug);
-  const { items: clients, create: createClient } = useClients(workspaceSlug);
+  const { items: clients, create: createClient, refresh: refreshClients } = useClients(workspaceSlug);
 
   // Real workspace: opens on the workspace-local today (same as Today).
   // Demo workspaces keep their seeded demo day.
@@ -159,6 +160,8 @@ export function CalendarView({
     [appointments, showCancelled],
   );
   const [actionError, setActionError] = useState<string | null>(null);
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [archiveNotice, setArchiveNotice] = useState<{ kind: "success" | "warning"; text: string } | null>(null);
   // Server answer for ONE appointment id (a stale answer for another id is never shown).
   const [fetchedBlockers, setFetchedBlockers] = useState<{ id: string; list: DeleteBlocker[] } | null>(null);
   const [desktopView, setDesktopView] = useState<DesktopView>("day");
@@ -393,6 +396,21 @@ export function CalendarView({
     });
   }
 
+  /** Explicit restore (owner / admin). The appointment itself does not change. */
+  async function handleRestoreClient(appt: Appointment) {
+    if (!appt.clientId || archiveBusy) return;
+    setArchiveBusy(true);
+    setArchiveNotice(null);
+    const result = await restoreClientAction(workspaceSlug, appt.clientId);
+    if (result.ok) {
+      await Promise.all([refreshAppointments(), refreshClients()]);
+      setArchiveNotice({ kind: "success", text: quickActions.clientRestored });
+    } else {
+      setArchiveNotice({ kind: "warning", text: quickActions.restoreFailed });
+    }
+    setArchiveBusy(false);
+  }
+
   async function handleConfirmCancel(appt: Appointment) {
     const matches = matchWaitingList(appt, waitingListEntries);
     setLastCancelMatchCount(matches.length);
@@ -441,7 +459,10 @@ export function CalendarView({
           {isMasked ? "•" : initials(item.client)}
         </span>
         <span className={styles.rowBody}>
-          <span className={styles.rowTitle}>{isMasked ? dashboard.statusBusy : item.client}</span>
+          <span className={styles.rowTitle}>
+            {isMasked ? dashboard.statusBusy : item.client}
+            {!isMasked && item.clientArchived ? ` · ${quickActions.clientArchivedNotice}` : ""}
+          </span>
           {!isMasked && (
             <span className={styles.rowSubtitle}>
               {resolveServiceLabel(item.service, demoServices, locale)}
@@ -885,7 +906,10 @@ export function CalendarView({
 
       <QuickActionsSheet
         open={Boolean(quickActionsTarget)}
-        onClose={() => setQuickActionsTargetId(null)}
+        onClose={() => {
+          setQuickActionsTargetId(null);
+          setArchiveNotice(null);
+        }}
         appointment={quickActionsTarget}
         services={demoServices}
         locale={locale}
@@ -904,6 +928,10 @@ export function CalendarView({
         onViewWaitingList={() => router.push(`/${workspaceSlug}/waiting-list`)}
         timeZone={workspaceTimeZone}
         canCorrect={canCorrect}
+        workspaceSlug={workspaceSlug}
+        onRestoreClient={() => quickActionsTarget && handleRestoreClient(quickActionsTarget)}
+        archiveBusy={archiveBusy}
+        archiveNotice={archiveNotice}
       />
 
       <MoveAppointmentSheet

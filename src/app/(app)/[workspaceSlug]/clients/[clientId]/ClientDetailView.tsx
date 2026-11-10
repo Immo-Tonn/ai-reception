@@ -12,8 +12,11 @@ import { useWorkspaceToday } from "@/features/workspace/WorkspaceCatalog";
 import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { StatusBadge } from "@/components/calendar/StatusBadge";
 import { activeStatuses } from "@/features/appointments/statusMeta";
+import { ArchiveClientPanel, useArchivedClient } from "./ArchiveClientPanel";
 import { EditClientSheet } from "./EditClientSheet";
+import { AnonymizeClientSheet } from "./AnonymizeClientSheet";
 import { RelatedPanel } from "./RelatedPanel";
+import { ExportClientSheet } from "./ExportClientSheet";
 import styles from "./page.module.css";
 
 type Tab = "upcoming" | "history" | "notes" | "contact";
@@ -29,33 +32,44 @@ function initials(name: string) {
 
 export function ClientDetailView({
   workspaceSlug,
+  exportPermissions = { canExport: false, canExportInternalNotes: false },
   clientId,
   locale,
   messages,
   crossModule,
   statusMessages,
+  canErase = false,
 }: {
   workspaceSlug: string;
+  /** Owner / admin (decided on the server); the export route and the database check it again. */
+  exportPermissions?: { canExport: boolean; canExportInternalNotes: boolean };
   clientId: string;
   locale: Locale;
   messages: Messages["clients"];
   crossModule: Messages["crossModule"];
   statusMessages: Messages["appointmentStatus"];
+  /** Owner only (decided on the server); the action and the database check it again. */
+  canErase?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("upcoming");
   const [editing, setEditing] = useState(false);
+  const [anonymizing, setAnonymizing] = useState(false);
 
   // Client, Upcoming and History are always derived live from the same
   // repository-backed hooks the rest of the app uses (ClientPicker,
   // ClientsView, CalendarView) — never a locally duplicated copy, so a
   // client created mid-session (or an appointment booked for them) shows
   // up here immediately and again after reload.
-  const { items: clients, loaded: clientsLoaded, update: updateClient } = useClients(workspaceSlug);
+  const { items: clients, loaded: clientsLoaded, update: updateClient, refresh: refreshClients } = useClients(workspaceSlug);
   const { items: appointments, loaded: appointmentsLoaded } = useAppointments(workspaceSlug);
 
-  const client = clients.find((item) => item.id === clientId) ?? null;
+  const listed = clients.find((item) => item.id === clientId) ?? null;
+  // Archived clients are not in the active list; load the card's client by id (0032).
+  const archivedLookup = useArchivedClient(workspaceSlug, clientId, clientsLoaded && !listed && !isDemoWorkspaceSlug(workspaceSlug));
+  const client = listed ?? archivedLookup.client;
 
   const today = useWorkspaceToday(workspaceSlug);
+  const [exporting, setExporting] = useState(false);
   const clientAppointments = useMemo(
     () => (client ? appointments.filter((a) => belongsToClient(a, client)) : []),
     [appointments, client],
@@ -89,7 +103,7 @@ export function ClientDetailView({
   const appointmentHref = (a: { id: string; date: string }) =>
     `/${workspaceSlug}/calendar?date=${encodeURIComponent(a.date)}&appointment=${encodeURIComponent(a.id)}`;
 
-  const loaded = clientsLoaded && appointmentsLoaded;
+  const loaded = clientsLoaded && appointmentsLoaded && !archivedLookup.pending;
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "upcoming", label: messages.detailUpcoming },
@@ -133,11 +147,14 @@ export function ClientDetailView({
             {client.tags.includes("new") && (
               <span className={`${styles.tag} ${styles.tagNew}`}>{messages.tagNew}</span>
             )}
+            {client.anonymizedAt && <span className={styles.tag}>{messages.anonymizedBadge}</span>}
           </div>
         </div>
-        <button type="button" className={styles.editButton} onClick={() => setEditing(true)}>
-          {messages.edit}
-        </button>
+        {!client.anonymizedAt && (
+          <button type="button" className={styles.editButton} onClick={() => setEditing(true)}>
+            {messages.edit}
+          </button>
+        )}
       </div>
 
       <div className={styles.statusCounts} aria-label={messages.statusSummaryLabel}>
@@ -145,6 +162,25 @@ export function ClientDetailView({
         <span className={counts.noShow > 0 ? styles.countWarning : undefined}>{messages.countNoShow.replace("{n}", String(counts.noShow))}</span>
         <span>{messages.countCancelled.replace("{n}", String(counts.cancelled))}</span>
       </div>
+
+      {exportPermissions.canExport && !isDemoWorkspaceSlug(workspaceSlug) && (
+        <>
+          <button type="button" className={`${styles.editButton} ${styles.exportButton}`} onClick={() => setExporting(true)}>
+            {messages.exportButton}
+          </button>
+          <ExportClientSheet
+            key={`${client.id}-${exporting}`}
+            workspaceSlug={workspaceSlug}
+            clientId={client.id}
+            open={exporting}
+            onClose={() => setExporting(false)}
+            canExportInternalNotes={exportPermissions.canExportInternalNotes}
+            today={today}
+            locale={locale}
+            messages={messages}
+          />
+        </>
+      )}
 
       <EditClientSheet
         key={`${client.id}-${editing}`}
@@ -154,6 +190,10 @@ export function ClientDetailView({
         onSave={(patch) => updateClient(client.id, patch)}
         messages={messages}
       />
+
+      {!isDemoWorkspaceSlug(workspaceSlug) && (
+        <ArchiveClientPanel workspaceSlug={workspaceSlug} client={client} upcomingCount={upcoming.length} locale={locale} messages={messages} />
+      )}
 
       <div className={styles.tabs}>
         {tabs.map((item) => (
@@ -253,6 +293,24 @@ export function ClientDetailView({
 
       {!isDemoWorkspaceSlug(workspaceSlug) && (
         <RelatedPanel workspaceSlug={workspaceSlug} clientId={client.id} locale={locale} messages={crossModule} />
+      )}
+
+      {canErase && !client.anonymizedAt && !isDemoWorkspaceSlug(workspaceSlug) && (
+        <>
+          <button type="button" className={`${styles.editButton} ${styles.anonymizeButton}`} onClick={() => setAnonymizing(true)}>
+            {messages.anonymizeButton}
+          </button>
+          <AnonymizeClientSheet
+            key={`${client.id}-${anonymizing}`}
+            workspaceSlug={workspaceSlug}
+            clientId={client.id}
+            clientName={client.name}
+            open={anonymizing}
+            onClose={() => setAnonymizing(false)}
+            onDone={refreshClients}
+            messages={messages}
+          />
+        </>
       )}
     </main>
   );

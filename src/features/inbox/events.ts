@@ -55,6 +55,10 @@ export interface InboxEvent {
   readAt: string | null;
   createdAt: string; // ISO
   details: InboxEventDetails | null;
+  /** The client is archived. Set only for a viewer who may read the client; never for a private event. */
+  clientArchived?: boolean;
+  /** This viewer may restore that client (owner / admin, not anonymised). */
+  clientRestorable?: boolean;
 }
 
 export interface InboxEventList {

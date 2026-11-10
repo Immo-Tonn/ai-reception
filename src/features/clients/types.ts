@@ -7,6 +7,8 @@ export interface ClientCustomField {
 
 export interface ClientRecord {
   id: string;
+  /** Set when the client is archived (migration 0032): hidden from active lists and pickers; history is kept. */
+  archivedAt?: string;
   name: string;
   email: string;
   phone: string;
@@ -21,4 +23,6 @@ export interface ClientRecord {
    * preset without a separate schema per industry. Optional so existing
    * records/tests are unaffected. */
   customFields?: ClientCustomField[];
+  /** Set when the client was anonymised (GDPR erasure, migration 0028): personal data is gone, the row is read-only. */
+  anonymizedAt?: string;
 }

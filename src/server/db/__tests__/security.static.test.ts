@@ -180,6 +180,7 @@ describe("service-role and secret hygiene", () => {
       "src/server/booking/pageData.ts", // public catalog for the booking page (same function)
       "src/server/externalCalendar/deps.ts", // external calendar tables (0025: no RLS policies, service role only; callers authorize first)
       "src/server/ratelimit/index.ts", // PostgreSQL rate limiter
+      "src/server/retention/deps.ts", // daily retention cron (CRON_SECRET): expired unclaimed booking_claims + retention_dry_run (0030, service_role only)
       "src/server/services/provisioning.service.ts", // provision_workspace
     ]);
   });
