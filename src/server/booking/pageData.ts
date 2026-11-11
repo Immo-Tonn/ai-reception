@@ -34,7 +34,7 @@ export async function loadPublicPageData(slug: string): Promise<PublicPageData> 
 
   if (!isSupabaseConfigured()) notFound();
   const catalog = await loadPublicCatalog({ admin: createSupabaseAdminClient() }, slug).catch((err: unknown) => {
-    // A backend failure (e.g. a rotated service-role key) must not look like "no such business"
+    // A backend failure must not look like "no such business"
     // in the dev console. The visitor still gets a plain 404; only the server log names the cause.
     console.error(`[booking] could not load the public catalog for "${slug}":`, err instanceof Error ? `${err.name}: ${err.message}` : err);
     return null;

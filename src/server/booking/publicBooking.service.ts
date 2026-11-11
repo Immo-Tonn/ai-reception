@@ -208,7 +208,7 @@ export async function loadPublicCatalog(deps: Pick<PublicBookingDeps, "admin">, 
   if (!slugSchema.safeParse(slug).success) return null;
   const { data, error } = await deps.admin.rpc("get_public_booking_catalog", { p_slug: slug });
   if (error) {
-    // Only the database's message (never keys or the request): e.g. "Unregistered API key".
+    // Only the database's message is logged (never keys or the request).
     console.error(`[booking] get_public_booking_catalog failed: ${error.message}`);
     throw new PublicBookingError("unknown");
   }
