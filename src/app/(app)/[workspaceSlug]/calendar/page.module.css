@@ -471,6 +471,18 @@
   }
 }
 
+.listGroup {
+  margin-top: var(--space-5);
+}
+
+.listGroupTitle {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-muted);
+  margin-bottom: var(--space-2);
+  text-transform: capitalize;
+}
+
 /* Cancelled (shown only with "Show cancelled"): clearly not an active booking. */
 .rowCancelled {
   opacity: 0.55;

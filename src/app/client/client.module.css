@@ -428,6 +428,12 @@
   font-size: var(--font-size-small);
 }
 
+.resetDone {
+  margin: 0;
+  color: var(--color-status-confirmed, #2f7d4f);
+  font-size: var(--font-size-small);
+}
+
 .demoNote {
   font-size: 11px;
   color: var(--color-muted);
