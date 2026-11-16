@@ -14,10 +14,15 @@ export const metadata: Metadata = {
   title: "Sign in — ServiceOS",
 };
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ google?: string | string[] }> }) {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reset?: string; google?: string | string[] }>;
+}) {
+  const { reset, google } = await searchParams;
   const locale = await getRequestLocale();
   const { login, common, authErrors, googleAuth } = getMessages(locale);
-  const googleError = googleErrorFromParam((await searchParams).google);
+  const googleError = googleErrorFromParam(google);
 
   return (
     <main className={styles.screen}>
@@ -42,6 +47,12 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               <p className={styles.formSubtitle}>{login.subtitle}</p>
             </div>
 
+            {reset === "done" ? (
+              <p className={styles.formError} role="status">
+                {login.passwordResetDone}
+              </p>
+            ) : null}
+
             {isGoogleLoginEnabled() ? (
               <GoogleButton
                 intent="owner"
@@ -56,6 +67,12 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               errors={authErrors}
               passwordLabels={{ show: common.showPassword, hide: common.hidePassword }}
             />
+
+            <p className={styles.signupPrompt}>
+              <Link className={styles.signupLink} href="/forgot-password">
+                {login.forgotPassword}
+              </Link>
+            </p>
 
             <p className={styles.signupPrompt}>
               {login.signupPrompt}{" "}

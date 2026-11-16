@@ -5,6 +5,7 @@ import type { Repository } from "@/lib/repository/types";
 import type { StaffMember } from "@/features/staff/types";
 import type { ResourceDefinition, ResourceType } from "@/features/resources/types";
 import type { AuditLogEntry } from "@/features/auditLog/types";
+import { recordAuditEntry } from "@/server/audit/deps";
 import { isUuid } from "./appointmentsMapper";
 import { RepositoryError, toRepositoryError } from "./errors";
 
@@ -104,7 +105,7 @@ export function createSupabaseResourcesRepository(workspaceId: string, getClient
 
 const ACTION_OK = new Set(["created", "updated", "moved", "statusChanged", "cancelled", "deleted"]);
 
-/** Audit log (`audit_logs`). Append-mostly: entries are written by members as `source = user`. No secrets or PII in `summary`. */
+/** Audit log (`audit_logs`). Read with the user's RLS; written only by the checked server writer. No secrets or PII in `summary`. */
 export function createSupabaseAuditLogRepository(workspaceId: string, getClient: ClientFactory = createSupabaseServerClient): Repository<AuditLogEntry> {
   const fromRow = (r: { id: string; created_at: string; action: string; entity_type: string; entity_id: string; summary: string; source: string }): AuditLogEntry => ({
     id: r.id,
@@ -126,18 +127,15 @@ export function createSupabaseAuditLogRepository(workspaceId: string, getClient:
       return undefined;
     },
     async create(item) {
-      const client = await getClient();
-      const { data: u } = await client.auth.getUser();
-      const { error } = await client.from("audit_logs").insert({
-        workspace_id: workspaceId,
-        actor_id: u.user?.id ?? null,
+      // Since migration 0033 a signed-in user cannot insert into audit_logs: the entry
+      // goes through the checked server writer (see src/server/audit/auditWriter.ts).
+      await recordAuditEntry({
+        workspaceId,
         action: item.action,
-        entity_type: item.entityType,
-        entity_id: item.entityId,
-        summary: item.summary.slice(0, 500),
-        source: "user",
+        entityType: item.entityType,
+        entityId: item.entityId,
+        summary: item.summary,
       });
-      if (error) throw toRepositoryError(error, "auditLog.create");
       return item;
     },
     async update() {

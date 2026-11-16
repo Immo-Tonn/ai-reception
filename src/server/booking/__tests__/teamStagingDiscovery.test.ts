@@ -157,7 +157,7 @@ describe("the four combinations of 'online booking' x 'listed in the directory'"
         const full = path.join(dir, name);
         if (statSync(full).isDirectory()) {
           if (!["__tests__", "content", "node_modules"].includes(name) && !full.endsWith(path.join("lib", "i18n", "data"))) walk(full);
-        } else if (/\.(ts|tsx)$/.test(name) && /labrity/i.test(readFileSync(full, "utf8"))) hits.push(path.relative(root, full));
+        } else if (/\.(ts|tsx)$/.test(name) && /labrity/i.test(readFileSync(full, "utf8"))) hits.push(path.relative(root, full).split(path.sep).join("/"));
       }
     };
     walk(root);

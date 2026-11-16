@@ -17,5 +17,9 @@ export const signInSchema = z.object({
   password: z.string().min(1).max(PASSWORD_MAX),
 });
 
+/** Password recovery: the e-mail alone, then e-mail + the one-time code (digits only). */
+export const resetEmailSchema = z.object({ email });
+export const resetCodeSchema = z.object({ email, code: z.string().regex(/^\d{6,10}$/) });
+
 export type SignUpInput = z.infer<typeof signUpSchema>;
 export type SignInInput = z.infer<typeof signInSchema>;
