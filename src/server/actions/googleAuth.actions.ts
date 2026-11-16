@@ -29,7 +29,7 @@ export async function startGoogleSignInAction(formData: FormData): Promise<void>
   const failure = (code: Parameters<typeof googleFailureHref>[1]) => googleFailureHref(intent, code, ctx.next);
 
   if (!isGoogleLoginEnabled()) redirect(failure("google_unavailable"));
-  if (!(await authAttemptAllowed({ kind: "sign_up" }))) redirect(failure("rate_limited"));
+  if (!(await authAttemptAllowed({ kind: "google_start" }))) redirect(failure("rate_limited"));
 
   const host = (await headers()).get("host");
   const { baseUrl } = getPublicBaseUrl(host);
