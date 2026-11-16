@@ -3,6 +3,8 @@ import Link from "next/link";
 import { BackLink } from "@/components/ui";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
 import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
+import { GoogleButton } from "@/components/auth/GoogleButton";
+import { googleErrorFromParam, isGoogleLoginEnabled } from "@/lib/auth/googleLogin";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { LoginForm } from "./LoginForm";
@@ -12,9 +14,10 @@ export const metadata: Metadata = {
   title: "Sign in — ServiceOS",
 };
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ google?: string | string[] }> }) {
   const locale = await getRequestLocale();
-  const { login, common, authErrors } = getMessages(locale);
+  const { login, common, authErrors, googleAuth } = getMessages(locale);
+  const googleError = googleErrorFromParam((await searchParams).google);
 
   return (
     <main className={styles.screen}>
@@ -38,6 +41,15 @@ export default async function LoginPage() {
               <h2 className={styles.formTitle}>{login.title}</h2>
               <p className={styles.formSubtitle}>{login.subtitle}</p>
             </div>
+
+            {isGoogleLoginEnabled() ? (
+              <GoogleButton
+                intent="owner"
+                label={googleAuth.continueWith}
+                orLabel={googleAuth.or}
+                errorText={googleError ? authErrors[googleError] : undefined}
+              />
+            ) : null}
 
             <LoginForm
               messages={login}

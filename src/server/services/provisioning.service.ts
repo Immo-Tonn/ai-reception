@@ -76,3 +76,35 @@ export async function signUpOwner(
     return { ok: false, code: "unknown" };
   }
 }
+
+/**
+ * Workspace for a person who is ALREADY signed in (Google sign-up): the Auth user exists and
+ * is verified by Google, so only the workspace has to be provisioned. Unlike `signUpOwner`, a
+ * failure never deletes the Auth user — it may be an existing account (e.g. a client).
+ * Idempotent like the RPC itself.
+ */
+export async function provisionOwnerWorkspace(input: {
+  userId: string;
+  email: string;
+  businessName: string;
+  locale: Locale;
+}): Promise<{ ok: true; workspaceSlug: string } | { ok: false; code: "invalid_input" | "unknown" }> {
+  const businessName = input.businessName.trim();
+  if (businessName.length < 1 || businessName.length > 120) return { ok: false, code: "invalid_input" };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin.rpc("provision_workspace", {
+      p_user_id: input.userId,
+      p_email: input.email,
+      p_full_name: "",
+      p_business_name: businessName,
+      p_base_slug: slugify(businessName),
+      p_locale: input.locale,
+    });
+    const row = Array.isArray(data) ? data[0] : data;
+    if (error || !row?.out_slug) return { ok: false, code: "unknown" };
+    return { ok: true, workspaceSlug: row.out_slug as string };
+  } catch {
+    return { ok: false, code: "unknown" };
+  }
+}

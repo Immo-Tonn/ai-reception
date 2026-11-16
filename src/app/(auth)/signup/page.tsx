@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
 import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
 import { BackLink } from "@/components/ui";
+import { GoogleButton } from "@/components/auth/GoogleButton";
+import { googleErrorFromParam, isGoogleLoginEnabled } from "@/lib/auth/googleLogin";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { SignupForm } from "./SignupForm";
@@ -12,9 +14,10 @@ export const metadata: Metadata = {
   title: "Create a workspace — ServiceOS",
 };
 
-export default async function SignupPage() {
+export default async function SignupPage({ searchParams }: { searchParams: Promise<{ google?: string | string[] }> }) {
   const locale = await getRequestLocale();
-  const { signup, common, authErrors } = getMessages(locale);
+  const { signup, common, authErrors, googleAuth } = getMessages(locale);
+  const googleError = googleErrorFromParam((await searchParams).google);
 
   return (
     <main className={styles.screen}>
@@ -39,6 +42,15 @@ export default async function SignupPage() {
               <h2 className={styles.formTitle}>{signup.title}</h2>
               <p className={styles.formSubtitle}>{signup.subtitle}</p>
             </div>
+
+            {isGoogleLoginEnabled() ? (
+              <GoogleButton
+                intent="owner"
+                label={googleAuth.signUpWith}
+                orLabel={googleAuth.or}
+                errorText={googleError ? authErrors[googleError] : undefined}
+              />
+            ) : null}
 
             <SignupForm
               messages={signup}
