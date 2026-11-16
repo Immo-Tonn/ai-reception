@@ -178,6 +178,8 @@ function normalizeJsonParam(value: unknown): unknown {
 export function createPgliteSupabaseClient(db: PGlite, actor: Actor): SupabaseClient {
   const client = {
     from: (table: string) => new Query(db, actor, table),
+    /** Test-only: the same database as the service role (the audit writer's insert, see src/test/setup.ts). */
+    __asService: () => createPgliteSupabaseClient(db, { kind: "service" }),
 
     async rpc(name: string, args: Record<string, unknown> = {}) {
       const keys = Object.keys(args);

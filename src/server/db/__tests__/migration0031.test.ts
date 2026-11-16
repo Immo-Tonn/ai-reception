@@ -52,6 +52,8 @@ afterAll(async () => {
 describe("0031 client retention setting", () => {
   it("is idempotent as a migration", async () => {
     await db.exec(readFileSync(path.join(migrationsDir, "0031_client_retention_setting.sql"), "utf8"));
+    // 0033 replaces the function bodies of this migration: replay in order
+    await db.exec(readFileSync(path.join(migrationsDir, "0033_audit_log_protection.sql"), "utf8"));
   });
 
   it("defaults to 36 months for every workspace (existing and new)", async () => {

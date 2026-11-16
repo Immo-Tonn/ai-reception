@@ -81,6 +81,8 @@ afterAll(async () => {
 describe("0029 client data export", () => {
   it("is idempotent as a migration", async () => {
     await db.exec(readFileSync(path.join(migrationsDir, "0029_client_data_export.sql"), "utf8"));
+    // 0033 replaces the function bodies of this migration: replay in order
+    await db.exec(readFileSync(path.join(migrationsDir, "0033_audit_log_protection.sql"), "utf8"));
   });
 
   it("owner exports exactly one client: no third parties, staff names, tokens or internal notes", async () => {
