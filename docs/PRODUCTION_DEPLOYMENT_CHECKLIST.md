@@ -1,8 +1,7 @@
 # Production Deployment Checklist
 
 Last updated: 2026-10-13. Branch: `feature/google-calendar-freebusy` (local commits only — **nothing pushed, no PR,
-no deploy**). Production = Vercel project on the team repo `Immo-Tonn/ai-reception` + Supabase project
-**ServiceOS Dev** (the only database; it serves production).
+no deploy**). Production hosting and database: see the private repository.
 
 ## Team Lead Handover Summary
 Full Russian step-by-step handover (Google Cloud, Vercel, Supabase, costs, tests, instructions for the team lead's Claude): [TEAM_LEAD_HANDOVER_GOOGLE_CALENDAR_RU.md](TEAM_LEAD_HANDOVER_GOOGLE_CALENDAR_RU.md).
@@ -22,11 +21,11 @@ Vercel ENV (`GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`, `EXTER
 Vercel function region; legal review; review and merge of the branch.
 
 **Risks:** no automatic database backups on the current Supabase plan (and Free projects pause after 1 week of
-inactivity); integration not yet tested with real Google; Vercel functions appear to run in the US (`iad1`);
+inactivity); integration not yet tested with real Google; hosting region to be confirmed;
 Datenschutz/Impressum not legally approved; Google "Testing" tokens expire after 7 days.
 
 **Open decisions:** final domain and product name; retention periods (legal); Supabase plan/PITR; function region
-`fra1`; whether to enable the integration for real users before Google verification.
+region of the functions; whether to enable the integration for real users before Google verification.
 
 ## 1. Already done
 - [x] Code: integration + cleanup + manage page + word-break fixes, local commits (see `git log` on the branch)
@@ -75,12 +74,12 @@ tolerate a database without 0026 for reads, see `store.ts`.)
    the Limited Use statement, scope justification, demo video. No CASA (only for restricted scopes).
 
 ## 6. Domain check
-- [ ] Team lead confirms in Vercel -> Domains which domain is primary (currently assumed: `https://ai-reception-two.vercel.app`)
+- [ ] Team lead confirms in Vercel -> Domains which domain is primary (currently assumed: `https://<production-domain>`)
 - [ ] `NEXT_PUBLIC_APP_URL` equals it; Supabase Auth Site URL / Redirect URLs match it
 
 ## 7. Legal checks (Needs legal review)
 Datenschutz Google section + whole Datenschutzerklärung + Impressum; `npm run check:legal` must pass before a public
-launch. Questions: [LEGAL_TODO.md](LEGAL_TODO.md). Vercel function region (`iad1`) vs `fra1`.
+launch. Questions: [LEGAL_TODO.md](LEGAL_TODO.md). Hosting function region: see private repository.
 
 ## 8. Tests before deploy
 - [ ] `npx tsc --noEmit`, `npx eslint`, `npx vitest run`, `npm run build` green on the merge commit
@@ -101,7 +100,7 @@ launch. Questions: [LEGAL_TODO.md](LEGAL_TODO.md). Vercel function region (`iad1
 - **Database disaster:** restore procedure in [BACKUP_RECOVERY.md](BACKUP_RECOVERY.md).
 
 ## 10. TODO: Custom Domain & Rebranding Before Public Launch
-`ai-reception-two.vercel.app` is a working domain, **not** the final product domain or name. When the final domain
+`<production-domain>` is a working domain, **not** the final product domain or name. When the final domain
 and brand are chosen (team lead confirms in Vercel), check and update:
 - [ ] Vercel -> Domains (primary domain, redirects from the old one) and `NEXT_PUBLIC_APP_URL`
 - [ ] Google OAuth -> Authorized redirect URIs (`<new>/api/integrations/google-calendar/callback`)

@@ -16,7 +16,7 @@ NOT approved; `googleCalendarIntegrationLive = false` (page says the feature is 
 **Questions for the lawyer (Needs legal review):**
 - [ ] Legal basis for processing staff calendar busy time (consent / § 26 BDSG / legitimate interest) and voluntariness in employment
 - [ ] Roles: controller (business as employer and/or ServiceOS operator), joint controllership (Art. 26) or processing (Art. 28); which contracts are needed with businesses
-- [ ] Processors and locations: Supabase (eu-central-1 Frankfurt), Vercel (functions currently appear to run in **iad1, USA** per `x-vercel-id`) — third-country transfer, DPAs, or move functions to `fra1`
+- [ ] Processors and locations: Supabase (EU region), Vercel (function region to be confirmed) — third-country transfer, DPAs, or move functions to an EU region. Facts: private repository.
 - [ ] Google: role and possible third-country transfer during OAuth / API calls (Google Ireland / Google LLC)
 - [ ] Is the pseudonymised account id (HMAC of Google `sub`) still personal data — wording OK?
 - [ ] Provisional retention: busy cache 24 h, connect-link records 30 days after use/expiry, "access withdrawn" status kept until disconnect (no auto-delete, booking safety)
@@ -55,11 +55,11 @@ Implementation: [GDPR_IMPLEMENTATION_PLAN.md](GDPR_IMPLEMENTATION_PLAN.md), [DAT
 | Item | Status | Source |
 |---|---|---|
 | Supabase project region eu-central-1 (Frankfurt) | **confirmed** | Supabase project settings, BACKUP_RECOVERY.md (2026-10-13) |
-| Vercel functions region | **observed `iad1` (USA)** — move to `fra1` pending, to verify | `x-vercel-id` response header, checked 2026-10-24; team lead TODO |
-| Vercel and Supabase plans (Hobby / Free?) | **to verify** | team lead |
-| AVV / DPA with Supabase and Vercel signed / accepted | **to verify** | not on file |
+| Vercel functions region | **to verify** | response header; facts in private repository |
+| Vercel and Supabase plans | **to verify** | team lead |
+| AVV / DPA with Supabase and Vercel | **to verify** | status in private repository |
 | Vercel log retention | **to verify** | plan dependent |
-| E-mail provider (other developer) and its region / DPA | **to verify** | not on file |
+| E-mail provider and its region / DPA | **to verify** | status in private repository |
 | International transfer (Vercel US functions, possibly Google) and transfer basis (DPF / SCC) | **to verify** | depends on the items above |
 | Google Calendar integration | not live (`googleCalendarIntegrationLive = false`) | content/legal |
 

@@ -21,7 +21,7 @@ export const RETENTION_POLICY = {
   inboxMonths: 12,
   /** Unclaimed booking claims are removed this many days after they expired (provisional, needs approval). */
   unclaimedClaimGraceDays: 30,
-  /** At most this many claims per run (Hobby plan: one run per day, short run time). */
+  /** At most this many claims per run (one run per day, short run time). */
   claimBatch: 500,
 } as const;
 

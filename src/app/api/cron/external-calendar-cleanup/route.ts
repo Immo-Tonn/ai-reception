@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 /**
  * Daily retention cleanup (vercel.json crons, docs/DATA_RETENTION.md,
  * docs/GDPR_IMPLEMENTATION_PLAN.md stage 3). Protected by CRON_SECRET.
- * Idempotent: a repeated or late run (Hobby plan: once a day, ±59 min) deletes
+ * Idempotent: a repeated or late run (the hosting plan limits cron to about once a day, +-59 min) deletes
  * nothing twice. Logs and returns COUNTS only — never ids, names, e-mail
  * addresses or tokens.
  *  1. Google Calendar integration cleanup (unchanged).
