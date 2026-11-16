@@ -23,7 +23,7 @@ export interface GoogleAuthUser {
   id: string;
   email?: string | null;
   email_confirmed_at?: string | null;
-  identities?: { provider?: string }[] | null;
+  identities?: { provider?: string; identity_data?: { email_verified?: boolean } | null }[] | null;
 }
 
 /**
@@ -89,7 +89,10 @@ export async function finishGoogleOAuth(client: GoogleAuthClient, code: string):
     const user = data?.user;
     if (error || !user) return { ok: false, code: "google_failed" };
     const viaGoogle = (user.identities ?? []).some((i) => i.provider === "google");
-    if (!viaGoogle || !user.email || !user.email_confirmed_at) {
+    // Defence against pre-registration takeover: an e-mail+password identity for the same address
+    // that was never verified could still hold a password the real owner does not know about.
+    const unverifiedPassword = (user.identities ?? []).some((i) => i.provider === "email" && i.identity_data?.email_verified === false);
+    if (!viaGoogle || !user.email || !user.email_confirmed_at || unverifiedPassword) {
       await client.auth.signOut();
       return { ok: false, code: "google_unverified" };
     }

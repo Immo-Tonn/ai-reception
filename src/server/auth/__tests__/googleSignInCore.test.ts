@@ -107,6 +107,21 @@ describe("finish Google sign-in", () => {
     }
   });
 
+  it("refuses an account that also holds an UNVERIFIED e-mail+password identity (pre-registration takeover)", async () => {
+    const identities = [{ provider: "email", identity_data: { email_verified: false } }, { provider: "google" }];
+    const { client, auth } = fake({ exchangeCodeForSession: vi.fn(async () => ({ data: { user: googleUser({ identities }) }, error: null })) });
+    expect(await finishGoogleOAuth(client, "c")).toEqual({ ok: false, code: "google_unverified" });
+    expect(auth.signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts an account that also has a VERIFIED (or unspecified) e-mail+password identity", async () => {
+    for (const data of [{ email_verified: true }, undefined, null]) {
+      const identities = [{ provider: "email", identity_data: data }, { provider: "google" }];
+      const { client } = fake({ exchangeCodeForSession: vi.fn(async () => ({ data: { user: googleUser({ identities }) }, error: null })) });
+      expect((await finishGoogleOAuth(client, "c")).ok).toBe(true);
+    }
+  });
+
   it("refuses a user without an e-mail address", async () => {
     const { client, auth } = fake({ exchangeCodeForSession: vi.fn(async () => ({ data: { user: googleUser({ email: null }) }, error: null })) });
     expect(await finishGoogleOAuth(client, "c")).toEqual({ ok: false, code: "google_unverified" });
