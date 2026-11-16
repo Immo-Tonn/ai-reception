@@ -16,11 +16,12 @@ export const metadata: Metadata = {
 export default async function ClientLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ redirect?: string | string[] }>;
+  searchParams: Promise<{ redirect?: string | string[]; reset?: string }>;
 }) {
-  const redirect = sanitizeClientRedirect((await searchParams).redirect);
+  const params = await searchParams;
+  const redirect = sanitizeClientRedirect(params.redirect);
   const locale = await getRequestLocale();
-  const { client, common, authErrors } = getMessages(locale);
+  const { client, common, authErrors, login } = getMessages(locale);
 
   return (
     <main className={styles.screen}>
@@ -31,12 +32,22 @@ export default async function ClientLoginPage({
       <div className={styles.body}>
         <h1 className={styles.title}>{client.loginTitle}</h1>
         <p className={styles.subtitle}>{client.loginSubtitle}</p>
+        {params.reset === "done" ? (
+          <p className={styles.resetDone} role="status">
+            {login.passwordResetDone}
+          </p>
+        ) : null}
         <LoginForm
           messages={client}
           errors={authErrors}
           passwordLabels={{ show: common.showPassword, hide: common.hidePassword }}
           redirect={redirect}
         />
+        <p className={styles.promptRow}>
+          <Link href="/forgot-password?for=client" className={styles.promptLink}>
+            {login.forgotPassword}
+          </Link>
+        </p>
         <p className={styles.promptRow}>
           {client.businessPrompt}{" "}
           <Link href="/business" className={styles.promptLink}>

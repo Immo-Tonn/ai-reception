@@ -50,6 +50,39 @@ describe("proxy (session refresh)", () => {
   });
 });
 
+describe("proxy (password-reset lock)", () => {
+  const flagged = "sb-proj-auth-token=abc; serviceos_pw_reset=9999999999999";
+
+  it("keeps a flagged browser on the set-new-password page instead of the app", async () => {
+    withEnv();
+    const res = await proxy(request("/my-salon/today", flagged));
+    expect(res.status).toBe(307);
+    expect(new URL(res.headers.get("location") ?? "").pathname).toBe("/reset-password/new");
+  });
+
+  it("lets a flagged browser reach the reset pages and static files", async () => {
+    withEnv();
+    for (const p of ["/reset-password/new", "/reset-password", "/forgot-password", "/login", "/logo.png"]) {
+      const res = await proxy(request(p, flagged));
+      expect(res.headers.get("x-middleware-next"), p).toBe("1");
+    }
+  });
+
+  it("refuses writes to other paths while flagged", async () => {
+    withEnv();
+    const post = new NextRequest("http://localhost/my-salon/today", { method: "POST", headers: { cookie: flagged } });
+    expect((await proxy(post)).status).toBe(403);
+  });
+
+  it("does nothing without the flag, and nothing for visitors without a session", async () => {
+    withEnv();
+    const plain = await proxy(request("/my-salon/today", "sb-proj-auth-token=abc"));
+    expect(plain.headers.get("x-middleware-next")).toBe("1");
+    const anonymous = await proxy(request("/my-salon/today", "serviceos_pw_reset=9999999999999"));
+    expect(anonymous.headers.get("x-middleware-next")).toBe("1");
+  });
+});
+
 describe("proxy matcher", () => {
   const re = new RegExp("^" + config.matcher[0] + "$");
   it("skips public booking, embeds and assets", () => {

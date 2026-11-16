@@ -87,7 +87,7 @@ describe("no leftover scroll locks / overlays", () => {
     const offenders = walk(path.join(repo, "src"))
       .filter((f) => f.endsWith(".css"))
       .filter((f) => /position:\s*fixed;[^}]*inset:\s*0/.test(readFileSync(f, "utf8")))
-      .map((f) => path.relative(repo, f));
+      .map((f) => path.relative(repo, f).split(path.sep).join("/"));
     expect(offenders).toEqual(["src/components/ui/Sheet/Sheet.module.css"]);
   });
 
