@@ -177,6 +177,7 @@ describe("service-role and secret hygiene", () => {
       "src/lib/supabase/admin.ts",
       "src/server/audit/deps.ts", // the ONLY insert into audit_logs (0033): after the server checked user + membership
       "src/server/auth/supabaseBusinessAuth.ts", // roll back a half-made sign-up
+      "src/server/billing/subscriptions.ts", // workspace_subscriptions (0034: no RLS policies, service role only; callers authorize first)
       "src/server/booking/deps.ts", // guest booking (3 whitelisted DB functions) + client directory listing (0017)
       "src/server/booking/pageData.ts", // public catalog for the booking page (same function)
       "src/server/externalCalendar/deps.ts", // external calendar tables (0025: no RLS policies, service role only; callers authorize first)
