@@ -11,7 +11,7 @@ import {
   startCheckoutAction,
 } from "@/server/actions/billing.actions";
 import { getSession } from "@/server/auth/session";
-import { fetchSubscription, getStripeConfig, type StripeSubscriptionState, type WorkspaceSubscription } from "@/server/billing/stripe";
+import { billingErrorCode, fetchSubscription, getStripeConfig, type StripeSubscriptionState, type WorkspaceSubscription } from "@/server/billing/stripe";
 import { getCurrentSubscription } from "@/server/billing/subscriptions";
 import { can } from "@/server/permissions/roles";
 import { getBusinessProfile } from "@/server/services/businessProfile.service";
@@ -59,7 +59,7 @@ export default async function BillingPage({
         subscription = await getCurrentSubscription(config, session.workspaceId);
         if (subscription) live = await fetchSubscription(config, subscription.subscriptionId);
       } catch (error) {
-        console.error("[billing]", error instanceof Error ? error.message : "unknown failure");
+        console.error("[billing]", billingErrorCode(error));
         // Unknown state: selling a plan now could charge the workspace twice.
         blockedNotice = m.errorNotice;
       }

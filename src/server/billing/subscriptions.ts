@@ -3,7 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { isBillingPlanId } from "@/features/billing/plans";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
+  BillingError,
+  billingErrorCode,
   fetchSubscription,
+  findOrCreateCustomer,
   findWorkspaceSubscription,
   isOccupyingStatus,
   type StripeConfig,
@@ -25,16 +28,48 @@ export function defaultBillingClient(): SupabaseClient {
   return createSupabaseAdminClient();
 }
 
-async function readStoredSubscription(client: SupabaseClient, workspaceId: string): Promise<WorkspaceSubscription | null> {
+interface StoredRow {
+  stripe_subscription_id: string;
+  stripe_customer_id: string;
+  plan: string | null;
+  status: string;
+}
+
+const dbErrorCode = (code: string | undefined) => `db_${code && /^[A-Za-z0-9]+$/.test(code) ? code : "unknown"}`;
+
+async function readStoredRow(client: SupabaseClient, workspaceId: string): Promise<StoredRow | null> {
   const { data, error } = await client
     .from("workspace_subscriptions")
     .select("stripe_subscription_id, stripe_customer_id, plan, status")
     .eq("workspace_id", workspaceId)
     .maybeSingle();
-  if (error) throw new Error(`stored subscription: ${error.code ?? "unknown"}`);
-  const row = data as { stripe_subscription_id: string; stripe_customer_id: string; plan: string | null; status: string } | null;
+  if (error) throw new BillingError(dbErrorCode(error.code));
+  return data as StoredRow | null;
+}
+
+async function readStoredSubscription(client: SupabaseClient, workspaceId: string): Promise<WorkspaceSubscription | null> {
+  const row = await readStoredRow(client, workspaceId);
   if (!row || !isOccupyingStatus(row.status)) return null;
   return { subscriptionId: row.stripe_subscription_id, customerId: row.stripe_customer_id, planId: row.plan && isBillingPlanId(row.plan) ? row.plan : null };
+}
+
+/**
+ * The workspace's one Stripe customer, reused for every purchase: the one
+ * stored with its (even ended) subscription, else found or created in Stripe.
+ */
+export async function getWorkspaceCustomerId(
+  config: StripeConfig,
+  workspaceId: string,
+  loadClient: () => SupabaseClient = defaultBillingClient,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string> {
+  try {
+    const stored = await readStoredRow(loadClient(), workspaceId);
+    if (stored) return stored.stripe_customer_id;
+  } catch (error) {
+    console.error("[billing]", billingErrorCode(error));
+  }
+  return findOrCreateCustomer(config, workspaceId, fetchImpl);
 }
 
 /**
@@ -52,7 +87,7 @@ export async function getCurrentSubscription(
     const stored = await readStoredSubscription(loadClient(), workspaceId);
     if (stored) return stored;
   } catch (error) {
-    console.error("[billing]", error instanceof Error ? error.message : "unknown failure");
+    console.error("[billing]", billingErrorCode(error));
   }
   return findWorkspaceSubscription(config, workspaceId, fetchImpl);
 }
@@ -66,7 +101,7 @@ async function saveSubscription(client: SupabaseClient, state: StripeSubscriptio
     p_status: state.status,
   });
   // A workspace that isn't here belongs to another environment on the same Stripe account: not ours to store.
-  if (error && error.code !== FOREIGN_KEY_VIOLATION) throw new Error(`save subscription: ${error.code ?? "unknown"}`);
+  if (error && error.code !== FOREIGN_KEY_VIOLATION) throw new BillingError(dbErrorCode(error.code));
 }
 
 function subscriptionIdOf(event: StripeEvent): string | null {

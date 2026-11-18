@@ -1,5 +1,5 @@
 import "server-only";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { BillingPlanId } from "@/features/billing/plans";
 
 /**
@@ -8,7 +8,15 @@ import type { BillingPlanId } from "@/features/billing/plans";
  * `metadata.workspace_id`, which ties it to the workspace.
  */
 const API_BASE = "https://api.stripe.com/v1";
+/**
+ * Pinned so a change of the account's default API version can't change the
+ * shapes read here. Webhook payloads don't depend on it: the webhook only
+ * takes the subscription id from an event and re-reads it with this version.
+ */
+export const STRIPE_API_VERSION = "2025-03-31.basil";
 const REQUEST_TIMEOUT_MS = 10_000;
+/** A repeated "choose plan" within this window gets the same Checkout page instead of a second one. */
+const CHECKOUT_IDEMPOTENCY_WINDOW_MS = 60 * 60 * 1000;
 /** Stripe's default: a signed event older than this is treated as a replay. */
 const SIGNATURE_TOLERANCE_SECONDS = 300;
 
@@ -29,12 +37,25 @@ export interface WorkspaceSubscription {
   planId: BillingPlanId | null;
 }
 
+/** A billing failure with a short `code` that is safe to log (no ids, e-mail addresses or keys). */
+export class BillingError extends Error {
+  constructor(readonly code: string) {
+    super(`billing failed: ${code}`);
+    this.name = "BillingError";
+  }
+}
+
 /** Carries only Stripe's status and error type/code — never the key or the request body. */
-export class StripeRequestError extends Error {
-  constructor(detail: string) {
-    super(`Stripe request failed: ${detail}`);
+export class StripeRequestError extends BillingError {
+  constructor(status: number | "network", stripeCode?: string) {
+    super(`stripe_${status}${stripeCode ? `_${stripeCode}` : ""}`);
     this.name = "StripeRequestError";
   }
+}
+
+/** The loggable code of any error: a `BillingError`'s code, otherwise just "unknown" (never the message). */
+export function billingErrorCode(error: unknown): string {
+  return error instanceof BillingError && /^[A-Za-z0-9_]+$/.test(error.code) ? error.code : "unknown";
 }
 
 /** `null` unless the secret key and all three prices are set. */
@@ -53,6 +74,7 @@ async function stripeRequest<T>(
   params: Record<string, string>,
   method: "GET" | "POST",
   fetchImpl: FetchLike,
+  idempotencyKey?: string,
 ): Promise<T> {
   const query = new URLSearchParams(params).toString();
   let response: Response;
@@ -61,7 +83,9 @@ async function stripeRequest<T>(
       method,
       headers: {
         Authorization: `Bearer ${config.secretKey}`,
+        "Stripe-Version": STRIPE_API_VERSION,
         ...(method === "POST" ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
       },
       ...(method === "POST" ? { body: query } : {}),
       cache: "no-store",
@@ -72,10 +96,12 @@ async function stripeRequest<T>(
   }
   const body = (await response.json().catch(() => null)) as (T & { error?: { type?: string; code?: string } }) | null;
   if (!response.ok || !body) {
-    throw new StripeRequestError(`${response.status} ${body?.error?.type ?? ""} ${body?.error?.code ?? ""}`.trim());
+    throw new StripeRequestError(response.status, body?.error?.code ?? body?.error?.type);
   }
   return body;
 }
+
+const searchValue = (value: string) => value.replace(/[\\']/g, "\\$&");
 
 /** The workspace's current subscription, if any. Search is eventually consistent (up to about a minute). */
 export async function findWorkspaceSubscription(
@@ -88,7 +114,7 @@ export async function findWorkspaceSubscription(
   }>(
     config,
     "/subscriptions/search",
-    { query: `metadata['workspace_id']:'${workspaceId.replace(/[\\']/g, "\\$&")}'`, limit: "100" },
+    { query: `metadata['workspace_id']:'${searchValue(workspaceId)}'`, limit: "100" },
     "GET",
     fetchImpl,
   );
@@ -186,28 +212,57 @@ export function parseSignedEvent(rawBody: string, signatureHeader: string | null
   }
 }
 
-/** URL of the Stripe-hosted payment page for one plan. */
-export async function createCheckoutUrl(
-  config: StripeConfig,
-  input: { planId: BillingPlanId; workspaceId: string; successUrl: string; cancelUrl: string },
-  fetchImpl: FetchLike = fetch,
-): Promise<string> {
-  const { url } = await stripeRequest<{ url: string }>(
+/**
+ * The workspace's one Stripe customer: found by `metadata.workspace_id`, or
+ * created. Search lags by up to a minute, so creation carries an idempotency
+ * key: two concurrent first purchases still get the same customer.
+ */
+export async function findOrCreateCustomer(config: StripeConfig, workspaceId: string, fetchImpl: FetchLike = fetch): Promise<string> {
+  const { data } = await stripeRequest<{ data: { id: string }[] }>(
     config,
-    "/checkout/sessions",
-    {
-      mode: "subscription",
-      "line_items[0][price]": config.prices[input.planId],
-      "line_items[0][quantity]": "1",
-      success_url: input.successUrl,
-      cancel_url: input.cancelUrl,
-      client_reference_id: input.workspaceId,
-      "metadata[workspace_id]": input.workspaceId,
-      "subscription_data[metadata][workspace_id]": input.workspaceId,
-    },
-    "POST",
+    "/customers/search",
+    { query: `metadata['workspace_id']:'${searchValue(workspaceId)}'`, limit: "1" },
+    "GET",
     fetchImpl,
   );
+  if (data[0]) return data[0].id;
+  const { id } = await stripeRequest<{ id: string }>(
+    config,
+    "/customers",
+    { "metadata[workspace_id]": workspaceId },
+    "POST",
+    fetchImpl,
+    `customer-${workspaceId}`,
+  );
+  return id;
+}
+
+/**
+ * URL of the Stripe-hosted payment page for one plan. The idempotency key
+ * makes a double click (or two tabs) within the window return the same page,
+ * so only one subscription can be paid for.
+ */
+export async function createCheckoutUrl(
+  config: StripeConfig,
+  input: { planId: BillingPlanId; workspaceId: string; customerId: string; successUrl: string; cancelUrl: string },
+  fetchImpl: FetchLike = fetch,
+  now = Date.now(),
+): Promise<string> {
+  const params = {
+    mode: "subscription",
+    customer: input.customerId,
+    "line_items[0][price]": config.prices[input.planId],
+    "line_items[0][quantity]": "1",
+    success_url: input.successUrl,
+    cancel_url: input.cancelUrl,
+    client_reference_id: input.workspaceId,
+    "metadata[workspace_id]": input.workspaceId,
+    "subscription_data[metadata][workspace_id]": input.workspaceId,
+  };
+  // Stripe rejects a reused key with different parameters, so the key covers them all.
+  const slot = Math.floor(now / CHECKOUT_IDEMPOTENCY_WINDOW_MS);
+  const digest = createHash("sha256").update(JSON.stringify([params, slot])).digest("hex").slice(0, 32);
+  const { url } = await stripeRequest<{ url: string }>(config, "/checkout/sessions", params, "POST", fetchImpl, `checkout-${input.workspaceId}-${digest}`);
   return url;
 }
 

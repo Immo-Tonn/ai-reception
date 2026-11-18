@@ -2,7 +2,19 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { createCheckoutUrl, createPortalUrl, fetchSubscription, findWorkspaceSubscription, getStripeConfig, setCancelAtPeriodEnd, StripeRequestError } from "../stripe";
+import {
+  BillingError,
+  billingErrorCode,
+  createCheckoutUrl,
+  createPortalUrl,
+  fetchSubscription,
+  findOrCreateCustomer,
+  findWorkspaceSubscription,
+  getStripeConfig,
+  setCancelAtPeriodEnd,
+  STRIPE_API_VERSION,
+  StripeRequestError,
+} from "../stripe";
 
 type FetchImpl = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -27,7 +39,7 @@ describe("findWorkspaceSubscription", () => {
     const url = new URL(fetchImpl.mock.calls[0][0]);
     expect(url.pathname).toBe("/v1/subscriptions/search");
     expect(url.searchParams.get("query")).toBe("metadata['workspace_id']:'w1'");
-    expect(fetchImpl.mock.calls[0][1]?.headers).toMatchObject({ Authorization: "Bearer test-key" });
+    expect(fetchImpl.mock.calls[0][1]?.headers).toMatchObject({ Authorization: "Bearer test-key", "Stripe-Version": STRIPE_API_VERSION });
   });
 
   it("treats a past-due subscription as occupying, canceled and incomplete as free", async () => {
@@ -50,10 +62,20 @@ describe("findWorkspaceSubscription", () => {
   });
 });
 
+const checkout = (planId: "start" | "business" | "pro", over: { successUrl?: string } = {}) => ({
+  planId,
+  workspaceId: "w1",
+  customerId: "cus_1",
+  successUrl: "https://a/ok",
+  cancelUrl: "https://a/no",
+  ...over,
+});
+const keyOf = (fetchImpl: { mock: { calls: [string, RequestInit?][] } }, call = 0) => (fetchImpl.mock.calls[call][1]?.headers as Record<string, string>)["Idempotency-Key"];
+
 describe("createCheckoutUrl", () => {
   it("creates a subscription session for the plan's price, tagged with the workspace", async () => {
     const fetchImpl = vi.fn<FetchImpl>(async () => json({ url: "https://checkout.stripe.com/c/1" }));
-    const url = await createCheckoutUrl(config, { planId: "pro", workspaceId: "w1", successUrl: "https://a/ok", cancelUrl: "https://a/no" }, fetchImpl);
+    const url = await createCheckoutUrl(config, checkout("pro"), fetchImpl);
     expect(url).toBe("https://checkout.stripe.com/c/1");
     expect(fetchImpl.mock.calls[0][1]?.method).toBe("POST");
     const body = new URLSearchParams(fetchImpl.mock.calls[0][1]?.body as string);
@@ -61,21 +83,69 @@ describe("createCheckoutUrl", () => {
     expect(body.get("line_items[0][price]")).toBe("price_p");
     expect(body.get("subscription_data[metadata][workspace_id]")).toBe("w1");
     expect(body.get("success_url")).toBe("https://a/ok");
+    expect(body.get("customer")).toBe("cus_1");
   });
 
   it("reports Stripe's error code without the key", async () => {
     const failing = async () => json({ error: { type: "invalid_request_error", code: "resource_missing" } }, 400);
-    const error = await createCheckoutUrl(config, { planId: "start", workspaceId: "w1", successUrl: "s", cancelUrl: "c" }, failing).catch((e) => e);
+    const error = await createCheckoutUrl(config, checkout("start"), failing).catch((e) => e);
     expect(error).toBeInstanceOf(StripeRequestError);
-    expect(error.message).toContain("resource_missing");
+    expect(error.code).toBe("stripe_400_resource_missing");
     expect(error.message).not.toContain("test-key");
+  });
+
+  it("gives a repeated click the same idempotency key, so Stripe returns the same page", async () => {
+    const fetchImpl = vi.fn<FetchImpl>(async () => json({ url: "u" }));
+    const at = 1_800_000_000_000;
+    await createCheckoutUrl(config, checkout("pro"), fetchImpl, at);
+    await createCheckoutUrl(config, checkout("pro"), fetchImpl, at + 60_000);
+    expect(keyOf(fetchImpl, 0)).toMatch(/^checkout-w1-[0-9a-f]{32}$/);
+    expect(keyOf(fetchImpl, 1)).toBe(keyOf(fetchImpl, 0));
+  });
+
+  it("uses a new key for another plan, other parameters, or once the window has passed", async () => {
+    const fetchImpl = vi.fn<FetchImpl>(async () => json({ url: "u" }));
+    const at = 1_800_000_000_000;
+    await createCheckoutUrl(config, checkout("pro"), fetchImpl, at);
+    await createCheckoutUrl(config, checkout("start"), fetchImpl, at);
+    await createCheckoutUrl(config, checkout("pro", { successUrl: "https://b/ok" }), fetchImpl, at);
+    await createCheckoutUrl(config, checkout("pro"), fetchImpl, at + 2 * 60 * 60 * 1000);
+    expect(new Set([0, 1, 2, 3].map((call) => keyOf(fetchImpl, call))).size).toBe(4);
   });
 
   it("reports a network failure as an error", async () => {
     const offline = async () => {
       throw new TypeError("fetch failed");
     };
-    await expect(createCheckoutUrl(config, { planId: "start", workspaceId: "w1", successUrl: "s", cancelUrl: "c" }, offline)).rejects.toBeInstanceOf(StripeRequestError);
+    await expect(createCheckoutUrl(config, checkout("start"), offline)).rejects.toBeInstanceOf(StripeRequestError);
+  });
+});
+
+describe("findOrCreateCustomer", () => {
+  it("reuses the workspace's customer found by its metadata", async () => {
+    const fetchImpl = vi.fn<FetchImpl>(async () => json({ data: [{ id: "cus_9" }] }));
+    await expect(findOrCreateCustomer(config, "w1", fetchImpl)).resolves.toBe("cus_9");
+    expect(new URL(fetchImpl.mock.calls[0][0]).pathname).toBe("/v1/customers/search");
+    expect(new URL(fetchImpl.mock.calls[0][0]).searchParams.get("query")).toBe("metadata['workspace_id']:'w1'");
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it("creates one with a per-workspace idempotency key when there is none", async () => {
+    const fetchImpl = vi.fn<FetchImpl>(async (url) => json(url.includes("/search") ? { data: [] } : { id: "cus_new" }));
+    await expect(findOrCreateCustomer(config, "w1", fetchImpl)).resolves.toBe("cus_new");
+    expect(fetchImpl.mock.calls[1][0]).toBe("https://api.stripe.com/v1/customers");
+    expect(fetchImpl.mock.calls[1][1]?.body).toBe("metadata%5Bworkspace_id%5D=w1");
+    expect(keyOf(fetchImpl, 1)).toBe("customer-w1");
+  });
+});
+
+describe("billingErrorCode", () => {
+  it("logs only a code, never an error's message", () => {
+    expect(billingErrorCode(new StripeRequestError(401, "api_key_invalid"))).toBe("stripe_401_api_key_invalid");
+    expect(billingErrorCode(new StripeRequestError("network"))).toBe("stripe_network");
+    expect(billingErrorCode(new BillingError("db_42P01"))).toBe("db_42P01");
+    expect(billingErrorCode(new Error("customer jane@example.com not found"))).toBe("unknown");
+    expect(billingErrorCode(new BillingError("bad code with spaces"))).toBe("unknown");
   });
 });
 

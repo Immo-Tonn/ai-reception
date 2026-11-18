@@ -7,7 +7,7 @@ vi.mock("server-only", () => ({}));
 import { as, createMigratedDb } from "@/server/db/__tests__/pg";
 import { createPgliteSupabaseClient } from "@/server/db/__tests__/supabasePglite";
 import type { StripeEvent } from "../stripe";
-import { getCurrentSubscription, syncSubscriptionFromEvent } from "../subscriptions";
+import { getCurrentSubscription, getWorkspaceCustomerId, syncSubscriptionFromEvent } from "../subscriptions";
 
 const OWNER = "aaaaaaaa-0000-4000-8000-0000000000a1";
 const config = { secretKey: "test-key", prices: { start: "price_s", business: "price_b", pro: "price_p" } };
@@ -114,5 +114,20 @@ describe("getCurrentSubscription", () => {
     };
     await expect(getCurrentSubscription(config, workspaceId, noClient, fromStripe([stripeSubscription()]))).resolves.toEqual({ subscriptionId: "sub_1", customerId: "cus_1", planId: "business" });
     error.mockRestore();
+  });
+});
+
+describe("getWorkspaceCustomerId", () => {
+  it("reuses the customer of the stored subscription, even an ended one", async () => {
+    await syncSubscriptionFromEvent(event("customer.subscription.deleted", { id: "sub_1" }), config, client, stripeReturning(stripeSubscription({ status: "canceled" })));
+    const fetchImpl = vi.fn<typeof fetch>(async () => json({ data: [] }));
+    await expect(getWorkspaceCustomerId(config, workspaceId, () => client, fetchImpl)).resolves.toBe("cus_1");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("finds or creates the customer in Stripe when nothing is stored", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => json({ data: [{ id: "cus_found" }] }));
+    await expect(getWorkspaceCustomerId(config, workspaceId, () => client, fetchImpl)).resolves.toBe("cus_found");
+    expect(String(fetchImpl.mock.calls[0][0])).toContain("/v1/customers/search");
   });
 });

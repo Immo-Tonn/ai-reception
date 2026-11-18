@@ -8,7 +8,7 @@ const sync = vi.hoisted(() => vi.fn());
 vi.mock("@/server/billing/subscriptions", () => ({ defaultBillingClient: () => ({}), syncSubscriptionFromEvent: sync }));
 
 import { POST } from "@/app/api/stripe/webhook/route";
-import { parseSignedEvent } from "../stripe";
+import { BillingError, parseSignedEvent } from "../stripe";
 
 const SECRET = "whsec_test";
 const NOW = 1_800_000_000;
@@ -85,9 +85,12 @@ describe("POST /api/stripe/webhook", () => {
   it("answers 500 on a failure so that Stripe retries, without logging details", async () => {
     configure();
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    sync.mockRejectedValueOnce(new Error("save subscription: 42P01"));
+    sync.mockRejectedValueOnce(new BillingError("db_42P01"));
     expect((await post(fresh())).status).toBe(500);
-    expect(error).toHaveBeenCalledWith("[billing] webhook:", "save subscription: 42P01");
+    expect(error).toHaveBeenLastCalledWith("[billing] webhook:", "db_42P01");
+    sync.mockRejectedValueOnce(new Error("subscription sub_1 of jane@example.com"));
+    expect((await post(fresh())).status).toBe(500);
+    expect(error).toHaveBeenLastCalledWith("[billing] webhook:", "unknown");
     error.mockRestore();
   });
 });
