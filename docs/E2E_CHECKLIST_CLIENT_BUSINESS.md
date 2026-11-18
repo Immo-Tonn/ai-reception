@@ -1,6 +1,6 @@
 # Full E2E checklist: iPhone = CLIENT, MacBook = BUSINESS (Labrity)
 
-Dev server on the LAN (`npm run dev`), ServiceOS Dev database. Use a NEW test client e-mail
+Dev server on the LAN (`npm run dev`), team test database.
 (for example `e2e-client-1@example.com`) so the client record is easy to find.
 Nothing here deletes data; cancel/mark instead.
 

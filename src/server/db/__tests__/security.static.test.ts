@@ -175,14 +175,24 @@ describe("service-role and secret hygiene", () => {
     const importers = sources.filter((f) => /createSupabaseAdminClient/.test(read(f))).map(rel).sort();
     expect(importers).toEqual([
       "src/lib/supabase/admin.ts",
+      "src/server/audit/deps.ts", // the ONLY insert into audit_logs (0033): after the server checked user + membership
       "src/server/auth/supabaseBusinessAuth.ts", // roll back a half-made sign-up
       "src/server/billing/subscriptions.ts", // workspace_subscriptions (0034: no RLS policies, service role only; callers authorize first)
       "src/server/booking/deps.ts", // guest booking (3 whitelisted DB functions) + client directory listing (0017)
       "src/server/booking/pageData.ts", // public catalog for the booking page (same function)
       "src/server/externalCalendar/deps.ts", // external calendar tables (0025: no RLS policies, service role only; callers authorize first)
       "src/server/ratelimit/index.ts", // PostgreSQL rate limiter
+      "src/server/retention/deps.ts", // daily retention cron (CRON_SECRET): expired unclaimed booking_claims + retention_dry_run (0030, service_role only)
       "src/server/services/provisioning.service.ts", // provision_workspace
     ]);
+  });
+
+  it("audit_logs is written from exactly one place in the application code", () => {
+    const inserts = sources
+      .filter((f) => !rel(f).startsWith("src/test/")) // test wiring (src/test/setup.ts) is not application code
+      .filter((f) => /from\(["']audit_logs["']\)\s*\.insert\(/.test(read(f).replace(/\s+/g, " ")))
+      .map(rel);
+    expect(inserts).toEqual(["src/server/audit/deps.ts"]);
   });
 
   it("the service-role key is read in exactly one file and never behind NEXT_PUBLIC_", () => {
@@ -191,7 +201,7 @@ describe("service-role and secret hygiene", () => {
     for (const f of walk(root).filter((f) => !f.includes("node_modules") && !f.includes("/.next/"))) {
       if (/\.(ts|tsx|js|md|sql|json)$/.test(f)) expect(read(f), rel(f)).not.toMatch(/NEXT_PUBLIC_[A-Z_]*SERVICE_ROLE/);
     }
-  });
+  }, 30_000); // scans the whole repo; the default 5 s is too tight when the full suite runs in parallel
 
   it("Supabase client code is server-only and never imported from a client component", () => {
     for (const f of sources) {
@@ -234,7 +244,7 @@ describe("service-role and secret hygiene", () => {
   });
 
   it(".env.example lists names only — no values", () => {
-    const lines = read(path.join(root, ".env.example")).split("\n").filter((l) => /^[A-Z_]+=/.test(l));
+    const lines = read(path.join(root, ".env.example")).split(/\r?\n/).filter((l) => /^[A-Z_]+=/.test(l));
     expect(lines.length).toBeGreaterThanOrEqual(4);
     for (const l of lines) expect(l, l).toMatch(/^[A-Z_]+=$/);
     const names = lines.map((l) => l.replace("=", ""));

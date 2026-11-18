@@ -8,6 +8,7 @@ const codeToKey = {
   conflict: "conflict",
   invalid_status: "invalidStatus",
   delete_blocked: "deleteBlocked",
+  client_archived: "clientArchived",
   unknown: "generic",
 } as const;
 

@@ -3,6 +3,18 @@
   padding: 0 var(--space-4) var(--space-8);
 }
 
+/* Archive status and action (owner / admin). */
+.archiveStatus {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-small);
+  color: var(--text-secondary);
+}
+
+.archiveButton {
+  margin-inline-start: 0;
+  margin-bottom: var(--space-4);
+}
+
 @media (min-width: 768px) {
   .page {
     padding: 0 var(--space-8) var(--space-10);
@@ -225,6 +237,13 @@
   cursor: pointer;
 }
 
+/* GDPR erasure (owner only): a quiet secondary action at the end of the card. */
+.anonymizeButton {
+  margin-inline-start: 0;
+  margin-top: var(--space-6);
+  color: var(--text-secondary);
+}
+
 /* History rows open the appointment in the calendar (status changes and corrections live there). */
 a.row {
   color: inherit;
@@ -255,4 +274,10 @@ a.row {
 .countWarning {
   color: var(--panel-status-negative-text, #b42318);
   font-weight: var(--font-weight-semibold);
+}
+
+/* GDPR export (owner / admin): secondary action under the status summary. */
+.exportButton {
+  margin-inline-start: 0;
+  margin-bottom: var(--space-4);
 }

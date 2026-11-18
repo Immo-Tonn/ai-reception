@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { getSupabaseConfig } from "@/lib/supabase/config";
+import { isRecoveryAllowedPath, RECOVERY_FLAG_COOKIE } from "@/lib/auth/recoveryFlag";
 
 /**
  * Keeps a signed-in business user's Supabase session fresh (Server
@@ -15,12 +16,20 @@ import { getSupabaseConfig } from "@/lib/supabase/config";
  *  - Any failure falls through to a plain `next()`.
  *
  * It never authorizes anything; access control lives in `getSession()` and
- * Row Level Security.
+ * Row Level Security. The one thing it does besides refreshing: while the
+ * "password reset in progress" flag is set (see `lib/auth/recoveryFlag`), a
+ * signed-in browser is kept on the set-new-password page. That is a
+ * convenience lock for the owner, not an access-control boundary.
  */
 export async function proxy(request: NextRequest) {
   const config = getSupabaseConfig();
   const hasAuthCookie = request.cookies.getAll().some((c) => c.name.startsWith("sb-"));
   if (!config || !hasAuthCookie) return NextResponse.next();
+
+  if (request.cookies.has(RECOVERY_FLAG_COOKIE) && !isRecoveryAllowedPath(request.nextUrl.pathname)) {
+    if (request.method !== "GET" && request.method !== "HEAD") return new NextResponse(null, { status: 403 });
+    return NextResponse.redirect(new URL("/reset-password/new", request.url));
+  }
 
   let response = NextResponse.next({ request });
   try {

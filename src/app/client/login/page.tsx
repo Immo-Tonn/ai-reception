@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { GoogleButton } from "@/components/auth/GoogleButton";
+import { googleErrorFromParam, isGoogleLoginEnabled } from "@/lib/auth/googleLogin";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
@@ -16,11 +18,17 @@ export const metadata: Metadata = {
 export default async function ClientLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ redirect?: string | string[] }>;
+  searchParams: Promise<{
+    redirect?: string | string[];
+    reset?: string;
+    google?: string | string[];
+  }>;
 }) {
-  const redirect = sanitizeClientRedirect((await searchParams).redirect);
+  const params = await searchParams;
+  const redirect = sanitizeClientRedirect(params.redirect);
+  const googleError = googleErrorFromParam(params.google);
   const locale = await getRequestLocale();
-  const { client, common, authErrors } = getMessages(locale);
+  const { client, common, authErrors, login, googleAuth } = getMessages(locale);
 
   return (
     <main className={styles.screen}>
@@ -31,12 +39,31 @@ export default async function ClientLoginPage({
       <div className={styles.body}>
         <h1 className={styles.title}>{client.loginTitle}</h1>
         <p className={styles.subtitle}>{client.loginSubtitle}</p>
+        {params.reset === "done" ? (
+          <p className={styles.resetDone} role="status">
+            {login.passwordResetDone}
+          </p>
+        ) : null}
+        {isGoogleLoginEnabled() ? (
+          <GoogleButton
+            intent="client"
+            next={redirect}
+            label={googleAuth.continueWith}
+            orLabel={googleAuth.or}
+            errorText={googleError ? authErrors[googleError] : undefined}
+          />
+        ) : null}
         <LoginForm
           messages={client}
           errors={authErrors}
           passwordLabels={{ show: common.showPassword, hide: common.hidePassword }}
           redirect={redirect}
         />
+        <p className={styles.promptRow}>
+          <Link href="/forgot-password?for=client" className={styles.promptLink}>
+            {login.forgotPassword}
+          </Link>
+        </p>
         <p className={styles.promptRow}>
           {client.businessPrompt}{" "}
           <Link href="/business" className={styles.promptLink}>

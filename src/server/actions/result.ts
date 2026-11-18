@@ -2,6 +2,7 @@ import { ZodError } from "zod";
 import { PermissionDeniedError } from "@/server/permissions/roles";
 import { BusinessRuleError } from "@/server/services/businessRuleError";
 import {
+  RepositoryClientArchivedError,
   RepositoryConflictError,
   RepositoryForbiddenError,
   RepositoryNotFoundError,
@@ -21,6 +22,7 @@ export type ActionErrorCode =
   | "conflict"
   | "invalid_status"
   | "delete_blocked"
+  | "client_archived"
   | "unknown";
 export type ActionResult<T> = { ok: true; data: T } | { ok: false; code: ActionErrorCode };
 
@@ -33,6 +35,7 @@ export function toActionError(error: unknown): ActionErrorCode {
   ) {
     return "forbidden";
   }
+  if (error instanceof RepositoryClientArchivedError) return "client_archived";
   if (error instanceof BusinessRuleError && error.code === "invalid_status_transition") return "invalid_status";
   if (error instanceof BusinessRuleError && error.code === "delete_not_allowed") return "delete_blocked";
   if (error instanceof BusinessRuleError || error instanceof RepositoryConflictError) return "conflict";

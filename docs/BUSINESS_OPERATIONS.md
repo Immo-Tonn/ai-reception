@@ -32,7 +32,7 @@ Existing tables reused: clients, appointments, services, staff_profiles, financi
 - Analytics: SECURITY INVOKER SQL functions over appointments, clients, invoices, work tables; revenue only from buckets the caller may see.
 
 ## As built (2026-10-05)
-- Migrations 0021-0024 applied to ServiceOS Dev (dry-run, ref matched .env.local, existing tables were empty, data intact, anon 401 everywhere).
+- Migrations 0021-0024 are part of the schema (dry-run first, data intact, anon 401 everywhere).
 - Finance: DB status enum unchanged; mapping draft=draft, unpaid=sent, partial=partially_paid, paid=paid, cancelled=void, overdue derived at read time. Money = numeric in DB, integer minor units in TS (`src/lib/money.ts`, half-up once per line). Invoices/payments are never deleted (void/cancel). Numbering INV-{workspace-local year}-{0001}.
 - Work: Lead -> Quote -> Job (+Project) conversions are SECURITY INVOKER SQL functions, idempotent (unique indexes uq_quotes_lead, uq_jobs_quote); links derived (quotes.lead_id, jobs.quote_id) to avoid circular FKs; `invoices.quote_id/job_id/project_id` carry the Work-Finance relation.
 - Waiting list: no automatic booking; "Book appointment" opens Calendar create with client name + date prefill only.

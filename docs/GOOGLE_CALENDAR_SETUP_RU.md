@@ -75,7 +75,7 @@ Billing-аккаунт (карта) для Calendar API **не нужен**.
 |---|---|
 | Локально | `http://localhost:3000/api/integrations/google-calendar/callback` |
 | Staging | `https://<ваш-фиксированный-staging-домен>/api/integrations/google-calendar/callback` |
-| Production (сейчас, временно) | `https://ai-reception-two.vercel.app/api/integrations/google-calendar/callback` — домен должен подтвердить тимлид в Vercel → Domains |
+| Production (сейчас, временно) | `https://<production-domain>/api/integrations/google-calendar/callback` — домен должен подтвердить тимлид в Vercel → Domains |
 | Production (после выбора своего домена) | `https://<новый-домен>/api/integrations/google-calendar/callback` — см. TODO в [PRODUCTION_DEPLOYMENT_CHECKLIST.md](PRODUCTION_DEPLOYMENT_CHECKLIST.md) |
 
 Один и тот же Redirect URI используется и для подключения календаря, и для страницы `/connect-calendar/manage` (вход «только подтвердить аккаунт»).

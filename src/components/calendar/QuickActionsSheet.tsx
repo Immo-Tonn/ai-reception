@@ -7,6 +7,7 @@ import type { ServiceDefinition } from "@/features/services/types";
 import { resolveServiceLabel } from "@/features/services/label";
 import type { Locale, Messages } from "@/lib/i18n";
 import { StatusBadge } from "./StatusBadge";
+import { ArchivedClientNotice } from "./ArchivedClientNotice";
 import { activeStatuses } from "@/features/appointments/statusMeta";
 import { canTransition, hasStarted, wallNow, isHistoryCorrection } from "@/features/appointments/statusRules";
 import styles from "./QuickActionsSheet.module.css";
@@ -31,6 +32,11 @@ interface QuickActionsSheetProps {
   timeZone?: string | null;
   /** May this person correct a recorded outcome (owner / admin / manager)? The server checks it too. */
   canCorrect?: boolean;
+  workspaceSlug?: string;
+  onRestoreClient?: () => void;
+  archiveBusy?: boolean;
+  /** Result of the last restore. */
+  archiveNotice?: { kind: "success" | "warning"; text: string } | null;
 }
 
 export function QuickActionsSheet({
@@ -51,6 +57,10 @@ export function QuickActionsSheet({
   onViewWaitingList,
   timeZone = null,
   canCorrect = false,
+  workspaceSlug,
+  onRestoreClient,
+  archiveBusy = false,
+  archiveNotice = null,
 }: QuickActionsSheetProps) {
   const [mode, setMode] = useState<"menu" | "confirmCancel" | "cancelledMatches">("menu");
 
@@ -120,6 +130,21 @@ export function QuickActionsSheet({
             </div>
             <StatusBadge status={appointment.status} labels={statusMessages} />
           </div>
+
+          {appointment.clientArchived && appointment.clientId && workspaceSlug && !isMasked && onRestoreClient ? (
+            <ArchivedClientNotice
+              workspaceSlug={workspaceSlug}
+              clientId={appointment.clientId}
+              messages={messages}
+              busy={archiveBusy}
+              onRestore={onRestoreClient}
+            />
+          ) : null}
+          {archiveNotice ? (
+            <p role={archiveNotice.kind === "warning" ? "alert" : "status"} className={archiveNotice.kind === "warning" ? styles.archiveWarning : styles.hint}>
+              {archiveNotice.text}
+            </p>
+          ) : null}
 
           {notStartedYet && <p className={styles.hint}>{messages.outcomeAfterStartHint}</p>}
 

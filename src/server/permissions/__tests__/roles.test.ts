@@ -13,6 +13,14 @@ describe("can", () => {
     expect(can("staff", "finance.view")).toBe(false);
   });
 
+  it("lets only the owner anonymise a client", () => {
+    expect(can("owner", "clients.erase")).toBe(true);
+    for (const role of ["admin", "manager", "staff", "accountant"] as const) {
+      expect(can(role, "clients.erase")).toBe(false);
+      expect(() => assertCan(role, "clients.erase")).toThrow(PermissionDeniedError);
+    }
+  });
+
   it("denies staff and manager access to private records", () => {
     expect(can("staff", "private_records.view")).toBe(false);
     expect(can("manager", "private_records.view")).toBe(false);
@@ -31,6 +39,18 @@ describe("can", () => {
 describe("assertCan", () => {
   it("does not throw when the role has the permission", () => {
     expect(() => assertCan("owner", "billing.manage")).not.toThrow();
+  });
+
+  it("lets owner and admin export a client; internal notes only the owner", () => {
+    expect(can("owner", "clients.export")).toBe(true);
+    expect(can("admin", "clients.export")).toBe(true);
+    expect(can("owner", "clients.export_internal_notes")).toBe(true);
+    expect(can("admin", "clients.export_internal_notes")).toBe(false);
+    for (const role of ["owner", "admin"] as const) expect(can(role, "clients.reopen_request")).toBe(true);
+    for (const role of ["manager", "staff", "accountant"] as const) expect(can(role, "clients.reopen_request")).toBe(false);
+    for (const role of ["manager", "staff", "accountant"] as const) {
+      expect(() => assertCan(role, "clients.export")).toThrow(PermissionDeniedError);
+    }
   });
 
   it("throws PermissionDeniedError when the role lacks the permission", () => {

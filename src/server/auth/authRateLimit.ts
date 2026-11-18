@@ -20,14 +20,17 @@ export const AUTH_RATE_LIMITS = {
   signInIp: { scope: "auth_sign_in_ip", limit: 30, windowSeconds: 10 * 60 },
   signInEmail: { scope: "auth_sign_in_email", limit: 10, windowSeconds: 15 * 60 },
   signUpIp: { scope: "auth_sign_up_ip", limit: 10, windowSeconds: 60 * 60 },
+  /** "Continue with Google" clicks: a separate, milder budget (people retry, and share mobile addresses). */
+  googleStartIp: { scope: "auth_google_start_ip", limit: 30, windowSeconds: 10 * 60 },
 } satisfies Record<string, RateLimitRule>;
 
-export type AuthAttempt = { kind: "sign_in"; email: string } | { kind: "sign_up" };
+export type AuthAttempt = { kind: "sign_in"; email: string } | { kind: "sign_up" } | { kind: "google_start" };
 
 /** Pure decision for a given limiter and client address (unit-tested). */
 export async function checkAuthAttempt(limiter: RateLimiter, ip: string, attempt: AuthAttempt): Promise<boolean> {
   try {
     if (attempt.kind === "sign_up") return (await limiter.hit(AUTH_RATE_LIMITS.signUpIp, ip)).allowed;
+    if (attempt.kind === "google_start") return (await limiter.hit(AUTH_RATE_LIMITS.googleStartIp, ip)).allowed;
     const [byIp, byEmail] = await Promise.all([
       limiter.hit(AUTH_RATE_LIMITS.signInIp, ip),
       limiter.hit(AUTH_RATE_LIMITS.signInEmail, attempt.email.trim().toLowerCase()),

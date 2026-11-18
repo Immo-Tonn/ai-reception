@@ -6,18 +6,16 @@ and pricing), checked 2026-10-13 — re-check before deciding.
 ## 1. Current state (2026-10-13)
 | Item | State |
 |---|---|
-| Production database | Supabase project **ServiceOS Dev** (only database; serves production), region eu-central-1 |
+| Database | Supabase project of the team, region eu-central-1 (project details: private repository) |
 | Supabase automatic backups | **none** (`supabase backups list`: empty, PITR disabled) — consistent with the Free plan; team lead to confirm the plan in Dashboard -> Billing |
 | Free-plan risk | Free projects are **paused after 1 week of inactivity** (pricing page) |
 | Manual backups | full logical dumps (roles, schema, data incl. Supabase Auth): before/after migration 0025 and before/after migration 0026 (all 2026-10-13) |
-| Where | operator's MacBook only: AES-256 encrypted disk images in `~/ServiceOS-Backups-Encrypted/` (`serviceos-supabase-2026-10-13.dmg` = before/after 0025, `serviceos-supabase-2026-10-13-before-0026.dmg`) + the unencrypted originals in `~/ServiceOS-Backups/` (kept until the owner approves deleting them) |
-| Password | one random password per image, stored in the macOS login Keychain (items "ServiceOS Supabase Backup", accounts `serviceos-backup-2026-10-13` and `serviceos-backup-2026-10-13-before-0026`); never written to the repo, logs or chat |
+| Where | encrypted, outside the repository; location and access are described in the private repository |
+| Password | one random password per backup, kept in a password manager; never written to the repo, logs or chat |
 | Restore tests | **passed** (see §3). 0025 backup: all 57 `public` + `auth` tables identical, Supabase Auth (GoTrue v2.197.0) lists all restored users. 0026 backup: all 59 tables identical, GoTrue lists 12/12 users, 0026 applied on the restored copy without changing any row (md5 of every `public` table equal) |
 
 ### Risks
-1. Single copy on one laptop. The login Keychain is **not** synced to iCloud: if the MacBook is lost, the image and
-   its password are lost. **Action for the owner:** copy the Keychain password into the team password manager and
-   copy the encrypted image to a second secure place (e.g. encrypted external drive or company cloud storage).
+1. Backups and their passwords must be stored redundantly (a second secure location). Current arrangement: private repository.
 2. The dump contains highly sensitive data: personal data of clients, password hashes, **active Supabase Auth
    sessions and refresh tokens**. Treat as secret; never commit, never upload unencrypted.
 3. No automatic backups and an inactivity pause on the current plan.

@@ -49,6 +49,8 @@ export interface SeriesRow {
 /** Everything needed to turn ids into the display names the UI expects. */
 export interface AppointmentLookups {
   clients: Map<string, string>;
+  /** Archived clients among those the viewer may read (RLS); see 0032. */
+  archivedClients?: Set<string>;
   services: Map<string, string>;
   staff: Map<string, string>;
   bucketKinds: Map<string, FinancialBucket>;
@@ -102,6 +104,7 @@ export function appointmentFromRow(row: AppointmentRow, lookups: AppointmentLook
     id: row.id,
     client: row.client_id ? (lookups.clients.get(row.client_id) ?? "") : "",
     ...(row.client_id ? { clientId: row.client_id } : {}),
+    ...(row.client_id && lookups.archivedClients?.has(row.client_id) ? { clientArchived: true } : {}),
     service: row.service_id ? (lookups.services.get(row.service_id) ?? "") : "",
     ...(row.service_id ? { serviceId: row.service_id } : {}),
     staff: row.staff_id ? (lookups.staff.get(row.staff_id) ?? "") : "",

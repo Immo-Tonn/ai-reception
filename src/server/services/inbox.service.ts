@@ -3,6 +3,7 @@ import type { Session } from "@/server/auth/session";
 import { assertCan } from "@/server/permissions/roles";
 import { isDemoWorkspaceSlug } from "@/features/workspace/registry";
 import { getServerInboxEventsRepository } from "@/server/repository/registry";
+import { archivedClientAccess } from "./clientArchive.service";
 import { RepositoryNotFoundError } from "@/server/repository/errors";
 import type { InboxEvent, InboxEventList, ServiceInboxEventType } from "@/features/inbox/events";
 
@@ -12,7 +13,19 @@ const EMPTY: InboxEventList = { events: [], unreadCount: 0 };
 export async function listInboxEvents(session: Session): Promise<InboxEventList> {
   assertCan(session.role, "appointments.view");
   if (isDemoWorkspaceSlug(session.workspaceId)) return EMPTY;
-  return getServerInboxEventsRepository(session.workspaceId).list();
+  const list = await getServerInboxEventsRepository(session.workspaceId).list();
+  const clientOf = (e: InboxEvent) => (e.details?.isPrivate ? null : (e.details?.clientId ?? e.clientId));
+  const ids = [...new Set(list.events.map(clientOf).filter((id): id is string => Boolean(id)))];
+  // The archive mark is an extra: an error here must not hide the Inbox.
+  const archived = await archivedClientAccess(session, ids).catch(() => new Map<string, { canRestore: boolean }>());
+  if (archived.size === 0) return list;
+  return {
+    ...list,
+    events: list.events.map((e) => {
+      const access = archived.get(clientOf(e) ?? "");
+      return access ? { ...e, clientArchived: true, clientRestorable: access.canRestore } : e;
+    }),
+  };
 }
 
 export async function getInboxUnreadCount(session: Session): Promise<number> {

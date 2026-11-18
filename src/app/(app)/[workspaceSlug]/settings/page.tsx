@@ -66,6 +66,7 @@ export default async function SettingsPage({
             ["hours", settings.hours],
             ["booking", settings.booking],
             ["integrations", settings.integrations],
+            ["retention", settings.retention],
             ["billing", settings.billing],
           ] as const
         ).map(([path, entry]) => (
@@ -92,6 +93,16 @@ export default async function SettingsPage({
           </div>
           <ThemeSwitcher initialTheme={theme} labels={settings.theme} />
         </div>
+
+        {!isDemoWorkspaceSlug(workspaceSlug) && (
+          <Link href={`/${workspaceSlug}/settings/account`} className={styles.row}>
+            <div className={styles.rowBody}>
+              <p className={styles.rowLabel}>{settings.accountSecurity.label}</p>
+              <p className={styles.rowDescription}>{settings.accountSecurity.description}</p>
+            </div>
+            <Icon name="chevronRight" size={18} />
+          </Link>
+        )}
 
         {!isDemoWorkspaceSlug(workspaceSlug) && (
           <form suppressHydrationWarning action={signOutAction} className={styles.row}>

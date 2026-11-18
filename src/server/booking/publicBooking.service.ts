@@ -207,7 +207,11 @@ export function normalizePublicCatalog(raw: RawCatalog): PublicCatalog {
 export async function loadPublicCatalog(deps: Pick<PublicBookingDeps, "admin">, slug: string): Promise<PublicCatalog | null> {
   if (!slugSchema.safeParse(slug).success) return null;
   const { data, error } = await deps.admin.rpc("get_public_booking_catalog", { p_slug: slug });
-  if (error) throw new PublicBookingError("unknown");
+  if (error) {
+    // Only the database's message is logged (never keys or the request).
+    console.error(`[booking] get_public_booking_catalog failed: ${error.message}`);
+    throw new PublicBookingError("unknown");
+  }
   const raw = data as RawCatalog | null;
   if (!raw) return null;
   return normalizePublicCatalog(raw);

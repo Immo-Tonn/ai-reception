@@ -45,7 +45,7 @@ export function createSupabaseAppointmentsRepository(
 
   async function loadLookups(client: SupabaseClient): Promise<AppointmentLookups> {
     const [clients, services, staff, buckets, series] = await Promise.all([
-      client.from("clients").select("id,name").eq("workspace_id", workspaceId),
+      client.from("clients").select("id,name,archived_at").eq("workspace_id", workspaceId),
       client.from("services").select("id,name").eq("workspace_id", workspaceId),
       client.from("staff_profiles").select("id,name").eq("workspace_id", workspaceId),
       client.rpc("workspace_financial_bucket_kinds", { p_workspace_id: workspaceId }),
@@ -54,6 +54,7 @@ export function createSupabaseAppointmentsRepository(
     const pairs = (res: { data: unknown }) => new Map(((res.data as { id: string; name: string }[]) ?? []).map((r) => [r.id, r.name]));
     return {
       clients: pairs(clients),
+      archivedClients: new Set(((clients.data as { id: string; archived_at: string | null }[]) ?? []).filter((c) => c.archived_at).map((c) => c.id)),
       services: pairs(services),
       staff: pairs(staff),
       bucketKinds: new Map(((buckets.data as { id: string; kind: string }[]) ?? []).map((b) => [b.id, b.kind as FinancialBucket])),

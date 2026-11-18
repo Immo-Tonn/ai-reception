@@ -3,6 +3,8 @@ import Link from "next/link";
 import { BackLink } from "@/components/ui";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
 import { PublicFooter } from "@/components/layout/PublicFooter/PublicFooter";
+import { GoogleButton } from "@/components/auth/GoogleButton";
+import { googleErrorFromParam, isGoogleLoginEnabled } from "@/lib/auth/googleLogin";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { LoginForm } from "./LoginForm";
@@ -12,9 +14,15 @@ export const metadata: Metadata = {
   title: "Sign in — ServiceOS",
 };
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reset?: string; google?: string | string[] }>;
+}) {
+  const { reset, google } = await searchParams;
   const locale = await getRequestLocale();
-  const { login, common, authErrors } = getMessages(locale);
+  const { login, common, authErrors, googleAuth } = getMessages(locale);
+  const googleError = googleErrorFromParam(google);
 
   return (
     <main className={styles.screen}>
@@ -39,11 +47,32 @@ export default async function LoginPage() {
               <p className={styles.formSubtitle}>{login.subtitle}</p>
             </div>
 
+            {reset === "done" ? (
+              <p className={styles.formError} role="status">
+                {login.passwordResetDone}
+              </p>
+            ) : null}
+
+            {isGoogleLoginEnabled() ? (
+              <GoogleButton
+                intent="owner"
+                label={googleAuth.continueWith}
+                orLabel={googleAuth.or}
+                errorText={googleError ? authErrors[googleError] : undefined}
+              />
+            ) : null}
+
             <LoginForm
               messages={login}
               errors={authErrors}
               passwordLabels={{ show: common.showPassword, hide: common.hidePassword }}
             />
+
+            <p className={styles.signupPrompt}>
+              <Link className={styles.signupLink} href="/forgot-password">
+                {login.forgotPassword}
+              </Link>
+            </p>
 
             <p className={styles.signupPrompt}>
               {login.signupPrompt}{" "}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { useRouter, useSearchParams } from "next/navigation";
 import { localIsoDate } from "@/lib/date/localIsoDate";
 import { describeSaveError } from "@/lib/repository/describeSaveError";
+import { restoreClientAction } from "@/server/actions/clientArchive.actions";
 import { CANCELLED_LIKE, HISTORY_STATUSES, type DeleteBlocker } from "@/features/appointments/statusRules";
 import { getAppointmentDeleteBlockersAction } from "@/server/actions/appointments.actions";
 import { Button, Icon } from "@/components/ui";
@@ -45,7 +46,7 @@ function subscribeShowCancelled(onChange: () => void) {
   };
 }
 
-type DesktopView = "day" | "week" | "month" | "staff";
+type DesktopView = "day" | "week" | "month" | "staff" | "list";
 
 function initials(name: string) {
   return name
@@ -124,10 +125,10 @@ export function CalendarView({
   const resourceLabelOverride = workspace.resourceLabel?.[locale];
   const noResourceLabelOverride = workspace.noResourceLabel?.[locale];
 
-  const { items: appointments, create, update, remove } = useAppointments(workspaceSlug);
+  const { items: appointments, create, update, remove, refresh: refreshAppointments } = useAppointments(workspaceSlug);
   const { log, entries: auditEntries } = useAuditLog(workspaceSlug);
   const { items: waitingListEntries } = useWaitingList(workspaceSlug);
-  const { items: clients, create: createClient } = useClients(workspaceSlug);
+  const { items: clients, create: createClient, refresh: refreshClients } = useClients(workspaceSlug);
 
   // Real workspace: opens on the workspace-local today (same as Today).
   // Demo workspaces keep their seeded demo day.
@@ -159,9 +160,12 @@ export function CalendarView({
     [appointments, showCancelled],
   );
   const [actionError, setActionError] = useState<string | null>(null);
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [archiveNotice, setArchiveNotice] = useState<{ kind: "success" | "warning"; text: string } | null>(null);
   // Server answer for ONE appointment id (a stale answer for another id is never shown).
   const [fetchedBlockers, setFetchedBlockers] = useState<{ id: string; list: DeleteBlocker[] } | null>(null);
   const [desktopView, setDesktopView] = useState<DesktopView>("day");
+  const [listScope, setListScope] = useState<"upcoming" | "past">("upcoming");
   // Week on phones: bring the selected day into view (Monday-first columns, 56px time axis).
   const mobileWeekScrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -242,6 +246,28 @@ export function CalendarView({
     .filter((item) => item.date === selectedDate)
     .filter((item) => staffFilter === "all" || item.staff === staffFilter)
     .sort((a, b) => a.time.localeCompare(b.time));
+
+  // "List" view: every appointment, grouped by day. Upcoming = the workspace's
+  // today and later, soonest first; Past = earlier, most recent first. "Today"
+  // is the workspace-local day (never the browser clock); demos keep their seeded day.
+  const listToday = isRealWorkspace ? workspaceToday : "2026-09-22";
+  const listGroups = useMemo(() => {
+    const filtered = appointments
+      .filter((item) => (listScope === "upcoming" ? item.date >= listToday : item.date < listToday))
+      .filter((item) => staffFilter === "all" || item.staff === staffFilter)
+      .sort((a, b) =>
+        listScope === "upcoming"
+          ? `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)
+          : `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`),
+      );
+    const groups: { date: string; items: Appointment[] }[] = [];
+    for (const item of filtered) {
+      const last = groups[groups.length - 1];
+      if (last && last.date === item.date) last.items.push(item);
+      else groups.push({ date: item.date, items: [item] });
+    }
+    return groups;
+  }, [appointments, listScope, listToday, staffFilter]);
 
   function openCreate() {
     setEditing(null);
@@ -370,6 +396,21 @@ export function CalendarView({
     });
   }
 
+  /** Explicit restore (owner / admin). The appointment itself does not change. */
+  async function handleRestoreClient(appt: Appointment) {
+    if (!appt.clientId || archiveBusy) return;
+    setArchiveBusy(true);
+    setArchiveNotice(null);
+    const result = await restoreClientAction(workspaceSlug, appt.clientId);
+    if (result.ok) {
+      await Promise.all([refreshAppointments(), refreshClients()]);
+      setArchiveNotice({ kind: "success", text: quickActions.clientRestored });
+    } else {
+      setArchiveNotice({ kind: "warning", text: quickActions.restoreFailed });
+    }
+    setArchiveBusy(false);
+  }
+
   async function handleConfirmCancel(appt: Appointment) {
     const matches = matchWaitingList(appt, waitingListEntries);
     setLastCancelMatchCount(matches.length);
@@ -418,7 +459,10 @@ export function CalendarView({
           {isMasked ? "•" : initials(item.client)}
         </span>
         <span className={styles.rowBody}>
-          <span className={styles.rowTitle}>{isMasked ? dashboard.statusBusy : item.client}</span>
+          <span className={styles.rowTitle}>
+            {isMasked ? dashboard.statusBusy : item.client}
+            {!isMasked && item.clientArchived ? ` · ${quickActions.clientArchivedNotice}` : ""}
+          </span>
           {!isMasked && (
             <span className={styles.rowSubtitle}>
               {resolveServiceLabel(item.service, demoServices, locale)}
@@ -521,7 +565,39 @@ export function CalendarView({
     { key: "week", label: calendar.weekView },
     { key: "month", label: calendar.monthView },
     { key: "staff", label: calendar.staffView },
+    { key: "list", label: calendar.listView },
   ];
+
+  const listSection = (
+    <div>
+      <div className={styles.viewSwitcher}>
+        {(["upcoming", "past"] as const).map((scope) => (
+          <button
+            key={scope}
+            type="button"
+            className={`${styles.viewTab} ${listScope === scope ? styles.viewTabActive : ""}`}
+            onClick={() => setListScope(scope)}
+          >
+            {scope === "upcoming" ? calendar.listUpcoming : calendar.listPast}
+          </button>
+        ))}
+      </div>
+      {listGroups.length === 0 ? (
+        <div className={styles.empty}>
+          <span className={styles.emptyTitle}>{calendar.listEmpty}</span>
+        </div>
+      ) : (
+        listGroups.map((group) => (
+          <section key={group.date} className={styles.listGroup}>
+            <h2 className={styles.listGroupTitle}>
+              {new Date(group.date + "T00:00:00").toLocaleDateString(locale, { dateStyle: "full" })}
+            </h2>
+            <div className={styles.list}>{group.items.map(renderRow)}</div>
+          </section>
+        ))
+      )}
+    </div>
+  );
 
   return (
     <main className={styles.page}>
@@ -682,6 +758,8 @@ export function CalendarView({
           </>
         )}
 
+        {desktopView === "list" && listSection}
+
         {desktopView === "staff" && (
           <div className={styles.gridScroll}>
             <TimeGrid
@@ -774,6 +852,8 @@ export function CalendarView({
           />
         )}
 
+        {desktopView === "list" && listSection}
+
         {desktopView === "staff" && (
           <div className={styles.gridScroll}>
           <TimeGrid
@@ -826,7 +906,10 @@ export function CalendarView({
 
       <QuickActionsSheet
         open={Boolean(quickActionsTarget)}
-        onClose={() => setQuickActionsTargetId(null)}
+        onClose={() => {
+          setQuickActionsTargetId(null);
+          setArchiveNotice(null);
+        }}
         appointment={quickActionsTarget}
         services={demoServices}
         locale={locale}
@@ -845,6 +928,10 @@ export function CalendarView({
         onViewWaitingList={() => router.push(`/${workspaceSlug}/waiting-list`)}
         timeZone={workspaceTimeZone}
         canCorrect={canCorrect}
+        workspaceSlug={workspaceSlug}
+        onRestoreClient={() => quickActionsTarget && handleRestoreClient(quickActionsTarget)}
+        archiveBusy={archiveBusy}
+        archiveNotice={archiveNotice}
       />
 
       <MoveAppointmentSheet

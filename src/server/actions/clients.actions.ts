@@ -5,6 +5,7 @@ import * as clientsService from "@/server/services/clients.service";
 import { runAction, type ActionResult } from "./result";
 import type { CreateClientInput, UpdateClientInput } from "@/server/validation/client.schema";
 import type { ClientRecord } from "@/features/clients/types";
+import type { AnonymizeClientResult } from "@/server/services/clients.service";
 
 export async function listClientsAction(workspaceSlug: string): Promise<ActionResult<ClientRecord[]>> {
   return runAction(async () => clientsService.listClients(await getSession(workspaceSlug)));
@@ -24,4 +25,8 @@ export async function updateClientAction(
   input: UpdateClientInput,
 ): Promise<ActionResult<ClientRecord | undefined>> {
   return runAction(async () => clientsService.updateClient(await getSession(workspaceSlug), id, input));
+}
+
+export async function anonymizeClientAction(workspaceSlug: string, id: string): Promise<ActionResult<AnonymizeClientResult>> {
+  return runAction(async () => clientsService.anonymizeClient(await getSession(workspaceSlug), id));
 }

@@ -35,6 +35,7 @@ import { wallToInstant } from "@/lib/time/zonedTime";
 
 const DATE_STRIP_DAYS = 28;
 
+
 type Step = "service" | "staff" | "date" | "time" | "details" | "confirmation";
 const steps: Step[] = ["service", "staff", "date", "time", "details", "confirmation"];
 
@@ -81,9 +82,22 @@ export function BookingWizard({
   const [selectedDate, setSelectedDate] = useState(() => resolveToday(new Date(), timezone));
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
   const [result, setResult] = useState<PublicBookingResult | null>(null);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  // null = untouched: the field shows the signed-in client's details (if any),
+  // so prefill needs no effect. Once typed (even to ""), the typed value wins.
+  const [firstNameInput, setFirstNameInput] = useState<string | null>(null);
+  const [lastNameInput, setLastNameInput] = useState<string | null>(null);
+  const [emailInput, setEmailInput] = useState<string | null>(null);
+  const [phoneInput, setPhoneInput] = useState<string | null>(null);
+  // A signed-in client has one stored name: split it at the first space
+  // ("Anna Maria Müller" -> first "Anna", last "Maria Müller").
+  const [identityFirstName = "", ...identityLastParts] = (identity?.name ?? "").trim().split(/\s+/);
+  const firstName = firstNameInput ?? identityFirstName;
+  const lastName = lastNameInput ?? identityLastParts.join(" ");
+  // The server still receives ONE `name` ("first last"), so the shared validation
+  // (detailsValidation.ts) and the booking API stay unchanged.
+  const name = `${firstName.trim()} ${lastName.trim()}`.trim();
+  const email = emailInput ?? identity?.email ?? "";
+  const phone = phoneInput ?? identity?.phone ?? "";
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,10 +106,11 @@ export function BookingWizard({
   // attempt (`submitAttempted`), never on first render of an empty form
   // (§ validation UX: don't just disable Submit with no explanation, but
   // don't scold an untouched field either).
-  const [touched, setTouched] = useState<{ name?: boolean; email?: boolean; phone?: boolean }>({});
+  const [touched, setTouched] = useState<{ firstName?: boolean; lastName?: boolean; email?: boolean; phone?: boolean }>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const nameFieldRef = useRef<HTMLInputElement>(null);
+  const firstNameFieldRef = useRef<HTMLInputElement>(null);
+  const lastNameFieldRef = useRef<HTMLInputElement>(null);
   const emailFieldRef = useRef<HTMLInputElement>(null);
   const phoneFieldRef = useRef<HTMLInputElement>(null);
 
@@ -126,21 +141,15 @@ export function BookingWizard({
     () => getClientDetailsFieldErrors({ name, email, phone }),
     [name, email, phone],
   );
-  const showNameError = Boolean(fieldErrors.name) && (touched.name || submitAttempted);
+  // First name is required, last name is optional. A format error on the combined
+  // name (digits, junk) is shown on every field that is filled in.
+  const nameFormatInvalid = Boolean(fieldErrors.name);
+  const firstNameInvalid = firstName.trim() === "" || nameFormatInvalid;
+  const lastNameInvalid = lastName.trim() !== "" && nameFormatInvalid;
+  const showFirstNameError = firstNameInvalid && (touched.firstName || submitAttempted);
+  const showLastNameError = lastNameInvalid && (touched.lastName || submitAttempted);
   const showEmailError = Boolean(fieldErrors.email) && (touched.email || submitAttempted);
   const showPhoneError = Boolean(fieldErrors.phone) && (touched.phone || submitAttempted);
-
-  // A signed-in client (see /client/login, /client/signup) doesn't have
-  // to retype their details every booking — guest checkout still works
-  // without ever touching this (§ booking never depends on registration).
-  // Adjusted during render when the identity changes (React's pattern for "state from a prop").
-  const [prefilledFrom, setPrefilledFrom] = useState<typeof identity>(null);
-  if (identity && identity !== prefilledFrom) {
-    setPrefilledFrom(identity);
-    setName((current) => current || identity.name);
-    setEmail((current) => current || identity.email);
-    setPhone((current) => current || identity.phone);
-  }
 
   useEffect(() => {
     if (!datesRequest || !selectedServiceId) return;
@@ -236,13 +245,15 @@ export function BookingWizard({
 
   async function handleSubmit() {
     if (!selectedService || !selectedSlot) return;
-    if (fieldErrors.name || fieldErrors.email || fieldErrors.phone) {
+    if (firstNameInvalid || lastNameInvalid || fieldErrors.email || fieldErrors.phone) {
       setSubmitAttempted(true);
-      const firstInvalidRef = fieldErrors.name
-        ? nameFieldRef
-        : fieldErrors.email
-          ? emailFieldRef
-          : phoneFieldRef;
+      const firstInvalidRef = firstNameInvalid
+        ? firstNameFieldRef
+        : lastNameInvalid
+          ? lastNameFieldRef
+          : fieldErrors.email
+            ? emailFieldRef
+            : phoneFieldRef;
       firstInvalidRef.current?.focus();
       return;
     }
@@ -261,7 +272,6 @@ export function BookingWizard({
       goTo("confirmation");
     } catch (err) {
       if (!(err instanceof BookingUnavailableError)) {
-         
         console.error("Public booking failed", err);
       }
       setError(err instanceof BookingRateLimitedError ? booking.rateLimitedError : booking.slotTakenError);
@@ -481,14 +491,23 @@ export function BookingWizard({
 
             <div className={styles.form}>
               <Input
-                ref={nameFieldRef}
-                label={`${booking.nameLabel} *`}
-                autoComplete="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={() => setTouched((t) => ({ ...t, name: true }))}
-                error={showNameError ? booking.nameError : undefined}
+                ref={firstNameFieldRef}
+                label={`${booking.firstNameLabel} *`}
+                autoComplete="given-name"
+                value={firstName}
+                onChange={(e) => setFirstNameInput(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, firstName: true }))}
+                error={showFirstNameError ? booking.nameError : undefined}
                 required
+              />
+              <Input
+                ref={lastNameFieldRef}
+                label={booking.lastNameLabel}
+                autoComplete="family-name"
+                value={lastName}
+                onChange={(e) => setLastNameInput(e.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, lastName: true }))}
+                error={showLastNameError ? booking.nameError : undefined}
               />
               <Input
                 ref={emailFieldRef}
@@ -497,7 +516,7 @@ export function BookingWizard({
                 inputMode="email"
                 autoComplete="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => setEmailInput(e.target.value)}
                 onBlur={() => setTouched((t) => ({ ...t, email: true }))}
                 error={showEmailError ? booking.emailError : undefined}
                 required
@@ -509,7 +528,7 @@ export function BookingWizard({
                 inputMode="tel"
                 autoComplete="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => setPhoneInput(e.target.value)}
                 onBlur={() => setTouched((t) => ({ ...t, phone: true }))}
                 error={showPhoneError ? booking.phoneError : undefined}
                 required
@@ -595,9 +614,10 @@ export function BookingWizard({
                 setSelectedStaffId("any");
                 setSelectedSlot(null);
                 setResult(null);
-                setName("");
-                setEmail("");
-                setPhone("");
+                setFirstNameInput("");
+                setLastNameInput("");
+                setEmailInput("");
+                setPhoneInput("");
                 setNotes("");
                 setTouched({});
                 setSubmitAttempted(false);
