@@ -37,6 +37,16 @@ describe("auth brute-force limits", () => {
     expect(await checkAuthAttempt(limiter, "198.51.100.1", { kind: "sign_up" })).toBe(true);
   });
 
+  it("Google start has its own milder budget and does not use up the sign-up budget", async () => {
+    const limiter = createMemoryRateLimiter(() => 0);
+    for (let i = 0; i < AUTH_RATE_LIMITS.googleStartIp.limit; i++) {
+      expect(await checkAuthAttempt(limiter, "203.0.113.50", { kind: "google_start" })).toBe(true);
+    }
+    expect(await checkAuthAttempt(limiter, "203.0.113.50", { kind: "google_start" })).toBe(false);
+    expect(await checkAuthAttempt(limiter, "203.0.113.50", { kind: "sign_up" })).toBe(true);
+    expect(AUTH_RATE_LIMITS.googleStartIp.limit).toBeGreaterThan(AUTH_RATE_LIMITS.signUpIp.limit);
+  });
+
   it("fails open when the limiter itself is down (Supabase limits still apply)", async () => {
     const broken: RateLimiter = { hit: async () => { throw new Error("rate limiter unavailable"); } };
     expect(await checkAuthAttempt(broken, "192.0.2.1", signIn("a@example.test"))).toBe(true);

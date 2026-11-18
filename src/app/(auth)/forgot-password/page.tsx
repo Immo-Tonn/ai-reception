@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { isGoogleLoginEnabled } from "@/lib/auth/googleLogin";
 import { parseRecoveryAudience } from "@/lib/auth/recoveryAudience";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
@@ -18,7 +19,7 @@ export default async function ForgotPasswordPage({
   const { expired, for: audienceParam } = await searchParams;
   const audience = parseRecoveryAudience(audienceParam);
   const locale = await getRequestLocale();
-  const { passwordReset, authErrors } = getMessages(locale);
+  const { passwordReset, authErrors, googleAuth } = getMessages(locale);
 
   return (
     <AuthShell audience={audience}>
@@ -32,6 +33,9 @@ export default async function ForgotPasswordPage({
         </p>
       ) : null}
       <ForgotPasswordForm messages={passwordReset} errors={authErrors} audience={audience} />
+      {isGoogleLoginEnabled() ? (
+        <p className={styles.formSubtitle}>{googleAuth.passwordHint}</p>
+      ) : null}
     </AuthShell>
   );
 }

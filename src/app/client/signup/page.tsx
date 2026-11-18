@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { GoogleButton } from "@/components/auth/GoogleButton";
+import { googleErrorFromParam, isGoogleLoginEnabled } from "@/lib/auth/googleLogin";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n/next";
 import { Preferences } from "@/components/layout/Preferences/Preferences";
@@ -16,11 +18,13 @@ export const metadata: Metadata = {
 export default async function ClientSignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ redirect?: string | string[] }>;
+  searchParams: Promise<{ redirect?: string | string[]; google?: string | string[] }>;
 }) {
-  const redirect = sanitizeClientRedirect((await searchParams).redirect);
+  const params = await searchParams;
+  const redirect = sanitizeClientRedirect(params.redirect);
+  const googleError = googleErrorFromParam(params.google);
   const locale = await getRequestLocale();
-  const { client, common, authErrors } = getMessages(locale);
+  const { client, common, authErrors, googleAuth } = getMessages(locale);
 
   return (
     <main className={styles.screen}>
@@ -31,6 +35,15 @@ export default async function ClientSignupPage({
       <div className={styles.body}>
         <h1 className={styles.title}>{client.signupTitle}</h1>
         <p className={styles.subtitle}>{client.signupSubtitle}</p>
+        {isGoogleLoginEnabled() ? (
+          <GoogleButton
+            intent="client"
+            next={redirect}
+            label={googleAuth.signUpWith}
+            orLabel={googleAuth.or}
+            errorText={googleError ? authErrors[googleError] : undefined}
+          />
+        ) : null}
         <SignupForm
           messages={client}
           errors={authErrors}
